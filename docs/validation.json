@@ -32,5 +32,33 @@
   "locked_delivery_verified": false,
   "display_off_delivery_verified": false,
   "closed_lid_delivery_verified": false,
-  "notarized": false
+  "notarized": false,
+  "checked_at_dubai": "2026-10-23T23:14:30.962705+04:00",
+  "github_actions": {
+    "url": "https://github.com/Dddysun/Codex-Mission-Manager/actions/runs/40009359100",
+    "conclusion": "success"
+  },
+  "github_release": {
+    "url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.1.0-preview.2",
+    "assets": [
+      {
+        "name": "build-manifest.json",
+        "size": 544,
+        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.1.0-preview.2/build-manifest.json",
+        "digest": "sha256:ac79a951f84d859dbdc971776022d8c6d0e85edc3f9a5ec172b974c529b52442"
+      },
+      {
+        "name": "Codex-Mission-Manager-0.1.0-arm64-preview.dmg",
+        "size": 26181402,
+        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.1.0-preview.2/Codex-Mission-Manager-0.1.0-arm64-preview.dmg",
+        "digest": "sha256:fe7250456b64f595980dfae630cc7886eebb33e949a6230e4084380189f23e06"
+      },
+      {
+        "name": "SHA256SUMS",
+        "size": 112,
+        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.1.0-preview.2/SHA256SUMS",
+        "digest": "sha256:25577bd109cbea0e7a63c356e3deb6cec22abe23c15ce8504c6fc734dfb2530a"
+      }
+    ]
+  }
 }

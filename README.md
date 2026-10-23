@@ -2,6 +2,8 @@
 
 Mac 本机聊天任务管家：按额度暂停和续接，安排下个五小时窗口的一次性指令，以及即时发送。产品基线见 [V0.1 总蓝图](docs/PRODUCT_BLUEPRINT_V0.1.md)。
 
+[下载 V0.1 预览 DMG](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.1.0-preview.2) · [打包验证记录](docs/validation.json)
+
 ## V0.1 架构
 
 - 原生 AppKit 窗口、固定菜单栏 Logo、SwiftUI 设置页。

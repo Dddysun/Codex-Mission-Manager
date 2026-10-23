@@ -33,3 +33,8 @@
 4. 在目标机器分别完成开盖后台、锁屏、熄屏、无外屏合盖和真实窗口恢复的发送验收。
 
 本次打包不安装管理员服务、不改变系统电源设置，也不向真实聊天发送测试消息。
+
+
+## Published preview
+
+GitHub Actions run40009359100 passed all build/test/package/upload steps. Preview DMG, SHA256SUMS and build manifest are published at https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.1.0-preview.2 . This confirms packaging and publication; it does not change the signing, permission or live acceptance gaps above. Local and CI DMG hashes differ because the compiler environment and disk-image metadata differ; use the checksum distributed alongside the selected image.
