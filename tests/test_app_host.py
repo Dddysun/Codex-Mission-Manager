@@ -1,0 +1,60 @@
+import fcntl
+import json
+from pathlib import Path
+import sqlite3
+import tempfile
+import unittest
+
+from app_host import legacy_service, make_config, migrate_legacy
+from guardian import Store, load_config, process_alive
+
+
+class PackagingHostTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp.name)
+
+    def tearDown(self):
+        self.temp.cleanup()
+
+    def test_fresh_install_has_portable_paused_private_state(self):
+        path = make_config(self.root / "app", self.root / "home", 54321, 123)
+        config = load_config(path)
+        self.assertEqual(config["ui_port"], 54321)
+        self.assertTrue(config["native_notifications"])
+        self.assertFalse(config["power_guard_enabled"])
+        self.assertTrue(config["desktop_database"].startswith(str(self.root / "home")))
+        store = Store(config["state_dir"])
+        self.assertTrue(store.get("supervisor_paused"))
+        self.assertEqual(store.tasks(), [])
+        store.close()
+
+    def test_existing_service_is_attached_without_writes_or_second_executor(self):
+        state = self.root / ".codex/usage-guardian/state"
+        state.mkdir(parents=True)
+        (state / "ui-8769.json").write_text(json.dumps({"url": "http://127.0.0.1:8769"}))
+        with (state / "daemon.lock").open("w") as daemon, (state / "ui-8769.lock").open("w") as ui:
+            fcntl.flock(daemon, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(ui, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            result = legacy_service(self.root)
+            self.assertTrue(result["external"])
+            self.assertFalse(result["owned"])
+            self.assertEqual(result["url"], "http://127.0.0.1:8769")
+
+    def test_migration_refuses_live_source_or_existing_destination(self):
+        source = self.root / ".codex/usage-guardian/state"
+        old = Store(source)
+        old.put("sent_marker", "do-not-replay")
+        old.close()
+        target = self.root / "app"
+        with (source / "daemon.lock").open("w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            with self.assertRaises(RuntimeError): migrate_legacy(target, self.root)
+        migrate_legacy(target, self.root)
+        copied = Store(target / "state")
+        self.assertEqual(copied.get("sent_marker"), "do-not-replay")
+        copied.close()
+        with self.assertRaises(RuntimeError): migrate_legacy(target, self.root)
+
+    def test_missing_host_process_is_detected(self):
+        self.assertFalse(process_alive(-999999999))

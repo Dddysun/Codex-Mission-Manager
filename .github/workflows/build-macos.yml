@@ -1,0 +1,46 @@
+name: Build macOS V0.1 preview
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: macos-15
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm Apple Silicon runner
+        run: test "$(uname -m)" = arm64
+      - name: Fetch pinned portable Python
+        run: python3 scripts/fetch_runtime.py --destination "$RUNNER_TEMP/mission-python"
+      - name: Test backend and packaging host
+        run: |
+          "$RUNNER_TEMP/mission-python/python/bin/python3" -m unittest discover -s backend/tests -v
+          PYTHONPATH=backend "$RUNNER_TEMP/mission-python/python/bin/python3" -m unittest discover -s tests -v
+          node backend/tests/test_sidebar.cjs
+      - name: Build native preview and DMG
+        run: |
+          python3 scripts/build.py --python-runtime "$RUNNER_TEMP/mission-python/python" --output "$RUNNER_TEMP/mission-build"
+          python3 scripts/make_dmg.py --build "$RUNNER_TEMP/mission-build"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Codex-Mission-Manager-arm64-preview
+          path: |
+            ${{ runner.temp }}/mission-build/*.dmg
+            ${{ runner.temp }}/mission-build/SHA256SUMS
+            ${{ runner.temp }}/mission-build/build-manifest.json
+      - name: Publish clearly labeled preview assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v0.1.0-preview.${GITHUB_RUN_NUMBER}" \
+            "$RUNNER_TEMP/mission-build/"*.dmg \
+            "$RUNNER_TEMP/mission-build/SHA256SUMS" \
+            "$RUNNER_TEMP/mission-build/build-manifest.json" \
+            --target "$GITHUB_SHA" --prerelease \
+            --title "V0.1 Apple Silicon local preview ${GITHUB_RUN_NUMBER}" \
+            --notes-file docs/RELEASE_STATUS.md

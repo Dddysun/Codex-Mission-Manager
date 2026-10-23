@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>任务管家 · 控制台</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/style.css"><script src="/app.js" defer></script></head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <a class="brand" href="/"><img src="/favicon.svg" alt=""><span>任务管家<small>GUARDIAN / LOCAL</small></span></a>
+    <div class="workspace-label">工作空间</div>
+    <nav aria-label="主导航"><button class="nav active" data-view="tasks"><span class="nav-symbol">▦</span>任务控制<span class="nav-count" id="navCount">—</span></button><button class="nav" data-view="events"><span class="nav-symbol">≡</span>操作记录</button><button class="nav" data-view="rules"><span class="nav-symbol">⌘</span>运行规则</button></nav>
+    <section class="account-section" aria-label="当前账号额度">
+      <div class="quota-heading"><span>当前额度</span><span id="planBadge" class="plan-badge unknown">待识别</span></div>
+      <p class="quota-caption" id="quotaCaption">正在读取当前账号</p>
+      <div class="quota-window" id="fiveHourQuota"><div class="quota-line"><span>五小时额度</span><strong id="fiveHourRemaining">—</strong></div><progress id="fiveHourProgress" max="100" value="0" aria-label="五小时剩余额度" aria-valuetext="尚未读取"></progress><time id="fiveHourReset">刷新时间待同步</time><span class="quota-countdown" id="fiveHourCountdown"></span></div>
+      <div class="quota-window" id="weeklyQuota"><div class="quota-line"><span>周额度</span><strong id="weeklyRemaining">—</strong></div><progress id="weeklyProgress" max="100" value="0" aria-label="周剩余额度" aria-valuetext="尚未读取"></progress><time id="weeklyReset">刷新时间待同步</time><span class="quota-countdown" id="weeklyCountdown"></span></div>
+      <div class="quota-footnote" id="usageFreshness">额度按当前账号实际限额计算</div>
+      <div class="account-card"><div class="account-avatar" id="accountAvatar" role="img" aria-label="账号头像"><span id="avatarInitials">?</span><img id="accountAvatarImage" alt="" hidden referrerpolicy="no-referrer"></div><div class="account-info"><strong id="accountName">正在读取账号</strong><span id="accountEmail">当前登录账号</span></div></div>
+      <div class="account-id-row"><span>账号 ID</span><button id="copyAccountId" aria-label="复制账号 ID" title="复制完整账号 ID" disabled>复制 ↗</button></div><code class="account-id" id="accountId">尚未读取</code>
+    </section>
+    <div class="sidebar-bottom"><div class="local-tag"><span class="dot"></span>仅在这台 Mac 上运行</div><p>关掉页面，管家仍会继续工作。</p><div class="sidebar-divider"></div><span class="sidebar-version">Quota Monitor 控制引擎</span></div>
+  </aside>
+  <main>
+    <header class="topbar"><div class="breadcrumb">本机工作空间 <span>/</span> <strong id="crumb">任务控制</strong></div><div class="top-actions"><span id="freshness">正在连接本机服务</span><button class="icon-button" id="refresh" aria-label="刷新状态" title="刷新状态">↻</button></div></header>
+    <section class="content">
+      <div id="connectionAlert" class="alert" hidden><span id="connectionText"></span><button class="text-button" id="reconnect">重新连接</button></div>
+      <div class="page-heading"><div><div class="eyebrow">YOUR WORK, CONTINUED.</div><h1 id="pageTitle">让任务接着完成。</h1><p id="pageDescription">在合适的时候暂停，在准备就绪后继续。</p></div><div class="heading-controls"><span class="status-pill" id="mainStatus"><span class="dot"></span><span>连接中</span></span><button class="button dark" id="globalControl" disabled>读取控制状态</button></div></div>
+
+      <section id="tasksView">
+        <div class="stats"><div class="stat"><span>已读取聊天</span><strong id="statTotal">—</strong><small>按来源分类的聊天目录</small></div><div class="stat"><span>正在执行</span><strong id="statActive">—</strong><small>当前正在处理工作</small></div><div class="stat"><span>等待执行</span><strong id="statWaiting">—</strong><small>自动续接或一次性预约</small></div><div class="stat"><span>需要留意</span><strong id="statAttention">—</strong><small>连接或任务状态待核对</small></div></div>
+        <div class="task-layout">
+          <section class="panel tasks-panel">
+            <div class="panel-heading"><div><h2>聊天列表 <span class="inline-count" id="taskCount">—</span></h2><p>自动续接与一次性预约，分别设置。</p></div><span class="subtle-label" id="catalogHint">正在同步聊天目录</span></div>
+            <div class="catalog-toolbar"><div class="engine-filters" role="group" aria-label="聊天来源"><button class="engine-filter active" data-engine="all">全部聊天</button><button class="engine-filter" data-engine="codex">Codex</button><button class="engine-filter" data-engine="chatgpt">ChatGPT</button></div><span id="cloudCatalogNote" class="catalog-note">ChatGPT 本次仅显示目录</span></div>
+            <div class="table-toolbar"><div class="filters" role="group" aria-label="聊天筛选"><button class="filter active" data-filter="all">全部</button><button class="filter" data-filter="waiting">待恢复</button><button class="filter" data-filter="scheduled">有预约</button><button class="filter" data-filter="attention">需留意</button></div><label class="search"><span>⌕</span><input id="search" type="search" placeholder="搜索聊天" aria-label="搜索聊天"></label></div>
+            <div class="table-scroll"><table><thead><tr><th>聊天</th><th>当前状态</th><th class="schedule-heading">额度恢复后执行 <small>一次性</small></th><th></th></tr></thead><tbody id="taskRows"><tr><td colspan="4" class="empty">正在读取聊天…</td></tr></tbody></table></div>
+            <div class="panel-footer"><span id="listFooter">等待本机服务</span><div class="pagination"><button id="previousPage" class="text-button" disabled>← 上一页</button><span id="pageNumber">1 / 1</span><button id="nextPage" class="text-button" disabled>下一页 →</button></div></div>
+          </section>
+          <aside class="activity-panel"><div class="panel-heading"><div><h2>最近操作</h2><p>每一次暂停与续做都有记录。</p></div><button class="text-button" id="allEvents">全部记录 ↗</button></div><div class="activity-list" id="recentEvents"><p class="empty">正在读取操作记录…</p></div><div class="quiet-note"><span class="note-symbol">↳</span><div><strong>尊重你的接管</strong><p>新消息、手动保持或审批都会优先处理。管家不会重复发送续做指令。</p></div></div></aside>
+        </div>
+        <div class="policy-strip"><span class="policy-mark">✓</span><div><strong>按规则自动接续</strong><span id="policySummary">正在读取运行规则</span></div><button class="text-button" id="viewRules">查看规则 →</button></div>
+      </section>
+
+      <section id="eventsView" hidden><div class="panel"><div class="panel-heading"><div><h2>操作记录</h2><p>显示最近 200 条真实操作，时间按本机时区显示。</p></div><label class="search"><span>⌕</span><input id="eventSearch" type="search" placeholder="搜索任务或操作" aria-label="搜索操作记录"></label></div><div class="table-scroll"><table><thead><tr><th>时间</th><th>任务</th><th>操作</th><th>说明</th></tr></thead><tbody id="eventRows"></tbody></table></div></div></section>
+      <section id="rulesView" hidden><div class="rules-grid"><section class="panel"><div class="panel-heading"><div><h2>自动控制规则</h2><p>侧栏展示当前登录账号的真实额度与刷新时间。</p></div></div><div class="rule-list" id="ruleList"></div></section><section class="panel"><div class="panel-heading"><div><h2>操作说明</h2><p>这些开关会直接影响后台服务。</p></div></div><div class="help-list"><h3>暂停自动控制</h3><p>管家继续监测，但暂不自动暂停或恢复任务。正在运行的聊天不会被这个开关停止，一次性预约的发送也会暂停。</p><h3>关闭单任务自动控制</h3><p>保持该任务，管家暂不接管。重新开启后，按最新任务状态和运行规则判断。</p><h3>额度恢复后执行</h3><p>独立于自动控制。开启后，在下一五小时窗口恢复、额度与服务许可可用时，发送一次所填指令，默认“继续任务”。当前回合完成不代表聊天永久结束。发送后开关自动关闭；新回合或审批会优先处理。自定义预约优先于同一聊天的默认自动续接。</p><h3>立刻执行</h3><p>将当前指令框内容发送到原聊天，不等待下一窗口。仅在聊天空闲、额度与服务许可可用时发送；不打断正在运行的任务。自动控制关闭或全局暂停自动控制时仍可手动执行。下方显示确认结果及发送标识，结果不明确不会重发。</p><h3>ChatGPT 目录</h3><p>本次仅显示客户端同步到的近期聊天快照，未启用自动执行。Codex 本机目录由后台持续读取；未打开的本机聊天在明确预约到期或启用自动控制时才会打开。</p><h3>连接待恢复</h3><p>聊天暂时无法连接时会等待重连，其他任务继续独立检查。</p><h3>运行条件</h3><p>保持本机、ChatGPT 应用和网络运行。防睡眠保护由后台维持，屏幕可以熄灭。</p><h3>已验证与待验证</h3><p>本机自动续接通道已实测成功。本聊天的真实低额度暂停与窗口恢复闭环已通过；新预约功能的下一真实窗口、Goal 实机恢复及登录自启动仍待验收。</p></div></section></div></section>
+      <footer class="page-footer"><span>本机连接 · 不上传任务记录</span><span id="serviceMeta">正在读取服务</span></footer>
+    </section>
+  </main>
+</div>
+<dialog id="taskDialog"><div class="dialog-heading"><div><div class="eyebrow">TASK DETAIL</div><h2 id="detailTitle"></h2></div><button class="icon-button" id="closeDialog" aria-label="关闭任务详情">×</button></div><div id="detailBody"></div><div class="dialog-footer"><button class="button" id="copyTask">复制任务 ID</button><button class="button dark" id="detailControl"></button></div></dialog>
+<div class="toast" id="toast" role="status" hidden></div>
+</body></html>
