@@ -1,8 +1,9 @@
 {
-  "dmg_sha256": "d25f8307f1acb724cc785e2438cd0aee0b1495533ee31386c546e38c0b9b975d",
+  "dmg_sha256": "643c544f50a15d17e640c96ea32963d0655cb8a03ebed89437c395a7edfaf3a0",
   "live_chat_messages_sent": 0,
   "administrator_service_installed": false,
   "system_power_settings_changed": false,
+  "webkit_linked": false,
   "readonly_mount": true,
   "signature_integrity": true,
   "native_self_test": {
@@ -12,7 +13,9 @@
     "native": true,
     "privateDataLoaded": false,
     "releaseSigned": false,
-    "version": "0.1.0"
+    "ui": "SwiftUI-AppKit",
+    "version": "0.1.0",
+    "webView": false
   },
   "embedded_runtime_self_test": {
     "runtime": "3.12.15",
@@ -33,32 +36,48 @@
   "display_off_delivery_verified": false,
   "closed_lid_delivery_verified": false,
   "notarized": false,
-  "checked_at_dubai": "2026-10-23T23:14:30.962705+04:00",
+  "checked_at_dubai": "2026-10-24T00:06:29.747652+04:00",
+  "native_control_contract_checks": "passed",
+  "native_fixture_render": {
+    "passed": true,
+    "webViewCount": 0,
+    "renderedViews": 113,
+    "fixtureChats": 3,
+    "messagesSent": 0,
+    "hostStarted": false
+  },
+  "live_readonly_snapshot_decoded": {
+    "chats": 61,
+    "events": 47,
+    "messagesSent": 0
+  },
+  "ui_implementation": "SwiftUI / AppKit",
   "github_actions": {
-    "url": "https://github.com/Dddysun/Codex-Mission-Manager/actions/runs/40009359100",
+    "url": "https://github.com/Dddysun/Codex-Mission-Manager/actions/runs/40016528402",
     "conclusion": "success"
   },
   "github_release": {
-    "url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.1.0-preview.2",
+    "url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.1.0-preview.3",
     "assets": [
       {
         "name": "build-manifest.json",
-        "size": 544,
-        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.1.0-preview.2/build-manifest.json",
-        "digest": "sha256:ac79a951f84d859dbdc971776022d8c6d0e85edc3f9a5ec172b974c529b52442"
+        "size": 597,
+        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.1.0-preview.3/build-manifest.json",
+        "digest": "sha256:4b77a969c8aaed48383019007f26a2d97aa3f562633db6b9cfd771491c6e5d7d"
       },
       {
-        "name": "Codex-Mission-Manager-0.1.0-arm64-preview.dmg",
-        "size": 26181402,
-        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.1.0-preview.2/Codex-Mission-Manager-0.1.0-arm64-preview.dmg",
-        "digest": "sha256:fe7250456b64f595980dfae630cc7886eebb33e949a6230e4084380189f23e06"
+        "name": "Codex-Mission-Manager-0.1.0-arm64-native-preview.dmg",
+        "size": 26561272,
+        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.1.0-preview.3/Codex-Mission-Manager-0.1.0-arm64-native-preview.dmg",
+        "digest": "sha256:854481472c35ec39851d70f8de7a7435a2c8e59bf78428a4677acb8ce4967fbf"
       },
       {
         "name": "SHA256SUMS",
-        "size": 112,
-        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.1.0-preview.2/SHA256SUMS",
-        "digest": "sha256:25577bd109cbea0e7a63c356e3deb6cec22abe23c15ce8504c6fc734dfb2530a"
+        "size": 119,
+        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.1.0-preview.3/SHA256SUMS",
+        "digest": "sha256:8481fda418c08388710fba60c73309c9134e7c455fdd9d85e052d79ef51d7c11"
       }
-    ]
+    ],
+    "source_commit": "79155ec94034797ca59f0544a21ebefff28685a5"
   }
 }

@@ -40,3 +40,5 @@
 用户于 2026-10-24 要求以真正的 macOS 原生控件替换内嵌网页。主窗口已改用 SwiftUI / AppKit，后台和控制协议保留。旧的 v0.1.0-preview.2 使用内嵌网页，不是本次原生界面包。
 
 最新构建产物参见仓库 Releases。原生控制契约测试覆盖快照解码、状态优先级、编辑版本冲突、预约取消、即时发送与未来预约分离，以及审批/忙碌状态的按钮限制；后台仍逐次执行完整条件核验。真实聊天发送未用于本轮界面改版测试。
+
+原生预览已发布：https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.1.0-preview.3 。GitHub Actions run 40016528402 全部通过；Release 包为 Codex-Mission-Manager-0.1.0-arm64-native-preview.dmg。原生示例窗口已实际渲染，主程序无 WebKit 链接；本机后台快照只读解码通过。完整真实聊天交互、通知、锁屏/合盖验收仍未完成。
