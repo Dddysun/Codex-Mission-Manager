@@ -26,6 +26,9 @@ def main():
             binary = app / "Contents/MacOS/CodexMissionManager"
             helper = app / "Contents/Library/HelperTools/PowerHelper"
             resources = app / "Contents/Resources"
+            libraries = subprocess.check_output(["otool", "-L", str(binary)], text=True)
+            assert "WebKit" not in libraries, "Native app unexpectedly links WebKit"
+            report["webkit_linked"] = False
             native = subprocess.check_output([str(binary), "--self-test"], text=True)
             python = subprocess.check_output([str(resources / "python/bin/python3"), "-I",
                 str(resources / "backend/app_host.py"), "--self-test"], text=True)

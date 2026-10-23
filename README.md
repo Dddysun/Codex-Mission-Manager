@@ -2,12 +2,13 @@
 
 Mac 本机聊天任务管家：按额度暂停和续接，安排下个五小时窗口的一次性指令，以及即时发送。产品基线见 [V0.1 总蓝图](docs/PRODUCT_BLUEPRINT_V0.1.md)。
 
-[下载 V0.1 预览 DMG](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.1.0-preview.2) · [打包验证记录](docs/validation.json)
+[下载最新预览 DMG](https://github.com/Dddysun/Codex-Mission-Manager/releases) · [打包验证记录](docs/validation.json)
 
 ## V0.1 架构
 
-- 原生 AppKit 窗口、固定菜单栏 Logo、SwiftUI 设置页。
-- WKWebView 嵌入现有本机前端；每个聊天保留阶段、状态、自动控制及独立指令。
+- SwiftUI / AppKit 原生主窗口和设置页、固定菜单栏 Logo。
+- 原生聊天列表、公开执行阶段、状态、自动控制开关、TextEditor 指令框、预约、立刻执行与回执；不使用 WKWebView，也不依赖浏览器。
+- 原生 URLSession 通过本机 JSON API 连接现有 Python 调度服务；界面每 5 秒同步，编辑中的草稿不随刷新丢失。
 - Python 标准库后端、SQLite 本机账本、版本锁定的原桌面客户端 IPC。
 - 应用捆绑精简 CPython，不需要系统 Python、Node 或 Homebrew。
 - 独立受限的管理员电源辅助服务，使用 SMAppService 登记及签名身份校验；本机临时签名预览中禁止启用。

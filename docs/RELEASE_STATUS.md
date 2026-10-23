@@ -4,7 +4,7 @@
 
 ## 已实现
 
-- 原生 AppKit / SwiftUI / WKWebView 主窗口及设置页。
+- SwiftUI / AppKit 原生主窗口及设置页；原生列表、开关、文本编辑、额度进度、账号侧栏、操作记录和回执。不使用 WebKit。
 - 固定菜单栏 Logo；打开窗口、全局暂停/恢复、退出。
 - 原有聊天目录、执行阶段、额度账号、自动控制、下一窗口预约、立刻执行及回执。
 - 后端与精简的可重定位 CPython 运行环境随 .app 分发。
@@ -35,6 +35,8 @@
 本次打包不安装管理员服务、不改变系统电源设置，也不向真实聊天发送测试消息。
 
 
-## Published preview
+## Native preview revision
 
-GitHub Actions run40009359100 passed all build/test/package/upload steps. Preview DMG, SHA256SUMS and build manifest are published at https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.1.0-preview.2 . This confirms packaging and publication; it does not change the signing, permission or live acceptance gaps above. Local and CI DMG hashes differ because the compiler environment and disk-image metadata differ; use the checksum distributed alongside the selected image.
+用户于 2026-10-24 要求以真正的 macOS 原生控件替换内嵌网页。主窗口已改用 SwiftUI / AppKit，后台和控制协议保留。旧的 v0.1.0-preview.2 使用内嵌网页，不是本次原生界面包。
+
+最新构建产物参见仓库 Releases。原生控制契约测试覆盖快照解码、状态优先级、编辑版本冲突、预约取消、即时发送与未来预约分离，以及审批/忙碌状态的按钮限制；后台仍逐次执行完整条件核验。真实聊天发送未用于本轮界面改版测试。

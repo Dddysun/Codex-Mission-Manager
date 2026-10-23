@@ -22,9 +22,15 @@ jobs:
           "$RUNNER_TEMP/mission-python/python/bin/python3" -m unittest discover -s backend/tests -v
           PYTHONPATH=backend "$RUNNER_TEMP/mission-python/python/bin/python3" -m unittest discover -s tests -v
           node backend/tests/test_sidebar.cjs
+      - name: Native control contract checks
+        run: |
+          swiftc -swift-version 5 -parse-as-library native/NativeState.swift tests/NativeContractTests.swift -o "$RUNNER_TEMP/native-contract"
+          "$RUNNER_TEMP/native-contract" tests/fixtures/native-state.json
       - name: Build native preview and DMG
         run: |
           python3 scripts/build.py --python-runtime "$RUNNER_TEMP/mission-python/python" --output "$RUNNER_TEMP/mission-build"
+          "$RUNNER_TEMP/mission-build/Codex Mission Manager.app/Contents/MacOS/CodexMissionManager" --self-test
+          if otool -L "$RUNNER_TEMP/mission-build/Codex Mission Manager.app/Contents/MacOS/CodexMissionManager" | grep -q WebKit; then exit 1; fi
           python3 scripts/make_dmg.py --build "$RUNNER_TEMP/mission-build"
       - uses: actions/upload-artifact@v4
         with:
@@ -42,5 +48,5 @@ jobs:
             "$RUNNER_TEMP/mission-build/SHA256SUMS" \
             "$RUNNER_TEMP/mission-build/build-manifest.json" \
             --target "$GITHUB_SHA" --prerelease \
-            --title "V0.1 Apple Silicon local preview ${GITHUB_RUN_NUMBER}" \
+            --title "V0.1 Native SwiftUI preview ${GITHUB_RUN_NUMBER}" \
             --notes-file docs/RELEASE_STATUS.md

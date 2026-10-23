@@ -1,7 +1,6 @@
 import AppKit
 import Carbon
 import SwiftUI
-import WebKit
 import ServiceManagement
 import UserNotifications
 import IOKit.pwr_mgt
@@ -23,7 +22,12 @@ final class MissionModel: ObservableObject {
     var lockDeadline = Date.distantPast
     var baseURL: URL?
     var stateDirectory: URL?
-    var onURL: ((URL) -> Void)?
+    @Published var snapshot: MissionSnapshot?
+    @Published var connected = false
+    @Published var busy = false
+    @Published var notice = ""
+    @Published var drafts: [String: MissionDraft] = [:]
+    var refreshing = false
     var host: Process?
     var hostInput: Pipe?
     var hostOutput = Data()
@@ -55,7 +59,7 @@ final class MissionModel: ObservableObject {
             if self.powerConnection != nil { self.disableClosedLid() }
         })
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
+        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             self?.refresh()
             self?.heartbeat()
             self?.deliverNotices()
@@ -86,6 +90,7 @@ final class MissionModel: ObservableObject {
             task.terminationHandler = { [weak self] _ in DispatchQueue.main.async {
                 self?.backend = "后台已退出；已有记录保留"
                 self?.host = nil
+                self?.connected = false
             } }
             try task.run()
             host = task
@@ -104,42 +109,79 @@ final class MissionModel: ObservableObject {
             baseURL = url
             stateDirectory = (value["state_dir"] as? String).map { URL(fileURLWithPath: $0) }
             backend = value["external"] as? Bool == true ? "已连接原有任务管家，未启动重复执行器" : "应用自带后台已启动"
-            onURL?(url)
             Task { await refreshControl() }
         }
     }
 
-    func refreshControl() async {
-        guard let url = baseURL else { return }
+    // A private ephemeral cookie session authenticates the local JSON API.
+    // No HTML is rendered and no WebKit runtime is used by the application.
+    @MainActor func refreshControl() async {
+        guard let url = baseURL, !refreshing else { return }
+        refreshing = true
+        defer { refreshing = false }
         do {
-            _ = try await session.data(from: url)
+            _ = try await session.data(from: url) // Compatibility session handshake with existing backends.
             let (data, response) = try await session.data(from: url.appendingPathComponent("api/state"))
-            guard (response as? HTTPURLResponse)?.statusCode == 200,
-                  let value = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-            await MainActor.run { self.paused = value["control_paused"] as? Bool ?? true }
-        } catch { await MainActor.run { self.error = "后台连接待恢复：" + error.localizedDescription } }
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                throw NSError(domain: "Guardian", code: 1, userInfo: [NSLocalizedDescriptionKey: "无法读取本机后台状态"])
+            }
+            let value = try JSONDecoder().decode(MissionSnapshot.self, from: data)
+            await MainActor.run {
+                self.snapshot = value; self.paused = value.control_paused; self.connected = true; self.error = ""
+            }
+        } catch { await MainActor.run { self.connected = false; self.error = "后台连接待恢复：" + error.localizedDescription } }
     }
 
-    func toggleAutomatic() {
-        guard let url = baseURL else { error = "后台尚未连接"; return }
+    func perform(_ payload: [String: Any]) {
+        guard !busy, connected, let url = baseURL else { return }
+        busy = true
+        notice = ""
         Task {
             do {
-                _ = try await session.data(from: url)
-                let (data, _) = try await session.data(from: url.appendingPathComponent("api/state"))
-                guard let state = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                      let revision = state["control_revision"] as? Int else { return }
                 var request = URLRequest(url: url.appendingPathComponent("api/action"))
                 request.httpMethod = "POST"
+                request.timeoutInterval = 20
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.setValue("1", forHTTPHeaderField: "X-Guardian-UI")
                 request.setValue(url.absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/")), forHTTPHeaderField: "Origin")
-                request.httpBody = try JSONSerialization.data(withJSONObject: ["action": (state["control_paused"] as? Bool ?? true) ? "enable" : "pause", "revision": revision])
+                request.httpBody = try JSONSerialization.data(withJSONObject: payload)
                 let (reply, response) = try await session.data(for: request)
                 let body = (try? JSONSerialization.jsonObject(with: reply)) as? [String: Any]
-                if (response as? HTTPURLResponse)?.statusCode != 200 { throw NSError(domain: "Guardian", code: 1, userInfo: [NSLocalizedDescriptionKey: body?["error"] as? String ?? "操作失败"]) }
-                await refreshControl()
-            } catch { await MainActor.run { self.error = error.localizedDescription } }
+                guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                    throw NSError(domain: "Guardian", code: 1, userInfo: [NSLocalizedDescriptionKey: body?["error"] as? String ?? "操作结果待核对，请刷新后检查记录"])
+                }
+                await MainActor.run {
+                    self.notice = body?["message"] as? String ?? "操作已提交"
+                    // Clear only a draft confirmed saved by this exact request.
+                    if payload["action"] as? String == "set_plan", payload["enabled"] as? Bool == true,
+                       let key = payload["key"] as? String, let prompt = payload["prompt"] as? String,
+                       self.drafts[key]?.text == prompt { self.drafts.removeValue(forKey: key) }
+                }
+            } catch { await MainActor.run { self.notice = error.localizedDescription } }
+            await self.refreshControl()
+            await MainActor.run { self.busy = false }
         }
+    }
+
+    func toggleAutomatic() {
+        guard let state = snapshot else { return }
+        perform(["action": !state.running ? "start" : state.control_paused ? "enable" : "pause", "revision": state.control_revision])
+    }
+    func setAutomatic(_ chat: MissionChat, enabled: Bool) {
+        guard chat.controllable else { return }
+        perform(MissionCommands.automatic(chat, enabled: enabled))
+    }
+    func editPrompt(_ chat: MissionChat, text: String) {
+        let revision = drafts[chat.key]?.revision ?? chat.plan?.revision ?? 0
+        drafts[chat.key] = MissionDraft(text: String(text.prefix(8000)), revision: revision)
+    }
+    func savePlan(_ chat: MissionChat, enabled: Bool) {
+        guard chat.controllable else { return }
+        perform(MissionCommands.plan(chat, draft: drafts[chat.key], enabled: enabled))
+    }
+    func executeNow(_ chat: MissionChat) {
+        guard chat.canExecute else { return }
+        perform(MissionCommands.immediate(chat, draft: drafts[chat.key]))
     }
 
     func setAwake(_ value: Bool) {
@@ -335,11 +377,10 @@ struct MissionSettings: View {
     }
 }
 
-final class MissionApp: NSObject, NSApplicationDelegate, WKNavigationDelegate, WKScriptMessageHandler {
+final class MissionApp: NSObject, NSApplicationDelegate {
     let model = MissionModel()
     var window: NSWindow!
     var settingsWindow: NSWindow?
-    var web: WKWebView!
     var statusItem: NSStatusItem!
     var pauseMenu: NSMenuItem!
     var isQuitting = false
@@ -365,22 +406,14 @@ final class MissionApp: NSObject, NSApplicationDelegate, WKNavigationDelegate, W
         tray.addItem(.separator())
         tray.addItem(withTitle: "退出任务管家", action: #selector(quit), keyEquivalent: "").target = self
         statusItem.menu = tray
-        let config = WKWebViewConfiguration()
-        config.userContentController.add(self, name: "mission")
-        let script = """
-        document.addEventListener('DOMContentLoaded',()=>{const nav=document.querySelector('.sidebar nav');if(!nav)return;const b=document.createElement('button');b.className='native-settings';b.textContent='⚙  设置';b.style.cssText='display:block;border:0;background:transparent;color:inherit;padding:14px;cursor:pointer';b.addEventListener('click',()=>window.webkit.messageHandlers.mission.postMessage('settings'));nav.append(b);});
-        """
-        config.userContentController.addUserScript(WKUserScript(source: script, injectionTime: .atDocumentStart, forMainFrameOnly: true))
-        web = WKWebView(frame: .zero, configuration: config)
-        web.navigationDelegate = self
-        window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1380, height: 900), styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
-        window.title = "任务管家 · V0.1"
-        window.minSize = NSSize(width: 980, height: 640)
+        let content = MissionWindow(model: model, showSettings: { [weak self] in self?.showSettings() })
+        window = NSWindow(contentViewController: NSHostingController(rootView: content))
+        window.title = "任务管家 · V0.1 原生预览"
+        window.setContentSize(NSSize(width: 1380, height: 900))
+        window.minSize = NSSize(width: 1120, height: 680)
         window.isReleasedWhenClosed = false
-        window.contentView = web
+        window.titlebarAppearsTransparent = true
         window.center()
-        web.loadHTMLString("<html lang='zh'><body style='font:17px -apple-system;padding:60px;color:#294235'><h1>任务管家</h1><p>正在连接本机后台。首次启动会检查客户端与账号。</p><p>若长时间未连接，请按 ⌘, 打开设置查看原因。</p></body></html>", baseURL: nil)
-        model.onURL = { [weak self] url in self?.web.load(URLRequest(url: url)) }
         model.start()
         let loginLaunch = NSAppleEventManager.shared().currentAppleEvent?.paramDescriptor(forKeyword: AEKeyword(keyAELaunchedAsLogInItem)) != nil
         if !loginLaunch && !CommandLine.arguments.contains("--background") { showWindow() }
@@ -414,24 +447,18 @@ final class MissionApp: NSObject, NSApplicationDelegate, WKNavigationDelegate, W
         }
         return .terminateLater
     }
-    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        guard message.frameInfo.isMainFrame, message.body as? String == "settings",
-              let origin = model.baseURL, let page = message.frameInfo.request.url,
-              page.scheme == origin.scheme, page.host == origin.host, page.port == origin.port else { return }
-        showSettings()
-    }
-    func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction, decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
-        guard let target = navigationAction.request.url else { decisionHandler(.cancel); return }
-        if target.scheme == "about" { decisionHandler(.allow); return }
-        if let origin = model.baseURL, target.scheme == origin.scheme && target.host == origin.host && target.port == origin.port { decisionHandler(.allow) }
-        else { decisionHandler(.cancel) }
-    }
 }
 
 @main enum MissionMain {
     static func main() {
+        if let index = CommandLine.arguments.firstIndex(of: "--ui-self-test"), CommandLine.arguments.count > index + 2 {
+            do {
+                try MissionPreview.render(fixture: CommandLine.arguments[index + 1], output: CommandLine.arguments[index + 2])
+            } catch { fputs("Native UI self-test failed: \(error)\n", stderr); exit(1) }
+            return
+        }
         if CommandLine.arguments.contains("--self-test") {
-            let report: [String: Any] = ["version": MissionIdentity.version, "architecture": "arm64", "native": true,
+            let report: [String: Any] = ["version": MissionIdentity.version, "architecture": "arm64", "native": true, "ui": "SwiftUI-AppKit", "webView": false,
                 "releaseSigned": MissionIdentity.releaseSigned, "helperPreviewFailsClosed": !MissionIdentity.releaseSigned,
                 "hardwareReadOnly": true, "privateDataLoaded": false]
             let data = try! JSONSerialization.data(withJSONObject: report, options: .sortedKeys)
