@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import shutil
 import subprocess
+import time
 
 
 def main():
@@ -32,7 +33,18 @@ def main():
     image = build / "Codex-Mission-Manager-0.1.0-arm64-preview.dmg"
     subprocess.run(["hdiutil", "create", "-volname", "Codex Mission Manager", "-srcfolder", str(stage),
                     "-format", "UDZO", "-ov", str(image)], check=True)
-    subprocess.run(["hdiutil", "verify", str(image)], check=True)
+    # DiskImages can retain a short-lived handle after create on hosted macOS.
+    # Retry only its explicit transient resource errors, never a bad checksum.
+    for attempt in range(5):
+        verify = subprocess.run(["hdiutil", "verify", str(image)], capture_output=True, text=True)
+        if verify.returncode == 0:
+            print(verify.stdout)
+            break
+        detail = verify.stdout + verify.stderr
+        transient = any(text in detail.lower() for text in ("resource temporarily unavailable", "resource busy"))
+        if not transient or attempt == 4:
+            raise RuntimeError("DMG verification failed: " + detail)
+        time.sleep(2 ** attempt)
     digest = hashlib.sha256(image.read_bytes()).hexdigest()
     (build / "SHA256SUMS").write_text(digest + "  " + image.name + "\n")
     manifest = json.loads((build / "build-manifest.json").read_text())

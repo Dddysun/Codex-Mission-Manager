@@ -1,0 +1,36 @@
+{
+  "dmg_sha256": "d25f8307f1acb724cc785e2438cd0aee0b1495533ee31386c546e38c0b9b975d",
+  "live_chat_messages_sent": 0,
+  "administrator_service_installed": false,
+  "system_power_settings_changed": false,
+  "readonly_mount": true,
+  "signature_integrity": true,
+  "native_self_test": {
+    "architecture": "arm64",
+    "hardwareReadOnly": true,
+    "helperPreviewFailsClosed": true,
+    "native": true,
+    "privateDataLoaded": false,
+    "releaseSigned": false,
+    "version": "0.1.0"
+  },
+  "embedded_runtime_self_test": {
+    "runtime": "3.12.15",
+    "sqlite": "3.53.1",
+    "ssl": "OpenSSL 3.5.9 29 Sep 2026",
+    "portable_config": true,
+    "private_data_loaded": false,
+    "all_backend_imports": true,
+    "runtime_inside_bundle": true
+  },
+  "unsigned_preview_helper_rejected": true,
+  "backend_tests_passed": 116,
+  "packaging_host_tests_passed": 4,
+  "javascript_render_checks": "passed",
+  "graphical_ui_verified": false,
+  "login_autostart_verified": false,
+  "locked_delivery_verified": false,
+  "display_off_delivery_verified": false,
+  "closed_lid_delivery_verified": false,
+  "notarized": false
+}
