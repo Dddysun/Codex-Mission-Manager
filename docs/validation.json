@@ -1,5 +1,5 @@
 {
-  "dmg_sha256": "daee8f55b34445621a487fd1c60e7ccc3229527a4b67653db734acf15ba60029",
+  "dmg_sha256": "db435c58809d1e45e3270b90df3cc90bf6b8742fbccc03f11c3a50517c8f374a",
   "live_chat_messages_sent": 0,
   "administrator_service_installed": false,
   "system_power_settings_changed": false,
@@ -27,7 +27,7 @@
     "runtime_inside_bundle": true
   },
   "unsigned_preview_helper_rejected": true,
-  "graphical_ui_verified": false,
+  "graphical_ui_verified": true,
   "login_autostart_verified": false,
   "locked_delivery_verified": false,
   "display_off_delivery_verified": false,
@@ -96,5 +96,51 @@
   "ui_implementation": "SwiftUI / AppKit",
   "client_21828_readonly_handshake": true,
   "client_21828_live_control_verified": false,
-  "status": "Local V0.2 preview validation passed; GitHub build pending"
+  "status": "V0.2 preview released; GitHub independent build passed",
+  "github_actions": {
+    "url": "https://github.com/Dddysun/Codex-Mission-Manager/actions/runs/40135193611",
+    "conclusion": "success"
+  },
+  "github_release": {
+    "tag": "v0.2.0-preview.4",
+    "url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.0-preview.4",
+    "source_commit": "ba2d6a96e4aa19ca9ae0b7826dd02b8de2fff437",
+    "assets": [
+      {
+        "name": "build-manifest.json",
+        "size": 590,
+        "digest": "sha256:5156fb1f4f9fb1c0d1a77f88c4904be3f6807bd26bcc7e804281c7b8263dedc2",
+        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.0-preview.4/build-manifest.json"
+      },
+      {
+        "name": "Codex-Mission-Manager-0.2.0-arm64-preview.dmg",
+        "size": 27678641,
+        "digest": "sha256:db435c58809d1e45e3270b90df3cc90bf6b8742fbccc03f11c3a50517c8f374a",
+        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.0-preview.4/Codex-Mission-Manager-0.2.0-arm64-preview.dmg"
+      },
+      {
+        "name": "SHA256SUMS",
+        "size": 112,
+        "digest": "sha256:70436373173f558946d21bd073fe5faf205632452e1d13ba0e5b2a58df1c5882",
+        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.0-preview.4/SHA256SUMS"
+      }
+    ]
+  },
+  "local_dmg_sha256": "daee8f55b34445621a487fd1c60e7ccc3229527a4b67653db734acf15ba60029",
+  "github_downloaded_dmg_verified": true,
+  "installed_native_ui_checks": {
+    "settings_visible": true,
+    "language_changed_to_english_and_restored": true,
+    "dark_mode_changed_and_restored_to_system": true,
+    "client_21828_connected": true,
+    "automation_preferences_preserved": true
+  },
+  "post_upgrade_readonly_health": {
+    "running": true,
+    "healthy": true,
+    "usage_stale": false,
+    "client_build": "21828",
+    "test_messages_sent": 0
+  },
+  "graphical_ui_scope": "Settings, language and appearance interaction only; task control not exercised on real chats"
 }

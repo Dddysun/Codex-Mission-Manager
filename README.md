@@ -4,9 +4,19 @@ macOS 原生聊天任务管理应用。根据可用额度暂停和续接已授�
 
 A native macOS companion for quota-aware Codex task control, one-time scheduled instructions, and confirmed delivery records.
 
-[下载 V0.2 原生预览 DMG](https://github.com/Dddysun/Codex-Mission-Manager/releases) · [产品总蓝图](docs/PRODUCT_BLUEPRINT_V0.1.md) · [发行状态](docs/RELEASE_STATUS.md)
+[下载 V0.2 原生预览 DMG](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.0-preview.4) · [产品总蓝图](docs/PRODUCT_BLUEPRINT_V0.1.md) · [发行状态](docs/RELEASE_STATUS.md)
 
 **V0.2.0 公开试用版。** 提供中英文界面、系统深色模式和菜单栏额度与控制面板。安装前请阅读下方发行限制。
+
+## 界面预览
+
+以下界面使用示例数据。
+
+![原生任务窗口 · English / Dark](docs/previews/main-en-dark.png)
+
+![原生权限设置 · 简体中文 / 浅色](docs/previews/settings-zh-light.png)
+
+![菜单栏 · English / Dark](docs/previews/menu-en-dark.png)
 
 ## 功能
 

@@ -19,6 +19,8 @@ build 21828 已完成本机只读握手、聊天归属查询及实时快照检�
 
 本轮 145 项后端测试、4 项打包宿主测试、原生控制契约及 JavaScript 检查通过。主窗口、设置、菜单栏分别完成中文浅色与英文深色原生渲染，共 6 个视图；未启动真实控制后台或发送测试消息。DMG 通过只读挂载、代码签名完整性、内置 CPython、自检与无 WebKit 依赖检查。签名完整性检查不代表 Apple 发行签名或公证。
 
+GitHub 独立构建 [40135193611](https://github.com/Dddysun/Codex-Mission-Manager/actions/runs/40135193611) 已通过，公开预览包已发布。具体资产校验值见 `validation.json` 与发行页。下载的公开 DMG 已在本机再次核验并安装；原有自动控制偏好保留，后台健康、额度数据新鲜。设置窗口的即时中英文切换和深色切换已实测，并恢复原有偏好。真实暂停与发送未用于这次界面验收。
+
 ## 当前限制
 
 - 无 Developer ID 发行签名与 Apple 公证；其他电脑可能被 macOS 阻止打开。
@@ -40,7 +42,7 @@ build 21828 已完成本机只读握手、聊天归属查询及实时快照检�
 
 ## 下载
 
-[下载公开预览安装包](https://github.com/Dddysun/Codex-Mission-Manager/releases)。选用 V0.2.0 或更新的预览版；每个发行页附带 DMG、SHA256SUMS 与构建清单。
+[下载 V0.2.0-preview.4 安装包](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.0-preview.4)。选用 V0.2.0 或更新的预览版；每个发行页附带 DMG、SHA256SUMS 与构建清单。
 
 历史版本：[V0.1.0 原生预览 preview.3](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.1.0-preview.3)。该版本的打包记录不能替代本轮 V0.2 验收结果。
 
