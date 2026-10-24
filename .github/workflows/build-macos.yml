@@ -1,4 +1,4 @@
-name: Build macOS V0.1 preview
+name: Build macOS V0.2 preview
 on:
   push:
     branches: [main]
@@ -24,7 +24,7 @@ jobs:
           node backend/tests/test_sidebar.cjs
       - name: Native control contract checks
         run: |
-          swiftc -swift-version 5 -parse-as-library native/NativeState.swift tests/NativeContractTests.swift -o "$RUNNER_TEMP/native-contract"
+          swiftc -swift-version 5 -parse-as-library native/Localization.swift native/NativeState.swift tests/NativeContractTests.swift -o "$RUNNER_TEMP/native-contract"
           "$RUNNER_TEMP/native-contract" tests/fixtures/native-state.json
       - name: Build native preview and DMG
         run: |
@@ -43,10 +43,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v0.1.0-preview.${GITHUB_RUN_NUMBER}" \
+          gh release create "v0.2.0-preview.${GITHUB_RUN_NUMBER}" \
             "$RUNNER_TEMP/mission-build/"*.dmg \
             "$RUNNER_TEMP/mission-build/SHA256SUMS" \
             "$RUNNER_TEMP/mission-build/build-manifest.json" \
             --target "$GITHUB_SHA" --prerelease \
-            --title "V0.1 Native SwiftUI preview ${GITHUB_RUN_NUMBER}" \
+            --title "V0.2 Native SwiftUI preview ${GITHUB_RUN_NUMBER}" \
             --notes-file docs/RELEASE_STATUS.md

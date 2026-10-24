@@ -62,6 +62,9 @@ class Quota:
 
 class NativeProtocolTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
+        self.compatibility_patch = mock.patch("compatibility.require_supported", return_value={"supported": True})
+        self.compatibility_patch.start()
+        self.addCleanup(self.compatibility_patch.stop)
         self.temp = tempfile.TemporaryDirectory(prefix="ug-ipc-", dir="/tmp")
         self.socket = str(Path(self.temp.name) / "app.sock")
         self.state, self.requests = state(), []
@@ -131,6 +134,20 @@ class NativeProtocolTests(unittest.IsolatedAsyncioTestCase):
         finally:
             writer.close()
             await writer.wait_closed()
+
+    async def test_client_update_blocks_every_mutating_operation_before_transport(self):
+        with mock.patch("compatibility.require_supported", side_effect=RuntimeError("unsupported build")) as guard:
+            for method in ("turn/start", "turn/interrupt", "thread/goal/set"):
+                before = len(self.requests)
+                with self.assertRaisesRegex(RuntimeError, "unsupported build"):
+                    await self.adapter.call(method, {"threadId": "one", "turnId": "original-one"})
+                self.assertEqual(len(self.requests), before)
+            self.assertEqual(guard.call_count, 3)
+        # Reads are still transport-only and must not trigger a mutation guard.
+        with mock.patch("compatibility.require_supported", side_effect=RuntimeError("unsupported build")) as guard:
+            result = await self.adapter.call("account/rateLimits/read")
+            self.assertIn("rateLimitsByLimitId", result)
+            guard.assert_not_called()
 
     async def test_full_controller_through_native_framed_socket(self):
         await self.controller.adopt("one")

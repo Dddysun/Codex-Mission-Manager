@@ -8,6 +8,7 @@ import threading
 import time
 import unittest
 import uuid
+from unittest import mock
 
 from guardian import Store
 from test_guardian import CONFIG, sample
@@ -68,6 +69,15 @@ class InterfaceTests(unittest.TestCase):
         self.assertEqual(data["usage"]["windows"]["five_hour"]["remaining"], 8)
         self.assertEqual(data["usage"]["account"]["id"], "account-1")
         self.assertFalse(data["usage"]["stale"])
+
+    def test_control_enabled_uses_shared_compatibility_status(self):
+        self.store.put('supervisor_paused',False)
+        for supported in (False,True):
+            status={'build':'fixture','supported':supported,'status':'supported' if supported else 'update_required'}
+            with mock.patch('ui.desktop_compatibility',return_value=status):
+                data=json.loads(self.request()[2])
+            self.assertEqual(data['compatibility'],status)
+            self.assertEqual(data['control_enabled'],supported)
 
     def test_old_usage_is_explicitly_stale(self):
         self.store.put("account_display", {"account": {"plan_type": "pro"}, "windows": {}, "observed_at": 1})
@@ -171,6 +181,124 @@ class InterfaceTests(unittest.TestCase):
         t=json.loads(self.request()[2])["tasks"][0]
         self.assertFalse(t["auto_resume"])
         self.assertEqual(t["plan"]["state"],"armed")
+
+    def prepare_unmanaged_chat(self):
+        self.prepare_catalog()
+        chat = entry("unmanaged-chat", "Pending chat")
+        catalog = self.store.get("chat_catalog")
+        catalog["items"].append(chat)
+        self.store.put("chat_catalog", catalog)
+        return chat
+
+    def chat_state(self, key):
+        return next(t for t in json.loads(self.request()[2])["tasks"] if t["key"] == key)
+
+    def test_pending_auto_control_waits_for_global_enable_and_can_be_cancelled(self):
+        chat = self.prepare_unmanaged_chat()
+        self.store.put("supervisor_paused", True)
+        payload = {"action":"set_auto", "key":chat["key"], "enabled":True, "revision":0}
+        status, _, body = self.request("POST", "/api/action", payload)
+        self.assertEqual(status, 200)
+        self.assertIn("等待", json.loads(body)["message"])
+        task = self.chat_state(chat["key"])
+        self.assertEqual(task["auto_connection"], "waiting_global")
+        self.assertTrue(task["auto_pending"])
+        self.assertTrue(task["auto_resume"])
+        self.assertEqual(self.request("POST", "/api/action", dict(payload, enabled=False))[0], 200)
+        task = self.chat_state(chat["key"])
+        self.assertEqual(task["auto_connection"], "off")
+        self.assertFalse(task["auto_pending"])
+        self.assertFalse(task["auto_resume"])
+        row = self.store.db.execute("SELECT state FROM requests WHERE kind='adopt'").fetchone()
+        self.assertEqual(row["state"], "cancelled")
+        self.assertTrue(self.store.get("supervisor_paused"))
+
+    def test_pending_auto_control_is_idempotent_and_uses_correct_connection_phase(self):
+        chat = self.prepare_unmanaged_chat()
+        payload = {"action":"set_auto", "key":chat["key"], "enabled":True, "revision":0}
+        for _ in range(2):
+            self.assertEqual(self.request("POST", "/api/action", payload)[0], 200)
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM requests WHERE kind='adopt'").fetchone()[0], 1)
+        self.assertEqual(self.chat_state(chat["key"])["auto_connection"], "queued")
+        with self.store.db:
+            self.store.db.execute("UPDATE requests SET state='processing' WHERE kind='adopt'")
+        self.assertEqual(self.chat_state(chat["key"])["auto_connection"], "connecting")
+
+    def test_failed_adoption_exposes_failure_reason_and_allows_retry(self):
+        chat = self.prepare_unmanaged_chat()
+        request_id = self.store.enqueue("adopt", {"thread_id":chat["id"]})
+        with self.store.db:
+            self.store.db.execute("UPDATE requests SET state='failed',result=? WHERE id=?", (json.dumps({"error":"Client connection timed out"}),request_id))
+        task = self.chat_state(chat["key"])
+        self.assertEqual(task["auto_connection"], "failed")
+        self.assertEqual(task["auto_error"], "Client connection timed out")
+        self.assertFalse(task["auto_pending"])
+        self.assertEqual(self.request("POST", "/api/action", {"action":"set_auto", "key":chat["key"], "enabled":True, "revision":0})[0], 200)
+        task = self.chat_state(chat["key"])
+        self.assertEqual(task["auto_connection"], "queued")
+        self.assertIsNone(task["auto_error"])
+
+    def test_bulk_pause_freezes_only_opted_in_managed_tasks_and_stops_automation(self):
+        self.prepare_catalog()
+        self.store.save_task({"id":"opted-out", "name":"Held", "state":"watching", "scope":"test", "auto_resume":False})
+        self.store.save_task({"id":"held", "name":"Held", "state":"held", "scope":"test", "manual_hold":True})
+        self.store.save_task({"id":"review", "name":"Review", "state":"needs_review", "scope":"test"})
+        self.store.put("supervisor_paused",False)
+        status, _, body = self.request("POST", "/api/action", {"action":"pause_all", "revision":0})
+        self.assertEqual(status,200)
+        self.assertTrue(self.store.get("supervisor_paused"))
+        self.assertEqual(self.store.get("control_revision"),1)
+        row = self.store.db.execute("SELECT value,state FROM requests WHERE kind='pause_all'").fetchone()
+        self.assertEqual(row["state"],"pending")
+        self.assertEqual(json.loads(row["value"]),{"ids":["task-1"],"scope":"test"})
+        self.assertEqual(self.store.get("bulk_pause_result")["total"],1)
+        self.assertEqual(self.request("POST", "/api/action", {"action":"pause_all", "revision":1})[0],409)
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM requests WHERE kind='pause_all'").fetchone()[0],1)
+        self.assertIn("message_en",json.loads(body))
+
+    def test_cancel_during_connection_hides_inflight_and_subsequent_failure(self):
+        chat = self.prepare_unmanaged_chat()
+        payload = {"action":"set_auto", "key":chat["key"], "enabled":True, "revision":0}
+        self.assertEqual(self.request("POST", "/api/action", payload)[0],200)
+        with self.store.db:self.store.db.execute("UPDATE requests SET state='processing' WHERE kind='adopt'")
+        self.assertEqual(self.request("POST", "/api/action", dict(payload,enabled=False))[0],200)
+        task=self.chat_state(chat["key"])
+        self.assertEqual(task["auto_connection"],"off")
+        self.assertFalse(task["auto_pending"])
+        with self.store.db:self.store.db.execute("UPDATE requests SET state='failed',result=? WHERE kind='adopt'",(json.dumps({"error":"Cancelled by user"}),))
+        task=self.chat_state(chat["key"])
+        self.assertEqual(task["auto_connection"],"off")
+        self.assertIsNone(task["auto_error"])
+
+    def test_bulk_pause_requires_control_mode(self):
+        self.prepare_catalog()
+        cfg=json.loads(self.config_path.read_text());cfg['mode']='notify';self.config_path.write_text(json.dumps(cfg))
+        self.assertEqual(self.request("POST", "/api/action", {"action":"pause_all", "revision":0})[0],409)
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM requests WHERE kind='pause_all'").fetchone()[0],0)
+        self.assertFalse(self.store.get('supervisor_paused',False))
+
+    def test_bulk_pause_requires_running_backend(self):
+        self.prepare_catalog()
+        self.lease.close()
+        self.assertEqual(self.request("POST", "/api/action", {"action":"pause_all", "revision":0})[0],409)
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM requests WHERE kind='pause_all'").fetchone()[0],0)
+
+    def test_bulk_pause_requires_fresh_usable_backend_status(self):
+        self.prepare_catalog()
+        path=Path(self.temp.name)/'state/status.json'
+        report=json.loads(path.read_text())
+        for update in ({'observed_at':1},{'observed_at':time.time(),'phase':'unknown'}):
+            report.update(update);path.write_text(json.dumps(report))
+            self.assertEqual(self.request("POST", "/api/action", {"action":"pause_all", "revision":0})[0],409)
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM requests WHERE kind='pause_all'").fetchone()[0],0)
+
+    def test_bulk_pause_stale_revision_has_no_partial_effect(self):
+        self.prepare_catalog()
+        self.store.put("control_revision",3)
+        self.store.put("supervisor_paused",False)
+        self.assertEqual(self.request("POST", "/api/action", {"action":"pause_all", "revision":2})[0],409)
+        self.assertFalse(self.store.get("supervisor_paused"))
+        self.assertEqual(self.store.db.execute("SELECT COUNT(*) FROM requests WHERE kind='pause_all'").fetchone()[0],0)
 
     def test_immediate_request_is_durable_idempotent_and_has_separate_receipt(self):
         local, _ = self.prepare_catalog()

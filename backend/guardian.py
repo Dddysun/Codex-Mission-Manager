@@ -262,7 +262,7 @@ class Controller:
         self.store.notice("review:" + task["id"] + ":" + str(task.get("action_id", "")),
                           "额度管家：任务需要检查", task["name"] + "；" + reason)
 
-    async def pause(self, task, sample):
+    async def pause(self, task, sample, manual=False):
         if self.clock() - sample["observed_at"] > self.config["max_sample_age_seconds"]:
             return
         view = await self.view(task["id"])
@@ -278,12 +278,13 @@ class Controller:
             return
         turn_id = active["id"] if active else None
         task.update(state="pause_intent", turn_id=turn_id, pause_sample=sample,
-                    baseline_message_id=message_id(view), pause_source="monitor",
+                    baseline_message_id=message_id(view), pause_source="manual" if manual else "monitor",
                     paused_for_goal=paused_for_goal, paused_goal=goal if paused_for_goal else None,
                     recovery_first_seen=None,
                     action_id=str(uuid.uuid4()), checkpoint={"time": self.clock(),
-                        "cwd": view["thread"].get("cwd"), "recent_turns": view["turns"]})
-        if self.cancelled() or not self.store.save_task(task):
+                        "cwd": view["thread"].get("cwd"), "recent_turns": view["turns"]},
+                    **({"manual_hold": True, "auto_resume": False} if manual else {}))
+        if (self.store.get('stop_requested',False) if manual else self.cancelled()) or not self.store.save_task(task):
             return  # Intent is durable before any side effect.
         try:
             # Expected turn ID prevents interrupting a newer turn after a race.
@@ -654,6 +655,8 @@ async def run(config, once=False):
                     except Exception as exc:
                         store.put("catalog_error", type(exc).__name__)
                 if config["mode"] == "control":
+                    from manual import pause_requests
+                    await pause_requests(controller, sample)
                     from immediate import ImmediateRunner
                     await ImmediateRunner(controller).tick(sample)
                 if config["mode"] == "control" and not supervisor_paused:
@@ -729,8 +732,10 @@ async def run(config, once=False):
                     return 0
                 if config.get("host_pid") and not process_alive(config["host_pid"]):
                     return 0
-                if store.db.execute("SELECT 1 FROM requests WHERE kind='execute_now' AND state='pending' LIMIT 1").fetchone():
+                if store.db.execute("SELECT 1 FROM requests WHERE kind IN ('execute_now','pause_all') AND state='pending' LIMIT 1").fetchone():
                     break  # A manual click wakes the existing executor within a second.
+                if not store.get('supervisor_paused',False) and store.db.execute("SELECT 1 FROM requests WHERE kind='adopt' AND state='pending' LIMIT 1").fetchone():
+                    break
                 if rpc and rpc.changed.is_set():
                     rpc.changed.clear()
                     # Coalesce event bursts; never query in a tight loop.

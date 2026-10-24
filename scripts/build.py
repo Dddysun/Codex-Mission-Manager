@@ -72,7 +72,7 @@ def build(args):
     sdk = subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
     common = ["swiftc", "-swift-version", "5", "-O", "-target", "arm64-apple-macos14.0", "-sdk", sdk,
               "-module-cache-path", module_cache, "-parse-as-library", shared_path]
-    run(common + [ROOT / "native/NativeState.swift", ROOT / "native/NativeViews.swift", ROOT / "native/App.swift", "-o", contents / "MacOS/CodexMissionManager"])
+    run(common + [ROOT / "native/Localization.swift", ROOT / "native/NativeState.swift", ROOT / "native/NativeViews.swift", ROOT / "native/NativeSettings.swift", ROOT / "native/MenuPanel.swift", ROOT / "native/App.swift", "-o", contents / "MacOS/CodexMissionManager"])
     run(common + [ROOT / "native/PowerHelper.swift", "-o", contents / "Library/HelperTools/PowerHelper"])
     icon = scratch / "draw-icon"
     run(["swiftc", "-module-cache-path", module_cache, ROOT / "scripts/Icon.swift", "-o", icon])
@@ -125,7 +125,7 @@ def build(args):
     if identity != "-": command += ["--options", "runtime", "--timestamp"]
     run(command + [app])
     run(["codesign", "--verify", "--deep", "--strict", app])
-    manifest = {"version": "0.1.0", "architecture": "arm64", "minimum_macos": "14.0",
+    manifest = {"version": "0.2.0", "architecture": "arm64", "minimum_macos": "14.0",
         "python": pyversion, "signing": "developer-id" if team else "ad-hoc-local-preview",
         "notarized": False, "privileged_helper_enabled": bool(team), "live_closed_lid_verified": False,
         "ui": "SwiftUI-AppKit", "webview": False, "private_runtime_data_included": False, "external_dependency": "Compatible installed ChatGPT/Codex desktop client"}

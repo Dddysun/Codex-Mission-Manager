@@ -6,15 +6,29 @@ import UserNotifications
 import IOKit.pwr_mgt
 
 final class MissionModel: ObservableObject {
-    @Published var backend = "正在启动本机服务"
-    @Published var client = "尚未检查"
-    @Published var power = "尚未检查"
+    @Published var language = UserDefaults.standard.string(forKey: "language") ?? (Locale.preferredLanguages.first?.hasPrefix("zh") == true ? "zh" : "en") {
+        didSet { if NativeLocalization.testLanguage == nil { UserDefaults.standard.set(language, forKey: "language") }; refresh(); onPresentationChanged?() }
+    }
+    @Published var theme = UserDefaults.standard.string(forKey: "theme") ?? "system" {
+        didSet { if NativeLocalization.testLanguage == nil { UserDefaults.standard.set(theme, forKey: "theme") }; onPresentationChanged?() }
+    }
+    @Published var loginEnabled = false
+    @Published var notificationsEnabled = false
+    @Published var notificationDelivery = UserDefaults.standard.object(forKey: "notificationDelivery") as? Bool ?? false
+    @Published var notificationsDenied = false
+    @Published var helperEnabled = false
+    @Published var closedLidEnabled = false
+    var onPresentationChanged: (() -> Void)?
+    var colorScheme: ColorScheme? { theme == "dark" ? .dark : theme == "light" ? .light : nil }
+    @Published var backend = L("正在启动本机服务")
+    @Published var client = L("尚未检查")
+    @Published var power = L("尚未检查")
     @Published var awake = false
-    @Published var login = "尚未检查"
-    @Published var notifications = "尚未检查"
-    @Published var helper = "尚未检查"
-    @Published var closedLid = "未启用"
-    @Published var checked = "尚未检查"
+    @Published var login = L("尚未检查")
+    @Published var notifications = L("尚未检查")
+    @Published var helper = L("尚未检查")
+    @Published var closedLid = L("未启用")
+    @Published var checked = L("尚未检查")
     @Published var error = ""
     @Published var paused = true
     @Published var allowBattery = false
@@ -23,6 +37,7 @@ final class MissionModel: ObservableObject {
     var baseURL: URL?
     var stateDirectory: URL?
     @Published var snapshot: MissionSnapshot?
+    @Published var connectionError = ""
     @Published var connected = false
     @Published var busy = false
     @Published var notice = ""
@@ -44,13 +59,13 @@ final class MissionModel: ObservableObject {
     var support: URL { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/CodexMissionManager") }
 
     func start() {
-        setAwake(UserDefaults.standard.object(forKey: "keepAwake") as? Bool ?? true)
+        setAwake(UserDefaults.standard.object(forKey: "keepAwake") as? Bool ?? false)
         let center = DistributedNotificationCenter.default()
         observerTokens.append(center.addObserver(forName: .init("com.apple.screenIsLocked"), object: nil, queue: .main) { [weak self] _ in
             guard let self, self.waitingForLock, Date() < self.lockDeadline else { return }
             self.waitingForLock = false
             self.withHelper { peer in peer.enableClosedLid(onBattery: self.allowBattery) { value in
-                DispatchQueue.main.async { self.closedLid = value["reason"] as? String ?? "未确认" }
+                DispatchQueue.main.async { self.closedLidEnabled = value["active"] as? Bool ?? false; self.closedLid = value["reason"] as? String ?? L("未确认") }
             } }
         })
         observerTokens.append(center.addObserver(forName: .init("com.apple.screenIsUnlocked"), object: nil, queue: .main) { [weak self] _ in
@@ -88,14 +103,14 @@ final class MissionModel: ObservableObject {
                 DispatchQueue.main.async { self?.receiveHost(data) }
             }
             task.terminationHandler = { [weak self] _ in DispatchQueue.main.async {
-                self?.backend = "后台已退出；已有记录保留"
+                self?.backend = L("后台已退出；已有记录保留")
                 self?.host = nil
                 self?.connected = false
             } }
             try task.run()
             host = task
             hostInput = input
-        } catch { self.error = error.localizedDescription; backend = "启动失败" }
+        } catch { self.error = error.localizedDescription; backend = L("启动失败") }
     }
 
     func receiveHost(_ data: Data) {
@@ -108,7 +123,7 @@ final class MissionModel: ObservableObject {
                   url.scheme == "http", url.host == "127.0.0.1", url.port != nil else { continue }
             baseURL = url
             stateDirectory = (value["state_dir"] as? String).map { URL(fileURLWithPath: $0) }
-            backend = value["external"] as? Bool == true ? "已连接原有任务管家，未启动重复执行器" : "应用自带后台已启动"
+            backend = value["external"] as? Bool == true ? L("已连接原有任务管家，未启动重复执行器") : L("应用自带后台已启动")
             Task { await refreshControl() }
         }
     }
@@ -123,13 +138,13 @@ final class MissionModel: ObservableObject {
             _ = try await session.data(from: url) // Compatibility session handshake with existing backends.
             let (data, response) = try await session.data(from: url.appendingPathComponent("api/state"))
             guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                throw NSError(domain: "Guardian", code: 1, userInfo: [NSLocalizedDescriptionKey: "无法读取本机后台状态"])
+                throw NSError(domain: "Guardian", code: 1, userInfo: [NSLocalizedDescriptionKey: L("无法读取本机后台状态")])
             }
             let value = try JSONDecoder().decode(MissionSnapshot.self, from: data)
             await MainActor.run {
-                self.snapshot = value; self.paused = value.control_paused; self.connected = true; self.error = ""
+                self.snapshot = value; self.paused = value.control_paused; self.connected = true; self.connectionError = ""
             }
-        } catch { await MainActor.run { self.connected = false; self.error = "后台连接待恢复：" + error.localizedDescription } }
+        } catch { await MainActor.run { self.connected = false; self.connectionError = L("后台连接待恢复：") + error.localizedDescription } }
     }
 
     func perform(_ payload: [String: Any]) {
@@ -148,10 +163,10 @@ final class MissionModel: ObservableObject {
                 let (reply, response) = try await session.data(for: request)
                 let body = (try? JSONSerialization.jsonObject(with: reply)) as? [String: Any]
                 guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                    throw NSError(domain: "Guardian", code: 1, userInfo: [NSLocalizedDescriptionKey: body?["error"] as? String ?? "操作结果待核对，请刷新后检查记录"])
+                    throw NSError(domain: "Guardian", code: 1, userInfo: [NSLocalizedDescriptionKey: body?["error"] as? String ?? L("操作结果待核对，请刷新后检查记录")])
                 }
                 await MainActor.run {
-                    self.notice = body?["message"] as? String ?? "操作已提交"
+                    self.notice = (self.language == "en" ? body?["message_en"] as? String : nil) ?? body?["message"] as? String ?? L("操作已提交")
                     // Clear only a draft confirmed saved by this exact request.
                     if payload["action"] as? String == "set_plan", payload["enabled"] as? Bool == true,
                        let key = payload["key"] as? String, let prompt = payload["prompt"] as? String,
@@ -163,6 +178,14 @@ final class MissionModel: ObservableObject {
         }
     }
 
+    func setGlobalAutomatic(_ enabled: Bool) {
+        guard let state = snapshot else { return }
+        perform(["action":enabled ? "enable" : "pause", "revision":state.control_revision])
+    }
+    func pauseAllTasks() {
+        guard let state = snapshot else { return }
+        perform(["action":"pause_all", "revision":state.control_revision])
+    }
     func toggleAutomatic() {
         guard let state = snapshot else { return }
         perform(["action": !state.running ? "start" : state.control_paused ? "enable" : "pause", "revision": state.control_revision])
@@ -187,7 +210,7 @@ final class MissionModel: ObservableObject {
     func setAwake(_ value: Bool) {
         if value && assertion == 0 {
             let result = IOPMAssertionCreateWithName(kIOPMAssertionTypePreventUserIdleSystemSleep as CFString,
-                IOPMAssertionLevel(kIOPMAssertionLevelOn), "任务管家：保持后台工作，允许屏幕熄灭" as CFString, &assertion)
+                IOPMAssertionLevel(kIOPMAssertionLevelOn), L("任务管家：保持后台工作，允许屏幕熄灭") as CFString, &assertion)
             awake = result == kIOReturnSuccess
         } else if !value && assertion != 0 { IOPMAssertionRelease(assertion); assertion = 0; awake = false }
         UserDefaults.standard.set(awake, forKey: "keepAwake")
@@ -195,63 +218,80 @@ final class MissionModel: ObservableObject {
 
     func registration(_ value: SMAppService.Status) -> String {
         switch value {
-        case .enabled: return "系统已允许"
-        case .requiresApproval: return "等待系统批准／已被停用"
-        case .notRegistered: return "尚未登记"
-        case .notFound: return "服务文件不可用"
-        @unknown default: return "未知，待确认"
+        case .enabled: return L("系统已允许")
+        case .requiresApproval: return L("等待系统批准／已被停用")
+        case .notRegistered: return L("尚未登记")
+        case .notFound: return L("尚未注册或服务暂不可用")
+        @unknown default: return L("未知，待确认")
         }
     }
 
     func refresh() {
+        loginEnabled = SMAppService.mainApp.status == .enabled
+        helperEnabled = signed && service.status == .enabled
         login = registration(SMAppService.mainApp.status)
-        helper = signed ? registration(service.status) : "本机预览包未配置 Developer ID，管理员服务不可启用"
+        helper = signed ? registration(service.status) : L("本机预览包未配置 Developer ID，管理员服务不可启用")
         let p = HardwareState.power()
-        power = "\(p.ac ? "外接电源" : "电池／电源待确认") · 电量 \(p.battery.map { "\($0)%" } ?? "未知") · \(HardwareState.lidClosed.map { $0 ? "已合盖" : "开盖" } ?? "机盖状态待确认")"
-        let app = URL(fileURLWithPath: "/Applications/ChatGPT.app/Contents/Info.plist")
-        if let data = try? Data(contentsOf: app), let info = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any] {
-            let build = info["CFBundleVersion"] as? String ?? "未知"
-            client = build == "20770" ? "检测到兼容客户端 build 20770；实际登录与连接见任务页" : "客户端 build \(build) 尚未适配，控制会被阻止"
-        } else { client = "未找到 ChatGPT 桌面客户端；应用内置 Python，但不分发原客户端" }
+        power = L("%@ · 电量 %@ · %@", String(describing: p.ac ? "外接电源" : "电池／电源待确认"), String(describing: p.battery.map { "\($0)%" } ?? "未知"), String(describing: HardwareState.lidClosed.map { $0 ? "已合盖" : "开盖" } ?? "机盖状态待确认"))
+        if let compatibility = snapshot?.compatibility {
+            if compatibility.status == "client_missing" { client = L("未检测到兼容客户端，请安装并登录桌面客户端。") }
+            else if compatibility.supported {
+                client = L("客户端 %@ · 兼容配置已匹配", compatibility.build ?? "—") + (connected ? " · " + L("已连接") : " · " + L("连接待恢复"))
+            } else { client = L("客户端 %@ 尚未支持，请检查任务管家更新。", compatibility.build ?? "—") }
+        } else { client = L("正在检查客户端兼容性") }
         checked = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
-        if waitingForLock && Date() >= lockDeadline { waitingForLock = false; closedLid = "锁屏等待已超时，未启用合盖保持" }
+        if waitingForLock && Date() >= lockDeadline { waitingForLock = false; closedLid = L("锁屏等待已超时，未启用合盖保持") }
         UNUserNotificationCenter.current().getNotificationSettings { value in DispatchQueue.main.async {
+            self.notificationsDenied = value.authorizationStatus == .denied
+            self.notificationsEnabled = [.authorized, .provisional].contains(value.authorizationStatus) && self.notificationDelivery
             switch value.authorizationStatus {
-            case .authorized, .provisional: self.notifications = "已允许"
-            case .denied: self.notifications = "已拒绝；任务仍可执行"
-            case .notDetermined: self.notifications = "尚未申请"
-            default: self.notifications = "状态待确认"
+            case .authorized, .provisional: self.notifications = L("已允许")
+            case .denied: self.notifications = L("已拒绝；任务仍可执行")
+            case .notDetermined: self.notifications = L("尚未申请")
+            default: self.notifications = L("状态待确认")
             }
         } }
     }
 
+    func setNotifications(_ enabled: Bool) {
+        notificationDelivery = enabled
+        UserDefaults.standard.set(enabled, forKey: "notificationDelivery")
+        if enabled && notificationsDenied { openSettings("notifications") }
+        else if enabled { requestNotifications() }
+        refresh()
+    }
     func requestNotifications() {
+        error = ""
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, error in
             DispatchQueue.main.async { self.error = error?.localizedDescription ?? ""; self.refresh() }
         }
     }
     func registerLogin() {
+        error = ""
         do { try SMAppService.mainApp.register(); refresh() }
         catch { self.error = error.localizedDescription }
     }
     func unregisterLogin() {
+        error = ""
         do { try SMAppService.mainApp.unregister(); refresh() }
         catch { self.error = error.localizedDescription }
     }
     func registerPower() {
-        guard signed else { error = "需要发行签名和系统管理员批准；此预览包不会安装 root 服务"; return }
+        error = ""
+        guard signed else { error = L("需要发行签名和系统管理员批准；此预览包不会安装 root 服务"); return }
         do { try service.register(); refresh(); SMAppService.openSystemSettingsLoginItems() }
         catch { self.error = error.localizedDescription }
     }
     func removePower() {
         guard signed else { return }
-        withHelper { peer in peer.disable { _ in DispatchQueue.main.async {
+        withHelper { peer in peer.disable { value in DispatchQueue.main.async {
+            guard value["active"] as? Bool != true else { self.error = L("电源设置尚未恢复，请稍后重试。"); return }
             do { try self.service.unregister(); self.powerConnection?.invalidate(); self.powerConnection = nil; self.refresh() }
             catch { self.error = error.localizedDescription }
         } } }
     }
     func withHelper(_ body: @escaping (PowerHelperProtocol) -> Void) {
-        guard signed, service.status == .enabled else { error = "管理员辅助服务未获准运行"; return }
+        guard signed, service.status == .enabled else { error = L("管理员辅助服务未获准运行"); return }
         if powerConnection == nil {
             let connection = NSXPCConnection(machServiceName: MissionIdentity.helper, options: .privileged)
             connection.remoteObjectInterface = NSXPCInterface(with: PowerHelperProtocol.self)
@@ -262,27 +302,29 @@ final class MissionModel: ObservableObject {
             powerConnection = connection
         }
         let proxy = powerConnection?.remoteObjectProxyWithErrorHandler { [weak self] error in
-            DispatchQueue.main.async { self?.closedLid = "服务连接失败：" + error.localizedDescription }
+            DispatchQueue.main.async { self?.closedLid = L("服务连接失败：") + error.localizedDescription }
         } as? PowerHelperProtocol
         if let proxy { body(proxy) }
     }
     func prepareClosedLid() {
-        guard signed, service.status == .enabled else { error = "需先完成发行签名与管理员辅助服务授权"; return }
+        guard signed, service.status == .enabled else { error = L("需先完成发行签名与管理员辅助服务授权"); return }
         waitingForLock = true
         lockDeadline = Date().addingTimeInterval(60)
-        closedLid = "等待锁屏：请按 Control–Command–Q；确认锁屏事件后才启用"
+        closedLid = L("等待锁屏：请按 Control–Command–Q；确认锁屏事件后才启用")
         // No simulated keyboard input, Accessibility access or private locking API.
     }
     func disableClosedLid() {
         waitingForLock = false
         withHelper { peer in peer.disable { value in DispatchQueue.main.async {
-            self.closedLid = value["reason"] as? String ?? "待确认"
+            self.closedLidEnabled = value["active"] as? Bool ?? false
+            self.closedLid = value["reason"] as? String ?? L("待确认")
         } } }
     }
     func heartbeat() {
         guard powerConnection != nil else { return }
         withHelper { peer in peer.heartbeat { value in DispatchQueue.main.async {
-            self.closedLid = value["reason"] as? String ?? "待确认"
+            self.closedLidEnabled = value["active"] as? Bool ?? false
+            self.closedLid = value["reason"] as? String ?? L("待确认")
         } } }
     }
     func deliverNotices() {
@@ -291,9 +333,9 @@ final class MissionModel: ObservableObject {
               let records = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] else { return }
         for record in records {
             guard let key = record["key"] as? String else { continue }
-            if !notificationKeys.contains(key), !firstNoticeRead {
+            if notificationDelivery, notificationsEnabled, !notificationKeys.contains(key), !firstNoticeRead {
                 let content = UNMutableNotificationContent()
-                content.title = record["title"] as? String ?? "任务管家"
+                content.title = L(record["title"] as? String ?? "任务管家").replacingOccurrences(of:"额度管家：",with:"")
                 content.body = record["body"] as? String ?? ""
                 UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: key, content: content, trigger: nil))
             }
@@ -310,70 +352,8 @@ final class MissionModel: ObservableObject {
     }
     func openSettings(_ destination: String) {
         if destination == "login" { SMAppService.openSystemSettingsLoginItems(); return }
-        let known = ["battery": "x-apple.systempreferences:com.apple.preference.battery", "notifications": "x-apple.systempreferences:com.apple.preference.notifications", "privacy": "x-apple.systempreferences:com.apple.preference.security"]
+        let known = ["general": "x-apple.systempreferences:com.apple.preference.general", "battery": "x-apple.systempreferences:com.apple.preference.battery", "notifications": "x-apple.systempreferences:com.apple.preference.notifications", "privacy": "x-apple.systempreferences:com.apple.preference.security"]
         if let text = known[destination], let url = URL(string: text) { NSWorkspace.shared.open(url) }
-    }
-}
-
-struct MissionSettings: View {
-    @ObservedObject var model: MissionModel
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                Text("后台运行与系统权限").font(.title2.bold())
-                Text("V0.1 · 授权状态、运行条件与实机验证分别展示").foregroundStyle(.secondary)
-                GroupBox("正常开盖后台") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(model.backend); Text(model.client).foregroundStyle(.secondary)
-                        Button("重新连接后台") { model.startHost() }.disabled(model.host != nil)
-                        Text("无需辅助功能、录屏或完全磁盘访问权限。关闭窗口后仍运行；退出应用才停止管家。")
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
-                }
-                GroupBox("锁屏与熄屏") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Toggle("保持系统清醒，允许屏幕熄灭", isOn: Binding(get: { model.awake }, set: { model.setAwake($0) }))
-                        Text(model.awake ? "本应用防空闲睡眠断言已启用" : "本应用未持有防睡眠断言")
-                        Text(model.power).foregroundStyle(.secondary)
-                        Text("当前配置会让管家后端持有自己的防睡眠保护；连接旧服务时，旧服务也可能持有保护。锁屏、熄屏发送及打开未加载聊天：实机验收未完成。")
-                        Button("打开电池设置") { model.openSettings("battery") }
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
-                }
-                GroupBox("无外屏合盖运行 · 增强模式") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(model.helper)
-                        Text(model.closedLid).foregroundStyle(.secondary)
-                        Text("管理员服务仅处理固定睡眠开关。默认需接电；电池余量≤20%、严重热压力或客户端失联45秒时恢复。启用前需手动锁屏；解锁会撤销合盖保持。机盖事件和锁屏事件均需本机实测。")
-                        Toggle("允许电池运行（保留20%截止保护）", isOn: $model.allowBattery)
-                        HStack {
-                            Button("申请管理员服务授权") { model.registerPower() }.disabled(!model.signed)
-                            Button("打开系统设置") { model.openSettings("login") }
-                        }
-                        HStack {
-                            Button("准备启用，等待锁屏") { model.prepareClosedLid() }.disabled(!model.signed)
-                            Button("取消／停用") { model.disableClosedLid() }.disabled(!model.signed)
-                            Button("移除辅助服务") { model.removePower() }.disabled(!model.signed)
-                        }
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
-                }
-                GroupBox("登录启动") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(model.login)
-                        HStack { Button("登记登录启动") { model.registerLogin() }; Button("取消登录启动") { model.unregisterLogin() }; Button("打开系统设置") { model.openSettings("login") } }
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
-                }
-                GroupBox("通知") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(model.notifications)
-                        Text("仅通知暂停、续接、发送失败和需处理异常。拒绝通知不影响执行。")
-                        HStack { Button("申请通知权限") { model.requestNotifications() }; Button("打开通知设置") { model.openSettings("notifications") } }
-                    }.frame(maxWidth: .infinity, alignment: .leading).padding(8)
-                }
-                if !model.error.isEmpty { Text(model.error).foregroundStyle(.orange).textSelection(.enabled) }
-                HStack { Button("重新检查") { model.refresh() }; Text("最近检查：\(model.checked)").foregroundStyle(.secondary) }
-                Text("本机预览包采用临时签名，未公证。管理员合盖服务未启用、未实机验证；不应将本包标记为合盖能力验收通过。")
-                    .font(.footnote).foregroundStyle(.secondary)
-            }.padding(24)
-        }.frame(minWidth: 670, minHeight: 600)
     }
 }
 
@@ -382,33 +362,25 @@ final class MissionApp: NSObject, NSApplicationDelegate {
     var window: NSWindow!
     var settingsWindow: NSWindow?
     var statusItem: NSStatusItem!
-    var pauseMenu: NSMenuItem!
+    let popover = NSPopover()
     var isQuitting = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let menu = NSMenu()
-        let appItem = NSMenuItem(); menu.addItem(appItem)
-        let appMenu = NSMenu()
-        appMenu.addItem(withTitle: "设置…", action: #selector(showSettings), keyEquivalent: ",").target = self
-        appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "退出任务管家", action: #selector(quit), keyEquivalent: "q").target = self
-        appItem.submenu = appMenu
-        let editItem = NSMenuItem(); menu.addItem(editItem)
-        let edit = NSMenu(title: "编辑"); editItem.submenu = edit
-        for (title, selector, key) in [("复制", "copy:", "c"), ("粘贴", "paste:", "v"), ("全选", "selectAll:", "a")] { edit.addItem(withTitle: title, action: Selector(selector), keyEquivalent: key) }
-        NSApp.mainMenu = menu
+        rebuildMainMenu()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "shield", accessibilityDescription: "任务管家")
-        statusItem.button?.toolTip = "任务管家"
-        let tray = NSMenu()
-        tray.addItem(withTitle: "打开任务管家", action: #selector(showWindow), keyEquivalent: "").target = self
-        pauseMenu = tray.addItem(withTitle: "暂停／恢复自动控制", action: #selector(toggleControl), keyEquivalent: ""); pauseMenu.target = self
-        tray.addItem(.separator())
-        tray.addItem(withTitle: "退出任务管家", action: #selector(quit), keyEquivalent: "").target = self
-        statusItem.menu = tray
+        statusItem.button?.image = NSImage(systemSymbolName: "checkmark.shield", accessibilityDescription: L("任务管家"))
+        statusItem.button?.toolTip = L("任务管家")
+        statusItem.button?.target = self
+        statusItem.button?.action = #selector(togglePanel)
+        statusItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
+        popover.behavior = .transient
+        popover.contentViewController = NSHostingController(rootView: MissionMenuPanel(model: model, openWindow: { [weak self] in self?.popover.performClose(nil); self?.showWindow() }, openSettings: { [weak self] in self?.popover.performClose(nil); self?.showSettings() }, quit: { [weak self] in self?.quit() }))
+        popover.contentSize = NSSize(width: 400, height: 570)
+        model.onPresentationChanged = { [weak self] in self?.applyPresentation() }
+        applyPresentation()
         let content = MissionWindow(model: model, showSettings: { [weak self] in self?.showSettings() })
         window = NSWindow(contentViewController: NSHostingController(rootView: content))
-        window.title = "任务管家 · V0.1 原生预览"
+        window.title = L("任务管家")
         window.setContentSize(NSSize(width: 1380, height: 900))
         window.minSize = NSSize(width: 1120, height: 680)
         window.isReleasedWhenClosed = false
@@ -417,18 +389,37 @@ final class MissionApp: NSObject, NSApplicationDelegate {
         model.start()
         let loginLaunch = NSAppleEventManager.shared().currentAppleEvent?.paramDescriptor(forKeyword: AEKeyword(keyAELaunchedAsLogInItem)) != nil
         if !loginLaunch && !CommandLine.arguments.contains("--background") { showWindow() }
-        Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            self.pauseMenu.title = self.model.paused ? "恢复自动控制" : "暂停自动控制"
-        }
+    }
+    func rebuildMainMenu() {
+        let menu = NSMenu(), appItem = NSMenuItem(), appMenu = NSMenu()
+        menu.addItem(appItem); appItem.submenu = appMenu
+        appMenu.addItem(withTitle:L("设置…"), action:#selector(showSettings), keyEquivalent:",").target = self
+        appMenu.addItem(.separator())
+        appMenu.addItem(withTitle:L("退出任务管家"), action:#selector(quit), keyEquivalent:"q").target = self
+        let editItem = NSMenuItem(); menu.addItem(editItem)
+        let edit = NSMenu(title:L("编辑")); editItem.submenu = edit
+        for (title, selector, key) in [(L("撤销"), "undo:", "z"), (L("剪切"), "cut:", "x"), (L("复制"), "copy:", "c"), (L("粘贴"), "paste:", "v"), (L("全选"), "selectAll:", "a")] { edit.addItem(withTitle:title, action:Selector(selector), keyEquivalent:key) }
+        NSApp.mainMenu = menu
+    }
+    func applyPresentation() {
+        NSApp.appearance = model.theme == "system" ? nil : NSAppearance(named:model.theme == "dark" ? .darkAqua : .aqua)
+        rebuildMainMenu()
+        window?.title = L("任务管家")
+        settingsWindow?.title = L("设置")
+        statusItem?.button?.toolTip = L("任务管家")
+    }
+    @objc func togglePanel() {
+        guard let button = statusItem.button else { return }
+        if popover.isShown { popover.performClose(nil) }
+        else { popover.show(relativeTo:button.bounds, of:button, preferredEdge:.minY); Task { await model.refreshControl() } }
     }
     @objc func showWindow() { NSApp.setActivationPolicy(.regular); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true) }
     @objc func showSettings() {
         if settingsWindow == nil {
             let host = NSHostingController(rootView: MissionSettings(model: model))
             let value = NSWindow(contentViewController: host)
-            value.title = "设置 · 后台运行与系统权限"
-            value.setContentSize(NSSize(width: 740, height: 760)); value.isReleasedWhenClosed = false; value.center()
+            value.title = L("设置")
+            value.setContentSize(NSSize(width: 800, height: 780)); value.isReleasedWhenClosed = false; value.center()
             settingsWindow = value
         }
         model.refresh(); settingsWindow?.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true)

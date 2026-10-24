@@ -233,9 +233,8 @@ class DesktopAdapter:
         self.account_display = None
 
     async def start(self):
-        app = plistlib.loads(Path("/Applications/ChatGPT.app/Contents/Info.plist").read_bytes())
-        if str(app.get("CFBundleVersion")) != self.config["desktop_app_build"]:
-            raise DesktopError("installed desktop build changed; adapter must be revalidated")
+        from compatibility import require_supported
+        require_supported()
         await self.quota.start()
         await self.ipc.start()
 
@@ -278,6 +277,9 @@ class DesktopAdapter:
 
     async def call(self, method, params=None):
         params = params or {}
+        if method in ("turn/start", "turn/interrupt", "thread/goal/set"):
+            from compatibility import require_supported
+            require_supported()  # Recheck after client updates while the service is running.
         if method.startswith("account/"):
             if method == "account/rateLimits/read" and self.config.get("fresh_quota_reads"):
                 from rpc import Rpc

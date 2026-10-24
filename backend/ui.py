@@ -17,6 +17,7 @@ from guardian import ROOT, Store, atomic_json, load_config
 from catalog import chat_key, entry
 from plans import get_plan, all_plans, set_plan
 from immediate import enqueue_dispatch, latest_dispatches
+from compatibility import desktop_compatibility
 
 
 def lock_held(path):
@@ -41,6 +42,7 @@ class Application:
             except (OSError, ValueError):
                 report = {}
             now = time.time()
+            compatibility = desktop_compatibility()
             running = lock_held(store.directory / "daemon.lock")
             observed = report.get("observed_at")
             fresh = observed is not None and now - observed <= cfg["max_sample_age_seconds"]
@@ -76,6 +78,10 @@ class Application:
                 if not catalog or catalog.get("local_error"):
                     chats.setdefault(key, entry(t["id"], t["name"]))
             pending = set()
+            adoption = {}
+            for record in store.db.execute("SELECT state,value,result FROM requests WHERE kind='adopt' ORDER BY rowid"):
+                target = json.loads(record['value']).get('thread_id')
+                adoption[target] = {'state':record['state'], 'result':json.loads(record['result'] or '{}')}
             preferences = store.get("auto_preferences", {})
             for row in store.db.execute("SELECT value FROM requests WHERE kind='adopt' AND state IN ('pending','processing')"):
                 tid = json.loads(row[0]).get("thread_id")
@@ -98,6 +104,19 @@ class Application:
                     if result["runtime"] is None and runtime_fresh:
                         result["runtime"] = chat.get("runtime") or {"type": chat["status"]}
                 result.update({k: chat.get(k) for k in ("key", "kind", "host_id", "category", "can_control", "capability_note", "source_label", "execution_stage")})
+                intent = adoption.get(chat['id']) if local else None
+                opted = preferences.get(chat['id'])
+                if not task and opted is True:
+                    result['auto_resume'] = True
+                if opted is False and not task:
+                    result['auto_connection'] = 'off'
+                    result['auto_error'] = None
+                elif intent and not task:
+                    result['auto_connection'] = ('waiting_global' if paused else 'queued') if intent['state'] == 'pending' else ('connecting' if intent['state'] == 'processing' else 'failed' if intent['state'] == 'failed' else 'off')
+                    result['auto_error'] = intent['result'].get('error') if intent['state'] == 'failed' else None
+                else:
+                    result['auto_connection'] = 'connected' if task else 'off'
+                    result['auto_error'] = None
                 result["immediate"] = dispatches.get(chat["key"])
                 plan = get_plan(store, chat["key"])
                 result["plan"] = ({k: plan.get(k) for k in ("state", "prompt", "revision", "armed_at", "armed_window_reset", "reason", "finished_at")}
@@ -122,11 +141,12 @@ class Application:
             return {
                 "observed_at": report.get("observed_at"), "now": now, "running": running,
                 "healthy": healthy, "stale": not fresh, "control_paused": paused,
-                "control_enabled": healthy and not paused and not stop_requested and cfg["mode"] == "control",
+                "control_enabled": healthy and compatibility['supported'] and not paused and not stop_requested and cfg["mode"] == "control",
                 "control_revision": global_revision,
                 "service_error": report.get("stage") if report.get("phase") == "unknown" else None,
                 "tasks": tasks, "events": events,
-                "usage": usage,
+                "usage": usage, "compatibility": compatibility,
+                "bulk_pause": store.get("bulk_pause_result"),
                 "catalog": {"observed_at": catalog.get("observed_at"), "cloud_observed_at": catalog.get("cloud_observed_at"),
                             "cloud_snapshot": True, "cloud_auto_execute": False, "local_error": catalog.get("local_error")},
                 "policy": {"pause": cfg["pause_remaining"], "resume": cfg["resume_remaining"],
@@ -139,7 +159,7 @@ class Application:
     def action(self, payload):
         cfg = load_config(self.config_path)
         action = payload.get("action")
-        if action not in ("pause", "enable", "hold", "release", "start", "set_plan", "set_auto", "execute_now"):
+        if action not in ("pause", "enable", "hold", "release", "start", "set_plan", "set_auto", "execute_now", "pause_all"):
             raise ValueError("未知操作")
         store = Store(cfg["state_dir"])
         try:
@@ -153,6 +173,26 @@ class Application:
             revision = payload.get("revision")
             if not isinstance(revision, int) or isinstance(revision, bool):
                 raise ValueError("操作缺少当前版本，请刷新后重试")
+            if action == "pause_all":
+                report = json.loads((store.directory / 'status.json').read_text())
+                if cfg['mode'] != 'control' or not lock_held(store.directory / 'daemon.lock') or report.get('phase') == 'unknown':
+                    raise ValueError('后台发送服务尚未就绪，未提交指令')
+                if time.time() - report.get('observed_at',0) > cfg['max_sample_age_seconds']:
+                    raise ValueError('需要先取得可靠的账号和额度采样')
+                with store.db:
+                    store.db.execute("BEGIN IMMEDIATE")
+                    if revision != store.get('control_revision', 0):
+                        raise ValueError('控制状态已变化，请刷新后重试')
+                    if store.db.execute("SELECT 1 FROM requests WHERE kind='pause_all' AND state IN ('pending','processing')").fetchone():
+                        raise ValueError('暂停请求正在处理，请等待结果')
+                    # Freeze precisely the opted-in managed chats, never every catalog item.
+                    ids = [t['id'] for t in store.tasks() if t.get('auto_resume',True) and not t.get('manual_hold') and t['state'] not in ('disabled','needs_review')]
+                    import uuid
+                    request_id = str(uuid.uuid4())
+                    store.db.execute('INSERT INTO requests VALUES(?,?,?,?,NULL)',(request_id,'pause_all',json.dumps({'ids':ids,'scope':(store.get('last_report',{}).get('quota') or {}).get('scope')}),'pending'))
+                    for key,value in [('supervisor_paused',True),('control_revision',revision+1),('bulk_pause_result',{'state':'pending','total':len(ids),'paused':0,'skipped':0,'failed':0})]:
+                        store.db.execute('INSERT OR REPLACE INTO kv VALUES(?,?)',(key,json.dumps(value)))
+                return {'message':'已提交暂停，正在逐项核对受管任务','message_en':'Pause requested. Checking managed tasks individually.'}
             if action in ("set_plan", "set_auto", "execute_now"):
                 report = json.loads((store.directory / "status.json").read_text())
                 sample = report.get("quota") or (store.get("last_report", {}).get("quota") or {})
@@ -189,8 +229,16 @@ class Application:
                 preferences = store.get("auto_preferences", {})
                 preferences[chat["id"]] = enabled
                 store.put("auto_preferences", preferences)
-                if enabled and not task:
-                    store.enqueue("adopt", {"thread_id": chat["id"]})
+                pending_rows = store.db.execute("SELECT id,value FROM requests WHERE kind='adopt' AND state IN ('pending','processing')").fetchall()
+                same = [r for r in pending_rows if json.loads(r['value']).get('thread_id') == chat['id']]
+                if enabled and not task and not same:
+                    store.enqueue("adopt", {"thread_id": chat["id"], "queued_at":time.time()})
+                if not enabled:
+                    with store.db:
+                        for record in same:
+                            store.db.execute("UPDATE requests SET state='cancelled',result=? WHERE id=? AND state='pending'",(json.dumps({'error':'Cancelled by user'}),record['id']))
+                if enabled and not task and store.get('supervisor_paused',False):
+                    return {'message':'已登记，等待启用全局自动控制','message_en':'Saved. Waiting for global automatic control to be enabled.'}
                 return {"message": "已允许自动控制，正在连接原聊天" if enabled else "已关闭自动控制；独立预约计划保留"}
             if action in ("hold", "release"):
                 tid = payload.get("thread_id")

@@ -2,6 +2,7 @@ import Foundation
 
 @main enum NativeContractTests {
     static func main() throws {
+        NativeLocalization.testLanguage = "zh"
         let data = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))
         let state = try JSONDecoder().decode(MissionSnapshot.self, from: data)
         if CommandLine.arguments.contains("--decode-only") { print("Native decoder accepted live snapshot: \(state.tasks.count) chats, \(state.events.count) events"); return }
@@ -30,6 +31,24 @@ import Foundation
         precondition(state.usage?.account?.subscription == "Plus")
         idle.connection_error = "offline"
         precondition(idle.status == "连接待恢复")
+        idle.auto_connection = "waiting_global"
+        precondition(idle.status == "等待全局启用")
+        idle.auto_connection = "queued"
+        precondition(idle.status == "等待连接")
+        idle.auto_connection = "failed"
+        idle.runtime?.type = "active"
+        precondition(idle.attention && !idle.active && idle.status == "连接失败，可重试")
+        idle.auto_connection = nil
+        idle.connection_error = nil
+        idle.state = "paused"
+        idle.manual_hold = true
+        precondition(idle.waiting && !idle.automatic && idle.status == "手动暂停")
+        idle.auto_connection = "waiting_global"
+        NativeLocalization.testLanguage = "en"
+        precondition(idle.status == "Waiting for automation")
+        precondition(L("暂停所有任务") == "Pause all tasks")
+        precondition(L("客户端 %@ · 兼容配置已匹配", "21828") == "Client 21828 · Compatibility profile matched")
+        precondition(!NativeLocalization.english.values.contains { $0.contains("本机预览") })
         print("Native snapshot / status / control contract checks passed")
     }
 }
