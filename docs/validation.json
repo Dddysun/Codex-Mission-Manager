@@ -1,5 +1,5 @@
 {
-  "dmg_sha256": "b62e7a77b7a4b12508d9d16affcfa4f5e23462e8b8bfd76d59821e0f31de87fd",
+  "dmg_sha256": "5a7857053dd261ee4b46e9addb5a3d8c7ac306b3e4caee9b0196e35e7cfa7725",
   "administrator_service_installed": false,
   "system_power_settings_changed": false,
   "webkit_linked": false,
@@ -111,41 +111,40 @@
   },
   "subscription_cases": "synthetic service responses; no real Free/Pro account switch",
   "client_21828_live_control_verified": false,
-  "status": "V0.2.1 preview published and installed; application connection and user-scheduled one-time instruction delivery verified",
-  "local_dmg_sha256": "baec0fd444e3b4c49db124dfe52620bcb6039a62b6ae55b10ba18498cb7dc61f",
+  "status": "V0.2.1 build 5 preview published and installed; 5s UI and 30s/10s collection delays verified",
   "github_downloaded_dmg_verified": true,
   "github_actions": {
-    "url": "https://github.com/Dddysun/Codex-Mission-Manager/actions/runs/40155666307",
+    "url": "https://github.com/Dddysun/Codex-Mission-Manager/actions/runs/40171708791",
     "conclusion": "success"
   },
   "github_release": {
-    "tag": "v0.2.1-preview.5",
-    "url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-preview.5",
-    "source_commit": "ba51f5ec8509a9a0bc6590957272a1ebc938fd2e",
+    "tag": "v0.2.1-preview.6",
+    "url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-preview.6",
+    "source_commit": "19dc3116c3ef7c81b3917060c3aa06466cf1a287",
     "assets": [
       {
         "name": "build-manifest.json",
         "size": 590,
-        "digest": "sha256:4bd62855e0f96170541b8b239db71a7d684b32239ebb607264f306597aa7cff8",
-        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-preview.5/build-manifest.json"
+        "digest": "sha256:6645baf1f6ddda1f6dc7f0a77ba222574765c76969ea236bae6d184824bdddf0",
+        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-preview.6/build-manifest.json"
       },
       {
         "name": "Codex-Mission-Manager-0.2.1-arm64-preview.dmg",
-        "size": 27707895,
-        "digest": "sha256:b62e7a77b7a4b12508d9d16affcfa4f5e23462e8b8bfd76d59821e0f31de87fd",
-        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-preview.5/Codex-Mission-Manager-0.2.1-arm64-preview.dmg"
+        "size": 27707967,
+        "digest": "sha256:5a7857053dd261ee4b46e9addb5a3d8c7ac306b3e4caee9b0196e35e7cfa7725",
+        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-preview.6/Codex-Mission-Manager-0.2.1-arm64-preview.dmg"
       },
       {
         "name": "SHA256SUMS",
         "size": 112,
-        "digest": "sha256:88441888a881543c9da65ff89b45409890c07bde58a09deb5ed97a17cc564c41",
-        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-preview.5/SHA256SUMS"
+        "digest": "sha256:f50a72e50e2b66c2776b7de798a889a602148d3a67ff4d2a5e98bdd57f1666c2",
+        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-preview.6/SHA256SUMS"
       }
     ]
   },
   "local_upgrade": {
     "installed_version": "0.2.1",
-    "installed_bundle_build": "4",
+    "installed_bundle_build": "5",
     "public_release_dmg_used": true,
     "automation_preferences_preserved": true,
     "existing_plan_count_preserved": true,
@@ -155,31 +154,40 @@
     "connection_error": null,
     "documents_access_prompt_pending": false,
     "permission_prompt_evidence": "Historical macOS TCC SystemPolicyDocumentsFolder prompt; user subsequently handled it and application connection recovered",
-    "verification_state": "passed: fresh application API and one user-scheduled delivery; no extra live test messages",
+    "verification_state": "passed: build 5 new-backend fresh sample, 30/10 runtime and complete plan/request records preserved",
     "live_chat_test_messages_sent": 0,
     "documents_access_handled_by_user": true,
     "last_read_only_check": {
-      "checked_at_dubai": "2026-10-25T10:11:50.523770+04:00",
+      "checked_at_dubai": "2026-10-25T11:14:04.783649+04:00",
+      "installed_version": "0.2.1",
+      "installed_build": "5",
+      "ui_poll_seconds": 5,
+      "normal_poll_seconds": 30,
+      "near_limit_poll_seconds": 10,
+      "api_poll_seconds": 30,
+      "new_backend_report_verified": true,
       "running": true,
       "healthy": true,
       "stale": false,
       "control_enabled": true,
-      "client_build": "21828",
-      "client_supported": true,
       "quota_state": "metered",
       "actual_window_minutes": [
         300,
         10080
       ],
-      "usage_stale": false,
-      "same_account_migration_recorded": true,
-      "task_error_count": 0
+      "preferences_and_permissions_preserved": true,
+      "complete_plan_records_preserved": true,
+      "complete_request_records_preserved": true,
+      "test_chat_messages_sent": 0,
+      "system_permissions_changed_by_updater": false
     },
     "original_task_permissions_and_manual_holds_preserved": true,
     "user_changes_after_upgrade_distinguished_from_migration": true,
-    "system_permissions_changed_by_installer": false
+    "system_permissions_changed_by_installer": false,
+    "complete_plan_records_preserved": true,
+    "complete_request_records_preserved": true
   },
-  "evidence_updated_at_dubai": "2026-10-25T10:16:49.282197+04:00",
+  "evidence_updated_at_dubai": "2026-10-25T11:14:54.844025+04:00",
   "client_21828_verification": {
     "read_only_application_connection": true,
     "user_scheduled_one_time_instruction_delivered": true,
@@ -212,6 +220,31 @@
     "sampled_managed_view_count": 4,
     "recorded_control_actions": 0,
     "scope": "three successful normal-phase rounds on one host; not a long-term average or performance guarantee",
-    "client_calls_issued_by_observer": 0
+    "client_calls_issued_by_observer": 0,
+    "verified_in_build": "4",
+    "poll_delays_during_observation_seconds": {
+      "normal": 60,
+      "near_limit": 15
+    }
+  },
+  "bundle_build": "5",
+  "baseline_build4_local_dmg_sha256": "baec0fd444e3b4c49db124dfe52620bcb6039a62b6ae55b10ba18498cb7dc61f",
+  "current_package_verification": {
+    "build": "5",
+    "readonly_mount": true,
+    "signature_integrity": true,
+    "embedded_runtime_verified": true,
+    "host_started_by_package_check": false,
+    "test_messages_sent": 0
+  },
+  "native_fixture_renders_verified_in_build": "4; native interface code unchanged in build 5",
+  "poll_intervals": {
+    "ui_cache_refresh_seconds": 5,
+    "normal_delay_seconds": 30,
+    "near_limit_or_pending_plan_delay_seconds": 10,
+    "delay_semantics": "wait after each collection/control round; collection duration is additional",
+    "connection_error_backoff_changed": false,
+    "fresh_and_repeat_app_host_defaults_checked": true,
+    "installed_template_and_runtime_config_checked": true
   }
 }
