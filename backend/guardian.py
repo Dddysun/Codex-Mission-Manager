@@ -4,7 +4,6 @@ import argparse
 import asyncio
 import contextlib
 import datetime as dt
-import fcntl
 import hashlib
 import json
 import math
@@ -19,6 +18,7 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from platform_support import lock_file, open_lock, process_alive, python_command
 from rpc import Rpc
 from quota import parse_bucket, classify, recovered, next_reset, sample_summary, window_map
 from control_policy import (active_turn, blocked_input, checkpoint_matches, decision, message_id,
@@ -440,7 +440,7 @@ async def identity_for(rpc, store=None):
     auth_path = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "auth.json"
     workspace = None
     if auth_path.exists():
-        auth = json.loads(auth_path.read_text())
+        auth = json.loads(auth_path.read_text(encoding="utf-8"))
         workspace = (auth.get("tokens") or {}).get("account_id") or auth.get("account_id")
     if not account.get("email") and not workspace:
         raise ValueError("stable account identity unavailable")
@@ -452,7 +452,14 @@ async def identity_for(rpc, store=None):
 def server_command(config):
     if config.get("server_command"):
         return config["server_command"]
-    executable = shutil.which("codex")
+    if os.name == 'nt':
+        from compatibility import windows_client
+        client = windows_client()
+        executable = (client or {}).get('cli') or shutil.which('codex.exe')
+        if not executable:
+            raise ValueError('Open the installed ChatGPT desktop app or install the official Codex CLI')
+    else:
+        executable = shutil.which("codex")
     bundled = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
     if not executable and Path(bundled).exists():
         executable = bundled
@@ -525,9 +532,9 @@ async def requests(controller):
 
 async def run(config, once=False):
     store = Store(config["state_dir"])
-    lock = (store.directory / "daemon.lock").open("a+")
+    lock = open_lock(store.directory / "daemon.lock")
     try:
-        fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        lock_file(lock)
     except BlockingIOError:
         raise SystemExit("额度管家已在运行；使用 status 查看。")
     store.put("stop_requested", False)
@@ -553,7 +560,7 @@ async def run(config, once=False):
             try:
                 if rpc is None:
                     rpc = Rpc(server_command(config), config["rpc_timeout_seconds"])
-                    if config.get("desktop_control_enabled"):
+                    if config.get("desktop_control_enabled") or os.name == 'nt':
                         from desktop import DesktopAdapter
                         rpc = DesktopAdapter(rpc, config)
                     await rpc.start()
@@ -569,10 +576,22 @@ async def run(config, once=False):
                 sample = parse_bucket(quota_response, config["limit_id"], started)
                 sample["scope"] = identity
                 phase = classify(sample, config)
+                if os.name == 'nt' and hasattr(rpc, 'refresh_control'):
+                    await rpc.refresh_control()
+                control_available = (config.get('desktop_control_enabled', False) and getattr(rpc, 'control_available', False)
+                                     if os.name == 'nt' else True)
+                if os.name == 'nt' and control_available:
+                    # Showing current status is independent of permission to
+                    # interrupt or resume a conversation.
+                    try:
+                        await rpc.discover()
+                    except Exception as exc:
+                        store.put('catalog_discovery_error', type(exc).__name__)
                 key = identity + ":" + config["limit_id"] + ":" + fingerprint({k: w["reset"] for k, w in window_map(sample).items()})
                 summary = sample_summary(sample)
                 if phase in ("low", "blocked"):
-                    mode = "仅提醒模式，未中断任务" if config["mode"] == "notify" else "正在核对并暂停受管任务"
+                    mode = ("仅提醒模式，未中断任务" if config["mode"] == "notify" else
+                            "仅监测，客户端控制连接尚未核验" if not control_available else "正在核对并暂停受管任务")
                     if config.get("quota_notifications", True):
                         store.notice(key + ":low", "额度管家：额度不足", summary + "；" + mode)
                     store.put("last_low", sample)
@@ -586,19 +605,19 @@ async def run(config, once=False):
                     store.put("last_low", None)
                 supervisor_paused = store.get("supervisor_paused", False)
                 controller = Controller(rpc, store, config, identity, identity_check=lambda: identity_for(rpc, store))
-                if config.get("desktop_control_enabled"):
+                if config.get("desktop_control_enabled") or os.name == 'nt':
                     # Directory faults never stop quota protection for loaded chats.
                     try:
                         from catalog import refresh_catalog
-                        await refresh_catalog(rpc, store, config, identity)
+                        await refresh_catalog(rpc, store, dict(config, control_available=control_available), identity)
                     except Exception as exc:
                         store.put("catalog_error", type(exc).__name__)
-                if config["mode"] == "control":
+                if config["mode"] == "control" and control_available:
                     from manual import pause_requests
                     await pause_requests(controller, sample)
                     from immediate import ImmediateRunner
                     await ImmediateRunner(controller).tick(sample)
-                if config["mode"] == "control" and not supervisor_paused:
+                if config["mode"] == "control" and not supervisor_paused and control_available:
                     if config.get("desktop_control_enabled") and config.get("desktop_auto_discover"):
                         stage = "desktop_discovery"
                         excluded = set(config.get("desktop_excluded_ids", []))
@@ -607,7 +626,7 @@ async def run(config, once=False):
                             if task["state"] != "disabled":
                                 rpc.hosts.setdefault(task["id"], "local")
                         skipped = {}
-                        for tid in await rpc.discover():
+                        for tid in (list(rpc.available) if os.name == 'nt' else await rpc.discover()):
                             if tid in excluded or tid in registered or store.get("auto_preferences", {}).get(tid) is False:
                                 continue
                             try:
@@ -623,9 +642,13 @@ async def run(config, once=False):
                 report = {"version": "0.2.1", "pid": os.getpid(), "observed_at": started,
                           "observed_at_dubai": local_time(started), "mode": config["mode"],
                           "phase": phase, "supervisor_paused": supervisor_paused, "quota": sample,
+                          "control_available": control_available,
+                          "desktop_connection_error": getattr(rpc, 'control_error', None),
                           "tasks": [{k: t.get(k) for k in ("id", "name", "state", "reason")} for t in store.tasks()],
                           "desktop_control": ("connected to existing native desktop session owners; private version-pinned IPC"
-                              if config.get("desktop_control_enabled") else "unverified; only explicitly adopted, loaded sessions are controllable"),
+                              if config.get("desktop_control_enabled") and control_available else
+                              "Windows read-only monitoring; control connection is not verified" if os.name == 'nt' else
+                              "unverified; only explicitly adopted, loaded sessions are controllable"),
                           "desktop_discovery_error": getattr(rpc, "discovery_error", None),
                           "task_errors": store.get("task_errors", {}),
                           "unmanaged_desktop_sessions": store.get("desktop_unmanaged", {})}
@@ -692,9 +715,11 @@ async def run(config, once=False):
 
 
 def make_launch_agent(config, python):
+    if os.name == "nt":
+        raise ValueError("launchd is not available on Windows; use the native application startup setting")
     import plistlib
     execution_root = Path(config.get("runtime_root", ROOT))
-    execution_config = str(execution_root / "config.json") if execution_root != ROOT else config["_path"]
+    execution_config = config["_path"]
     value = {"Label": "local.usage-guardian", "ProgramArguments": [str(Path(python).resolve()),
               str(execution_root / "guardian.py"), "--config", execution_config, "run"],
              "WorkingDirectory": str(execution_root), "RunAtLoad": True, "KeepAlive": True,
@@ -706,13 +731,6 @@ def make_launch_agent(config, python):
     output.write_bytes(plistlib.dumps(value))
     return str(output)
 
-
-def process_alive(pid):
-    try:
-        os.kill(int(pid), 0)
-        return True
-    except (OSError, ValueError, TypeError):
-        return False
 
 
 def main():
@@ -741,29 +759,30 @@ def main():
     try:
         if args.command == "status":
             path = store.directory / "status.json"
-            report = json.loads(path.read_text()) if path.exists() else {"phase": "not_started"}
+            report = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"phase": "not_started"}
             observed = report.get("observed_at")
             report["sample_stale"] = observed is None or time.time() - observed > config["max_sample_age_seconds"]
             report["supervisor_paused"] = store.get("supervisor_paused", False)
-            with (store.directory / "daemon.lock").open("a+") as lock:
+            with open_lock(store.directory / "daemon.lock") as lock:
                 try:
-                    fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    lock_file(lock)
                     report["daemon_running"] = False
                 except BlockingIOError:
                     report["daemon_running"] = True
             print(json.dumps(report, ensure_ascii=False, indent=2))
         elif args.command == "start":
-            with (store.directory / "daemon.lock").open("a+") as lock:
+            with open_lock(store.directory / "daemon.lock") as lock:
                 try:
-                    fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    lock_file(lock)
                 except BlockingIOError:
                     print("额度管家已经在运行")
                     return 0
             with (store.directory / "daemon.log").open("ab") as out, (store.directory / "daemon-error.log").open("ab") as err:
                 execution_root = Path(config.get("runtime_root", ROOT))
-                execution_config = str(execution_root / "config.json") if execution_root != ROOT else config["_path"]
-                process = subprocess.Popen([sys.executable, str(execution_root / "guardian.py"), "--config", execution_config, "run"],
-                    stdin=subprocess.DEVNULL, stdout=out, stderr=err, start_new_session=True, close_fds=True)
+                execution_config = config["_path"]
+                process = subprocess.Popen(python_command(execution_root / "guardian.py", "--config", execution_config, "run"),
+                    stdin=subprocess.DEVNULL, stdout=out, stderr=err, start_new_session=True, close_fds=True,
+                    **({'creationflags':subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
             print("已发起后台监测，进程 %s；请使用 status 确认新鲜用量与 daemon_running。" % process.pid)
         elif args.command == "stop":
             store.put("control_revision", store.get("control_revision", 0) + 1)

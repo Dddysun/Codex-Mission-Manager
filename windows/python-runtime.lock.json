@@ -1,0 +1,8 @@
+{
+  "version": "3.13.17",
+  "architecture": "amd64",
+  "distribution": "official-windows-embeddable",
+  "url": "https://www.python.org/ftp/python/3.13.17/python-3.13.17-embed-amd64.zip",
+  "sha256": "9e35319bffedab8b36ad44d8f377cb4f1733bcec257a0b6d04d94f01486ddb38",
+  "source": "https://www.python.org/downloads/release/python-31317/"
+}

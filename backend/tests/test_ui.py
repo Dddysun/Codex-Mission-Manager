@@ -1,5 +1,4 @@
 """Real HTTP controls against an isolated ledger; never touches desktop tasks."""
-import fcntl
 import http.client
 import json
 from pathlib import Path
@@ -10,6 +9,7 @@ import unittest
 import uuid
 from unittest import mock
 
+from platform_support import open_lock, lock_file
 from guardian import Store
 from test_guardian import CONFIG, sample
 from ui import make_server
@@ -18,6 +18,9 @@ from catalog import entry
 
 class InterfaceTests(unittest.TestCase):
     def setUp(self):
+        platform = mock.patch("ui.IS_WINDOWS", False)
+        platform.start()
+        self.addCleanup(platform.stop)
         self.temp = tempfile.TemporaryDirectory()
         root = Path(self.temp.name)
         config = dict(CONFIG, state_dir=str(root / "state"))
@@ -27,8 +30,8 @@ class InterfaceTests(unittest.TestCase):
         self.store.save_task({"id": "task-1", "name": "GUI 验收任务 <script>", "state": "watching", "scope": "test"})
         self.store.put("task_runtime", {"task-1": {"status": {"type": "active", "activeFlags": []}, "observed_at": time.time()}})
         (root / "state/status.json").write_text(json.dumps({"observed_at": time.time(), "phase": "normal", "quota": {"internal_only": True}}))
-        self.lease = (root / "state/daemon.lock").open("a+")
-        fcntl.flock(self.lease.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        self.lease = open_lock(root / "state/daemon.lock")
+        lock_file(self.lease)
         self.server = make_server(self.config_path, 0)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()

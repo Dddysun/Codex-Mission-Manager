@@ -17,6 +17,8 @@ import struct
 import time
 import uuid
 from stages import from_turn
+from platform_support import sqlite_ro_uri
+IS_WINDOWS = os.name == "nt"
 
 
 VERSIONS = {"initialize": 0, "thread-owner-discovery": 1,
@@ -69,14 +71,37 @@ class DesktopIPC:
         self.snapshots = {}
         self.reader = self.writer = self.task = None
         self.changed = asyncio.Event()
+        self.disconnected = False
+        self.server_identity = None
 
     async def start(self):
-        info, parent = self.path.lstat(), self.path.parent.stat()
-        if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid() or parent.st_uid != os.getuid():
-            raise DesktopError("desktop socket ownership mismatch")
-        if parent.st_mode & 0o022 or info.st_mode & 0o077:
-            raise DesktopError("desktop socket is not private to this user")
-        self.reader, self.writer = await asyncio.open_unix_connection(str(self.path))
+        if IS_WINDOWS:
+            from compatibility import windows_client
+            from platform_support import verify_windows_pipe_server
+            info = windows_client()
+            if not info:
+                raise DesktopError('installed Windows desktop package is unavailable')
+            loop = asyncio.get_running_loop()
+            reader = asyncio.StreamReader(limit=64*1024*1024)
+            protocol = asyncio.StreamReaderProtocol(reader)
+            transport, _ = await loop.create_pipe_connection(lambda:protocol, r'\\.\pipe\codex-ipc')
+            self.reader, self.writer = reader, asyncio.StreamWriter(transport, protocol, reader, loop)
+            try:
+                handle = transport.get_extra_info('pipe')
+                if handle is None:
+                    raise DesktopError('desktop pipe handle is unavailable')
+                self.server_identity = verify_windows_pipe_server(handle.fileno(), info['install_location'])
+            except Exception:
+                self.writer.close()
+                raise
+        else:
+            info, parent = self.path.lstat(), self.path.parent.stat()
+            if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid() or parent.st_uid != os.getuid():
+                raise DesktopError("desktop socket ownership mismatch")
+            if parent.st_mode & 0o022 or info.st_mode & 0o077:
+                raise DesktopError("desktop socket is not private to this user")
+            self.reader, self.writer = await asyncio.open_unix_connection(str(self.path))
+        self.disconnected = False
         self.task = asyncio.create_task(self._read())
         result = await self.call("initialize", {"clientType": "usage-guardian"})
         self.client_id = result["result"]["clientId"]
@@ -122,6 +147,7 @@ class DesktopIPC:
                         departed = params.get("clientId")
                         self.owners = {k: v for k, v in self.owners.items() if v != departed}
         except (asyncio.CancelledError, Exception) as exc:
+            self.disconnected = True
             for future in list(self.pending.values()):
                 if not future.done():
                     future.set_exception(DesktopError(type(exc).__name__))
@@ -231,14 +257,49 @@ class DesktopAdapter:
         self.discovery_signatures = {}
         self.discovery_error = None
         self.account_display = None
+        self.control_available = not IS_WINDOWS
+        self.control_error = None
 
     async def start(self):
         from compatibility import require_supported
+        if IS_WINDOWS:
+            # Quota/history remain usable when the optional desktop transport
+            # is closed, not running, or not yet covered by a Windows profile.
+            await self.quota.start()
+            await self.refresh_control()
+            return
         require_supported()
         await self.quota.start()
         await self.ipc.start()
 
+    async def refresh_control(self):
+        if not IS_WINDOWS:
+            return self.control_available
+        if self.control_available and not self.ipc.disconnected:
+            return True
+        self.control_available = False
+        self.available = []
+        if not self.config.get('desktop_control_enabled'):
+            self.control_error = 'desktop_control_disabled'
+            return False
+        from compatibility import desktop_compatibility
+        if not desktop_compatibility()['supported']:
+            self.control_error = 'desktop_version_not_verified'
+            return False
+        try:
+            await self.ipc.close()
+            self.ipc = DesktopIPC(self.config.get('desktop_socket'))
+            await asyncio.wait_for(self.ipc.start(), self.config.get('desktop_connect_timeout_seconds', 8))
+            self.control_available = True
+            self.control_error = None
+        except Exception as exc:
+            self.control_error = type(exc).__name__
+            await self.ipc.close()
+        return self.control_available
+
     async def discover(self):
+        if IS_WINDOWS and not self.control_available:
+            return []
         candidates = dict(self.hosts)
         candidates.update(self.ipc.known)
         signatures = {}
@@ -246,7 +307,7 @@ class DesktopAdapter:
         self.discovery_error = None
         if db_path.exists():
             try:
-                db = sqlite3.connect("file:" + str(db_path) + "?mode=ro", uri=True, timeout=1)
+                db = sqlite3.connect(sqlite_ro_uri(db_path), uri=True, timeout=1)
                 try:
                     for row in db.execute("SELECT id,updated_at_ms FROM threads WHERE archived=0 AND source='vscode' ORDER BY updated_at DESC LIMIT 100"):
                         candidates[row[0]] = "local"
@@ -280,6 +341,8 @@ class DesktopAdapter:
         if method in ("turn/start", "turn/interrupt", "thread/goal/set"):
             from compatibility import require_supported
             require_supported()  # Recheck after client updates while the service is running.
+            if IS_WINDOWS and (not self.control_available or self.ipc.disconnected):
+                raise DesktopError('Windows desktop control connection has not been verified')
         if method.startswith("account/"):
             if method == "account/rateLimits/read" and self.config.get("fresh_quota_reads"):
                 from rpc import Rpc
@@ -385,10 +448,15 @@ class DesktopAdapter:
         # Reopen the existing desktop conversation, never a second executor.
         # Only callers processing an explicit UI action use this method.
         uuid.UUID(thread_id)
-        process = await asyncio.create_subprocess_exec("/usr/bin/open", "codex://threads/" + thread_id,
-            stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
-        if await process.wait():
-            raise DesktopError("desktop could not open the selected conversation")
+        if IS_WINDOWS:
+            if not self.control_available or self.ipc.disconnected:
+                raise DesktopError('Windows desktop control connection has not been verified')
+            os.startfile('codex://threads/' + thread_id)
+        else:
+            process = await asyncio.create_subprocess_exec("/usr/bin/open", "codex://threads/" + thread_id,
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL)
+            if await process.wait():
+                raise DesktopError("desktop could not open the selected conversation")
         deadline = time.monotonic() + 25
         while time.monotonic() < deadline:
             try:

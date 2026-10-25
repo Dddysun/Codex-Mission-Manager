@@ -1,0 +1,65 @@
+name: Build Windows native preview
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'windows/**'
+      - 'backend/**'
+      - 'tests/**'
+      - 'third-party/**'
+      - '.github/workflows/build-windows.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-package:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build native application and per-user EXE installer
+        shell: powershell
+        run: |
+          .\windows\build.ps1 -OutputDirectory "$env:RUNNER_TEMP\mission-windows"
+      - name: Run isolated Windows regressions
+        shell: powershell
+        run: |
+          & "$env:RUNNER_TEMP\mission-windows\app\runtime\python\python.exe" -X utf8 -I .\windows\run_tests.py --output "$env:RUNNER_TEMP\mission-windows\test-results"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Verify four native fixture views
+        shell: powershell
+        run: |
+          $exe = "$env:RUNNER_TEMP\mission-windows\app\CodexMissionManager.exe"
+          foreach ($name in @('native-state','native-pro-weekly','native-service-only','native-quota-unknown')) {
+            $fixture = Join-Path $env:GITHUB_WORKSPACE ("tests\fixtures\"+$name+".json")
+            $image = Join-Path "$env:RUNNER_TEMP\mission-windows" ($name+".png")
+            $p = Start-Process -FilePath $exe -ArgumentList @('--ui-self-test',('"'+$fixture+'"'),('"'+$image+'"')) -Wait -PassThru
+            if ($p.ExitCode -ne 0 -or !(Test-Path $image)) { throw ('Native render failed: '+$name) }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Codex-Mission-Manager-Windows-x64
+          path: |
+            ${{ runner.temp }}/mission-windows/*setup.exe
+            ${{ runner.temp }}/mission-windows/*preview.zip
+            ${{ runner.temp }}/mission-windows/SHA256SUMS
+            ${{ runner.temp }}/mission-windows/build-manifest.json
+            ${{ runner.temp }}/mission-windows/*.png
+            ${{ runner.temp }}/mission-windows/*.png.json
+            ${{ runner.temp }}/mission-windows/test-results/windows-test-results.json
+      - name: Publish Windows preview assets
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = "v0.2.1-windows-preview.$env:GITHUB_RUN_NUMBER"
+          $assets = @(
+            "$env:RUNNER_TEMP\mission-windows\Codex-Mission-Manager-0.2.1-windows-x64-setup.exe",
+            "$env:RUNNER_TEMP\mission-windows\Codex-Mission-Manager-0.2.1-windows-x64-preview.zip",
+            "$env:RUNNER_TEMP\mission-windows\SHA256SUMS",
+            "$env:RUNNER_TEMP\mission-windows\build-manifest.json"
+          )
+          & gh release create $tag @assets --target $env:GITHUB_SHA --prerelease --title "V0.2.1 Windows native preview $env:GITHUB_RUN_NUMBER" --notes-file docs/WINDOWS_PORT.md
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

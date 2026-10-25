@@ -3,7 +3,6 @@
 import argparse
 from http import cookies
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-import fcntl
 import json
 import os
 from pathlib import Path
@@ -13,20 +12,14 @@ import subprocess
 import sys
 import time
 
+from platform_support import lock_file, open_lock, lock_held, python_command
 from guardian import ROOT, Store, atomic_json, load_config
 from catalog import chat_key, entry
 from plans import get_plan, all_plans, set_plan
 from immediate import enqueue_dispatch, latest_dispatches
 from compatibility import desktop_compatibility
+IS_WINDOWS = os.name == 'nt'
 
-
-def lock_held(path):
-    with Path(path).open("a+") as handle:
-        try:
-            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return False
-        except BlockingIOError:
-            return True
 
 
 class Application:
@@ -38,11 +31,13 @@ class Application:
         store = Store(cfg["state_dir"])
         try:
             try:
-                report = json.loads((store.directory / "status.json").read_text())
+                report = json.loads((store.directory / "status.json").read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 report = {}
             now = time.time()
             compatibility = desktop_compatibility()
+            control_available = (bool(report.get('control_available')) and compatibility['supported']
+                                 if IS_WINDOWS else compatibility['supported'])
             running = lock_held(store.directory / "daemon.lock")
             observed = report.get("observed_at")
             fresh = observed is not None and now - observed <= cfg["max_sample_age_seconds"]
@@ -104,6 +99,8 @@ class Application:
                     if result["runtime"] is None and runtime_fresh:
                         result["runtime"] = chat.get("runtime") or {"type": chat["status"]}
                 result.update({k: chat.get(k) for k in ("key", "kind", "host_id", "category", "can_control", "capability_note", "source_label", "execution_stage")})
+                if IS_WINDOWS and local and not control_available:
+                    result.update(can_control=False, capability_note='Windows 客户端控制连接尚未通过核验；当前仅显示目录与执行阶段')
                 intent = adoption.get(chat['id']) if local else None
                 opted = preferences.get(chat['id'])
                 if not task and opted is True:
@@ -143,7 +140,9 @@ class Application:
             return {
                 "observed_at": report.get("observed_at"), "now": now, "running": running,
                 "healthy": healthy, "stale": not fresh, "control_paused": paused,
-                "control_enabled": healthy and compatibility['supported'] and not paused and not stop_requested and cfg["mode"] == "control",
+                "control_enabled": healthy and control_available and not paused and not stop_requested and cfg["mode"] == "control",
+                "control_available": control_available,
+                "desktop_connection_error": report.get('desktop_connection_error'),
                 "control_revision": global_revision,
                 "service_error": report.get("stage") if report.get("phase") == "unknown" else None,
                 "tasks": tasks, "events": events,
@@ -153,7 +152,9 @@ class Application:
                             "cloud_snapshot": True, "cloud_auto_execute": False, "local_error": catalog.get("local_error")},
                 "policy": {"pause": cfg["pause_remaining"], "resume": cfg["resume_remaining"],
                            "confirm_seconds": cfg.get("recovery_confirm_seconds", 5)},
-                "poll_seconds": cfg["poll_seconds"], "pid": report.get("pid") if running else None,
+                "poll_seconds": cfg["poll_seconds"],
+                "near_limit_poll_seconds": cfg["near_limit_poll_seconds"],
+                "pid": report.get("pid") if running else None,
             }
         finally:
             store.close()
@@ -167,16 +168,25 @@ class Application:
         try:
             if action == "start":
                 runtime = Path(cfg.get("runtime_root", ROOT))
-                result = subprocess.run([sys.executable, str(runtime / "guardian.py"), "--config",
-                    str(self.config_path), "start"], capture_output=True, text=True, timeout=10)
+                result = subprocess.run(python_command(runtime / "guardian.py", "--config", self.config_path, "start"), capture_output=True, text=True, timeout=10)
                 if result.returncode:
                     raise ValueError("后台启动失败，请查看服务日志")
                 return {"message": "已请求启动后台服务，正在等待首次检查"}
+            if IS_WINDOWS:
+                disabling = action in ('pause','hold') or (action in ('set_auto','set_plan') and payload.get('enabled') is False)
+                if not disabling:
+                    try:
+                        current = json.loads((store.directory/'status.json').read_text(encoding='utf-8'))
+                    except (OSError, ValueError):
+                        current = {}
+                    if (not cfg.get('desktop_control_enabled') or not current.get('control_available')
+                            or not desktop_compatibility()['supported']):
+                        raise ValueError('Windows 客户端控制连接尚未通过核验，当前不可发送或启用自动控制')
             revision = payload.get("revision")
             if not isinstance(revision, int) or isinstance(revision, bool):
                 raise ValueError("操作缺少当前版本，请刷新后重试")
             if action == "pause_all":
-                report = json.loads((store.directory / 'status.json').read_text())
+                report = json.loads((store.directory / 'status.json').read_text(encoding="utf-8"))
                 if cfg['mode'] != 'control' or not lock_held(store.directory / 'daemon.lock') or report.get('phase') == 'unknown':
                     raise ValueError('后台发送服务尚未就绪，未提交指令')
                 if time.time() - report.get('observed_at',0) > cfg['max_sample_age_seconds']:
@@ -196,11 +206,23 @@ class Application:
                         store.db.execute('INSERT OR REPLACE INTO kv VALUES(?,?)',(key,json.dumps(value)))
                 return {'message':'已提交暂停，正在逐项核对受管任务','message_en':'Pause requested. Checking managed tasks individually.'}
             if action in ("set_plan", "set_auto", "execute_now"):
-                report = json.loads((store.directory / "status.json").read_text())
+                try:
+                    report = json.loads((store.directory / "status.json").read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    if not (IS_WINDOWS and action in ('set_auto','set_plan') and payload.get('enabled') is False):
+                        raise
+                    report = {}  # A cached, same-account revocation never dispatches.
                 sample = report.get("quota") or (store.get("last_report", {}).get("quota") or {})
                 catalog = store.get("chat_catalog", {})
                 chat = next((c for c in catalog.get("items", []) if c["key"] == payload.get("key")), None)
-                if not chat or not chat.get("can_control") or catalog.get("scope") != sample.get("scope"):
+                revoking_local = (IS_WINDOWS and chat and chat.get('kind') == 'codex'
+                                  and chat.get('host_id') == 'local' and payload.get('enabled') is False
+                                  and action in ('set_auto','set_plan') and bool(sample.get('scope'))
+                                  and catalog.get('scope') == sample.get('scope'))
+                if (IS_WINDOWS and action in ('set_auto','set_plan') and payload.get('enabled') is False
+                        and (not sample.get('scope') or catalog.get('scope') != sample.get('scope'))):
+                    raise ValueError('登录账号尚未核对，无法修改该聊天的许可或预约')
+                if not chat or (not chat.get("can_control") and not revoking_local) or catalog.get("scope") != sample.get("scope"):
                     raise ValueError("该聊天本次仅显示目录，未启用自动执行")
                 if action == "execute_now":
                     if (cfg["mode"] != "control" or not lock_held(store.directory / "daemon.lock")
@@ -215,7 +237,16 @@ class Application:
                 if action == "set_plan":
                     if enabled and (not sample.get("scope") or time.time() - sample.get("observed_at", 0) > cfg["max_sample_age_seconds"]):
                         raise ValueError("需要先取得可靠的账号和额度采样")
-                    set_plan(store, chat, enabled, payload.get("prompt", "继续任务"), revision, sample)
+                    plan_chat = chat
+                    if revoking_local:
+                        existing = get_plan(store, chat['key'])
+                        if existing and existing.get('scope') != sample.get('scope'):
+                            raise ValueError('该预约的登录账号已变化，请先核对')
+                        # This ephemeral capability permits cancellation only;
+                        # the stored catalog remains read-only and no enable or
+                        # dispatch path receives this copy.
+                        plan_chat = dict(chat, can_control=True)
+                    set_plan(store, plan_chat, enabled, payload.get("prompt", "继续任务"), revision, sample)
                     if not store.get_task(chat["id"]):
                         preferences = store.get("auto_preferences", {})
                         preferences.setdefault(chat["id"], False)
@@ -356,8 +387,8 @@ def main():
     lock_path, info_path = state / (instance + ".lock"), state / (instance + ".json")
     stop_path = state / (instance + ".stop")
     if args.command == "serve":
-        with lock_path.open("a+") as lock:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with open_lock(lock_path) as lock:
+            lock_file(lock)
             server = make_server(args.config, args.port)
             stop_path.unlink(missing_ok=True)
             server.timeout = .5
@@ -370,7 +401,7 @@ def main():
                 stop_path.unlink(missing_ok=True)
         return
     running = lock_held(lock_path)
-    info = json.loads(info_path.read_text()) if info_path.exists() else {}
+    info = json.loads(info_path.read_text(encoding="utf-8")) if info_path.exists() else {}
     if args.command == "status":
         print(json.dumps(dict(info, running=running), ensure_ascii=False))
     elif args.command == "stop":
@@ -382,9 +413,9 @@ def main():
     else:
         runtime = Path(cfg.get("runtime_root", ROOT))
         with (state / "ui.log").open("ab") as log:
-            subprocess.Popen([sys.executable, str(runtime / "ui.py"), "serve", "--config",
-                str(runtime / "config.json"), "--port", str(args.port)], stdin=subprocess.DEVNULL,
-                stdout=log, stderr=log, start_new_session=True)
+            subprocess.Popen(python_command(runtime / "ui.py", "serve", "--config", args.config, "--port", args.port), stdin=subprocess.DEVNULL,
+                stdout=log, stderr=log, start_new_session=True,
+                **({'creationflags':subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
         print("http://127.0.0.1:%s" % args.port)
 
 

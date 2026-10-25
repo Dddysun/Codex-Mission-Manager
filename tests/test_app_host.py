@@ -1,4 +1,4 @@
-import fcntl
+from platform_support import open_lock, lock_file
 import json
 from pathlib import Path
 import sqlite3
@@ -33,9 +33,9 @@ class PackagingHostTests(unittest.TestCase):
         state = self.root / ".codex/usage-guardian/state"
         state.mkdir(parents=True)
         (state / "ui-8769.json").write_text(json.dumps({"url": "http://127.0.0.1:8769"}))
-        with (state / "daemon.lock").open("w") as daemon, (state / "ui-8769.lock").open("w") as ui:
-            fcntl.flock(daemon, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            fcntl.flock(ui, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with open_lock(state / "daemon.lock") as daemon, open_lock(state / "ui-8769.lock") as ui:
+            lock_file(daemon)
+            lock_file(ui)
             result = legacy_service(self.root)
             self.assertTrue(result["external"])
             self.assertFalse(result["owned"])
@@ -47,8 +47,8 @@ class PackagingHostTests(unittest.TestCase):
         old.put("sent_marker", "do-not-replay")
         old.close()
         target = self.root / "app"
-        with (source / "daemon.lock").open("w") as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with open_lock(source / "daemon.lock") as lock:
+            lock_file(lock)
             with self.assertRaises(RuntimeError): migrate_legacy(target, self.root)
         migrate_legacy(target, self.root)
         copied = Store(target / "state")

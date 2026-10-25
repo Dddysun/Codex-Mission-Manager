@@ -60,6 +60,7 @@ class Quota:
         raise AssertionError(method)
 
 
+@unittest.skipIf(os.name == "nt", "Unix socket regressions; Windows named-pipe transport is checked separately")
 class NativeProtocolTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.compatibility_patch = mock.patch("compatibility.require_supported", return_value={"supported": True})

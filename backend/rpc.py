@@ -2,6 +2,8 @@
 import asyncio
 import contextlib
 import json
+import os
+import subprocess
 
 
 class RpcError(RuntimeError):
@@ -22,7 +24,8 @@ class Rpc:
         self.process = await asyncio.create_subprocess_exec(
             *self.command, stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
-            limit=16 * 1024 * 1024)
+            limit=16 * 1024 * 1024,
+            **({'creationflags':subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
         self.reader = asyncio.create_task(self._read())
         result = await self.call("initialize", {"clientInfo": {
             "name": "usage_guardian", "title": "Usage Guardian", "version": "0.1.0"}})

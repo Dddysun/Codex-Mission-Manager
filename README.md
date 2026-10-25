@@ -1,12 +1,16 @@
 # Codex Mission Manager · 任务管家
 
-macOS 原生聊天任务管理应用。根据可用额度暂停和续接已授权的 Codex 任务，安排额度恢复后的一次性指令，并查看执行阶段与发送记录。
+macOS 与 Windows 原生聊天任务管理应用。根据可用额度暂停和续接已授权的 Codex 任务，安排额度恢复后的一次性指令，并查看执行阶段与发送记录。
 
-A native macOS companion for quota-aware Codex task control, one-time scheduled instructions, and confirmed delivery records.
+A native macOS and Windows companion for quota-aware Codex task control, one-time scheduled instructions, and confirmed delivery records.
 
 [下载 V0.2.1 原生预览 DMG](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-preview.6) · [产品总蓝图](docs/PRODUCT_BLUEPRINT_V0.1.md) · [发行状态](docs/RELEASE_STATUS.md)
 
 **V0.2.1 公开预览版。** 按实际订阅响应识别五小时、周与其他额度窗口，支持无固定窗口的明确服务许可；保留中英文、系统深色模式和原生菜单栏。安装前请阅读发行限制。
+
+## Windows 原生预览
+
+Windows 版本提供 WPF 原生窗口和携带 Python 的每用户 EXE 安装器。程序功能、已验收范围与缺失项见 [Windows 移植清单](docs/WINDOWS_PORT.md)，安装说明见 [Windows 安装与卸载](windows/INSTALL_README.md)。**当前 Windows 预览尚未开放真实任务控制**：官方客户端安装及协议验收仍待完成，Windows 兼容表暂无已核验版本。控制界面与调度逻辑已移植，但不会对未核验客户端发送指令。
 
 ## 界面预览
 
@@ -86,7 +90,7 @@ V0.2 增加系统、浅色和深色外观，以及即时切换的简体中文和
 
 ## 当前发行限制
 
-当前预览发行没有 Developer ID 签名与 Apple 公证，其他电脑可能被 macOS 阻止打开。合盖辅助服务未开放；锁屏、熄屏和无外屏合盖下的完整发送流程仍需单独实机验收。Intel、Windows、多账号同时登录和自动升级尚未提供。
+当前预览发行没有 Developer ID 签名与 Apple 公证，其他电脑可能被 macOS 阻止打开。合盖辅助服务未开放；锁屏、熄屏和无外屏合盖下的完整发送流程仍需单独实机验收。Intel Mac、多账号同时登录和自动升级尚未提供。Windows x64 为独立原生预览，具体限制见 Windows 移植清单。
 
 客户端控制依赖版本敏感的本机通信通道。支持范围和已完成的验收以 [发行状态](docs/RELEASE_STATUS.md) 为准。
 

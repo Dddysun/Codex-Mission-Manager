@@ -40,6 +40,7 @@ jobs:
             ${{ runner.temp }}/mission-build/SHA256SUMS
             ${{ runner.temp }}/mission-build/build-manifest.json
       - name: Publish clearly labeled preview assets
+        if: ${{ !contains(github.event.head_commit.message, '[windows-port]') }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

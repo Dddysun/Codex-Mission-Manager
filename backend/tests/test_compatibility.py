@@ -1,4 +1,5 @@
 """Compatibility policy checks with synthetic app metadata only."""
+import os
 import plistlib
 from pathlib import Path
 import tempfile
@@ -8,6 +9,7 @@ from unittest import mock
 from compatibility import desktop_compatibility, require_supported
 
 
+@unittest.skipIf(os.name == "nt", "macOS plist compatibility profiles have separate Windows checks")
 class CompatibilityTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory()

@@ -1,6 +1,6 @@
 """App-owned backend host. Resources are immutable; user data stays outside .app."""
 import argparse
-import fcntl
+from contextlib import closing
 import json
 import os
 from pathlib import Path
@@ -13,17 +13,11 @@ import time
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))  # Trusted bundled modules, also in isolated Python mode.
+from platform_support import lock_held, sqlite_ro_uri, support_directory, python_command
 
 
 def locked(path):
-    if not path.exists():
-        return False
-    with path.open("r") as stream:
-        try:
-            fcntl.flock(stream, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            return False
-        except BlockingIOError:
-            return True
+    return lock_held(path, create=False)
 
 
 def legacy_service(home):
@@ -34,7 +28,7 @@ def legacy_service(home):
         info = root / "state" / name
         lock = info.with_suffix(".lock")
         if info.exists() and locked(lock):
-            value = json.loads(info.read_text())
+            value = json.loads(info.read_text(encoding="utf-8"))
             if value.get("url", "").startswith("http://127.0.0.1:"):
                 return {"url": value["url"], "external": True, "owned": False,
                         "state_dir": str(root / "state"), "config": str(root / "config.json")}
@@ -45,10 +39,12 @@ def make_config(directory, home=None, port=8769, parent_pid=None):
     directory = Path(directory)
     directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     state = directory / "state"
-    cfg = json.loads((ROOT / "config.example.json").read_text())
+    cfg = json.loads((ROOT / "config.example.json").read_text(encoding="utf-8"))
     cfg.update(state_dir=str(state), runtime_root=str(ROOT), ui_port=port,
                host_pid=parent_pid, system_notifications=False, native_notifications=True, power_guard_enabled=False)
     cfg["desktop_database"] = str(Path(home or Path.home()) / ".codex/state_5.sqlite")
+    if os.name == 'nt':
+        cfg.update(desktop_platform='windows', desktop_connect_timeout_seconds=8)
     path = directory / "config.json"
     from guardian import atomic_json
     atomic_json(path, cfg)
@@ -72,14 +68,33 @@ def migrate_legacy(directory, home=None):
     target = destination / "guardian.sqlite3"
     if target.exists():
         raise RuntimeError("Destination already contains a ledger; it was not overwritten")
-    with sqlite3.connect("file:" + str(source / "guardian.sqlite3") + "?mode=ro", uri=True) as old:
-        with sqlite3.connect(str(target)) as new:
+    with closing(sqlite3.connect(sqlite_ro_uri(source / "guardian.sqlite3"), uri=True)) as old:
+        with closing(sqlite3.connect(str(target))) as new:
             old.backup(new)
+            new.commit()
     os.chmod(target, 0o600)
 
 
 def run(directory, attach=True, home=None):
-    if attach:
+    if os.name != 'nt':
+        return run_owned(directory, attach, home)
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    lease = None
+    from platform_support import open_lock, lock_file
+    try:
+        lease = open_lock(directory/'host.lock')
+        lock_file(lease)
+        return run_owned(directory, attach, home)
+    except BlockingIOError as exc:
+        raise RuntimeError('The application backend is already running for this user') from exc
+    finally:
+        if lease:
+            lease.close()
+
+
+def run_owned(directory, attach=True, home=None):
+    if attach and os.name != 'nt':
         existing = legacy_service(Path(home or Path.home()))
         if existing:
             print(json.dumps(existing), flush=True)
@@ -107,8 +122,9 @@ def run(directory, attach=True, home=None):
     stop = threading.Event()
     threading.Thread(target=lambda: (sys.stdin.readline(), stop.set()), daemon=True).start()
     with (Path(directory) / "backend.log").open("ab") as log:
-        daemon = subprocess.Popen([sys.executable, "-I", str(ROOT / "guardian.py"),
-            "--config", str(config_path), "run"], stdout=log, stderr=log, stdin=subprocess.DEVNULL)
+        daemon = subprocess.Popen(python_command(ROOT / "guardian.py", "--config", config_path, "run", isolated=True),
+            stdout=log, stderr=log, stdin=subprocess.DEVNULL,
+            **({'creationflags':subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
         print(json.dumps({"url": "http://127.0.0.1:%s" % port, "external": False, "owned": True,
             "state_dir": str(Path(directory) / "state"), "config": str(config_path)}), flush=True)
         try:
@@ -139,6 +155,8 @@ def self_test():
     import tempfile
     import ui, desktop, immediate, plans, catalog, stages
     runtime = ROOT.parent / "python"
+    if os.name == "nt":
+        runtime = ROOT.parent / "runtime/python"
     if runtime.is_dir():
         assert Path(sys.prefix).resolve() == runtime.resolve(), "Runtime escaped application bundle"
     with tempfile.TemporaryDirectory() as temp:
@@ -156,7 +174,7 @@ def self_test():
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--directory", type=Path, default=Path.home() / "Library/Application Support/CodexMissionManager")
+    parser.add_argument("--directory", type=Path, default=support_directory())
     parser.add_argument("--no-attach", action="store_true")
     parser.add_argument("--self-test", action="store_true")
     parser.add_argument("--migrate", action="store_true")
