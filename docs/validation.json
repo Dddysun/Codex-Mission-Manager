@@ -1,6 +1,5 @@
 {
   "dmg_sha256": "b62e7a77b7a4b12508d9d16affcfa4f5e23462e8b8bfd76d59821e0f31de87fd",
-  "live_chat_messages_sent": 0,
   "administrator_service_installed": false,
   "system_power_settings_changed": false,
   "webkit_linked": false,
@@ -112,7 +111,7 @@
   },
   "subscription_cases": "synthetic service responses; no real Free/Pro account switch",
   "client_21828_live_control_verified": false,
-  "status": "V0.2.1 preview published and installed; application connection verification pending user-handled Documents access prompt",
+  "status": "V0.2.1 preview published and installed; application connection and user-scheduled one-time instruction delivery verified",
   "local_dmg_sha256": "baec0fd444e3b4c49db124dfe52620bcb6039a62b6ae55b10ba18498cb7dc61f",
   "github_downloaded_dmg_verified": true,
   "github_actions": {
@@ -151,14 +150,68 @@
     "automation_preferences_preserved": true,
     "existing_plan_count_preserved": true,
     "runtime_data_removed": false,
-    "permissions_changed": false,
     "backend_process_running": true,
-    "application_connection_healthy": false,
-    "connection_error": "TimeoutError during initialization",
-    "documents_access_prompt_pending": true,
-    "permission_prompt_evidence": "macOS TCC SystemPolicyDocumentsFolder request awaiting user choice",
-    "verification_state": "pending user-handled system prompt; independent probes do not prove application connection",
-    "live_chat_test_messages_sent": 0
+    "application_connection_healthy": true,
+    "connection_error": null,
+    "documents_access_prompt_pending": false,
+    "permission_prompt_evidence": "Historical macOS TCC SystemPolicyDocumentsFolder prompt; user subsequently handled it and application connection recovered",
+    "verification_state": "passed: fresh application API and one user-scheduled delivery; no extra live test messages",
+    "live_chat_test_messages_sent": 0,
+    "documents_access_handled_by_user": true,
+    "last_read_only_check": {
+      "checked_at_dubai": "2026-10-25T10:11:50.523770+04:00",
+      "running": true,
+      "healthy": true,
+      "stale": false,
+      "control_enabled": true,
+      "client_build": "21828",
+      "client_supported": true,
+      "quota_state": "metered",
+      "actual_window_minutes": [
+        300,
+        10080
+      ],
+      "usage_stale": false,
+      "same_account_migration_recorded": true,
+      "task_error_count": 0
+    },
+    "original_task_permissions_and_manual_holds_preserved": true,
+    "user_changes_after_upgrade_distinguished_from_migration": true,
+    "system_permissions_changed_by_installer": false
   },
-  "evidence_updated_at_dubai": "2026-10-25T06:58:11.069704+04:00"
+  "evidence_updated_at_dubai": "2026-10-25T10:16:49.282197+04:00",
+  "client_21828_verification": {
+    "read_only_application_connection": true,
+    "user_scheduled_one_time_instruction_delivered": true,
+    "one_matching_ledger_confirmation": true,
+    "additional_live_test_messages_sent": 0,
+    "low_quota_automatic_pause": false,
+    "default_automatic_resume": false,
+    "immediate_button_delivery": false,
+    "complete_natural_reset_cycle": false
+  },
+  "verification_tool_initiated_test_messages_sent": 0,
+  "user_scheduled_messages_observed": 1,
+  "collection_latency_observation": {
+    "metric": "successful loop start to atomic status-cache publication; includes control checks, excludes subsequent notification delivery and idle delay",
+    "method": "status file modification timestamp minus report observed_at; atomic replacement checked, matching ledger report",
+    "sample_count": 3,
+    "mean_seconds": 17.483857,
+    "min_seconds": 8.229598,
+    "max_seconds": 22.170824,
+    "individual_samples_seconds": [
+      22.051149,
+      8.229598,
+      22.170824
+    ],
+    "observed_start_intervals_seconds": [
+      82.055054,
+      68.232561
+    ],
+    "sampled_catalog_chat_count": 30,
+    "sampled_managed_view_count": 4,
+    "recorded_control_actions": 0,
+    "scope": "three successful normal-phase rounds on one host; not a long-term average or performance guarantee",
+    "client_calls_issued_by_observer": 0
+  }
 }
