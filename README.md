@@ -4,13 +4,23 @@ macOS 原生聊天任务管理应用。根据可用额度暂停和续接已授�
 
 A native macOS companion for quota-aware Codex task control, one-time scheduled instructions, and confirmed delivery records.
 
-[下载 V0.2.1 原生预览 DMG](https://github.com/Dddysun/Codex-Mission-Manager/releases) · [产品总蓝图](docs/PRODUCT_BLUEPRINT_V0.1.md) · [发行状态](docs/RELEASE_STATUS.md)
+[下载 V0.2.1 原生预览 DMG](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-preview.5) · [产品总蓝图](docs/PRODUCT_BLUEPRINT_V0.1.md) · [发行状态](docs/RELEASE_STATUS.md)
 
 **V0.2.1 公开预览版。** 按实际订阅响应识别五小时、周与其他额度窗口，支持无固定窗口的明确服务许可；保留中英文、系统深色模式和原生菜单栏。安装前请阅读发行限制。
 
 ## 界面预览
 
-以下界面使用示例数据。
+以下界面使用示例数据。 V0.2.1 的订阅状态示例如下。
+
+![Pro 仅周额度 · 原生窗口](docs/previews-v021/pro-weekly-main.png)
+
+![自定义额度窗口 · English / Dark](docs/previews-v021/custom-windows-menu.png)
+
+![明确许可但无固定窗口](docs/previews-v021/service-only-menu.png)
+
+![未知额度停止发送](docs/previews-v021/quota-unknown-menu.png)
+
+以下为原生设置与基础窗口示例。
 
 ![原生任务窗口 · English / Dark](docs/previews/main-en-dark.png)
 
@@ -68,6 +78,8 @@ V0.2 增加系统、浅色和深色外观，以及即时切换的简体中文和
 
 关闭主窗口后继续在菜单栏运行。退出应用停止其后台与电源保持，不主动中断原客户端正在执行的聊天。新安装默认暂停全局自动控制，核对账号和聊天后再启用。
 
+客户端已有配置或项目路径引用受保护的“文稿”文件夹时，首次启动可能触发 macOS 文件夹访问提示。请在解锁后处理该提示；等待选择期间，客户端初始化可能超时，自动发送保持停用。应用不会替用户授予系统权限。
+
 检测到旧版后台时，应用优先连接现有服务，避免启动重复执行器。迁移旧账本需先停止旧服务，再显式运行 `backend/app_host.py --migrate`；目标已有账本时拒绝覆盖。
 
 ## 当前发行限制
@@ -104,4 +116,4 @@ PYTHONPATH=backend python3 -m unittest discover -s tests -v
 node backend/tests/test_sidebar.cjs
 ```
 
-V0.2.1 新增订阅、额度窗口、一次性预约与旧记录迁移回归。最终测试和打包结果见发行记录。测试与发行验证的范围、真实聊天是否参与以及剩余限制，统一记录在 [发行状态](docs/RELEASE_STATUS.md) 和 `docs/validation.json`。
+V0.2.1 已通过190项后端测试（其中39项订阅专项）、4项打包宿主测试、原生控制契约和 JavaScript 检查；8个原生订阅视图渲染与 DMG 检查通过。GitHub 独立构建及公开发行成功。测试与发行验证的范围、真实聊天是否参与以及剩余限制，统一记录在 [发行状态](docs/RELEASE_STATUS.md) 和 `docs/validation.json`。

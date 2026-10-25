@@ -1,5 +1,5 @@
 {
-  "dmg_sha256": "baec0fd444e3b4c49db124dfe52620bcb6039a62b6ae55b10ba18498cb7dc61f",
+  "dmg_sha256": "b62e7a77b7a4b12508d9d16affcfa4f5e23462e8b8bfd76d59821e0f31de87fd",
   "live_chat_messages_sent": 0,
   "administrator_service_installed": false,
   "system_power_settings_changed": false,
@@ -112,5 +112,53 @@
   },
   "subscription_cases": "synthetic service responses; no real Free/Pro account switch",
   "client_21828_live_control_verified": false,
-  "status": "V0.2.1 local preview validated; GitHub build pending"
+  "status": "V0.2.1 preview published and installed; application connection verification pending user-handled Documents access prompt",
+  "local_dmg_sha256": "baec0fd444e3b4c49db124dfe52620bcb6039a62b6ae55b10ba18498cb7dc61f",
+  "github_downloaded_dmg_verified": true,
+  "github_actions": {
+    "url": "https://github.com/Dddysun/Codex-Mission-Manager/actions/runs/40155666307",
+    "conclusion": "success"
+  },
+  "github_release": {
+    "tag": "v0.2.1-preview.5",
+    "url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-preview.5",
+    "source_commit": "ba51f5ec8509a9a0bc6590957272a1ebc938fd2e",
+    "assets": [
+      {
+        "name": "build-manifest.json",
+        "size": 590,
+        "digest": "sha256:4bd62855e0f96170541b8b239db71a7d684b32239ebb607264f306597aa7cff8",
+        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-preview.5/build-manifest.json"
+      },
+      {
+        "name": "Codex-Mission-Manager-0.2.1-arm64-preview.dmg",
+        "size": 27707895,
+        "digest": "sha256:b62e7a77b7a4b12508d9d16affcfa4f5e23462e8b8bfd76d59821e0f31de87fd",
+        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-preview.5/Codex-Mission-Manager-0.2.1-arm64-preview.dmg"
+      },
+      {
+        "name": "SHA256SUMS",
+        "size": 112,
+        "digest": "sha256:88441888a881543c9da65ff89b45409890c07bde58a09deb5ed97a17cc564c41",
+        "browser_download_url": "https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-preview.5/SHA256SUMS"
+      }
+    ]
+  },
+  "local_upgrade": {
+    "installed_version": "0.2.1",
+    "installed_bundle_build": "4",
+    "public_release_dmg_used": true,
+    "automation_preferences_preserved": true,
+    "existing_plan_count_preserved": true,
+    "runtime_data_removed": false,
+    "permissions_changed": false,
+    "backend_process_running": true,
+    "application_connection_healthy": false,
+    "connection_error": "TimeoutError during initialization",
+    "documents_access_prompt_pending": true,
+    "permission_prompt_evidence": "macOS TCC SystemPolicyDocumentsFolder request awaiting user choice",
+    "verification_state": "pending user-handled system prompt; independent probes do not prove application connection",
+    "live_chat_test_messages_sent": 0
+  },
+  "evidence_updated_at_dubai": "2026-10-25T06:58:11.069704+04:00"
 }
