@@ -4,13 +4,21 @@ macOS 与 Windows 原生聊天任务管理应用。根据可用额度暂停和�
 
 A native macOS and Windows companion for quota-aware Codex task control, one-time scheduled instructions, and confirmed delivery records.
 
-[下载 V0.2.1 原生预览 DMG](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-preview.6) · [产品总蓝图](docs/PRODUCT_BLUEPRINT_V0.1.md) · [发行状态](docs/RELEASE_STATUS.md)
+[下载 macOS DMG](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-preview.6) · [下载 Windows EXE](https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-windows-preview.1/Codex-Mission-Manager-0.2.1-windows-x64-setup.exe) · [产品总蓝图](docs/PRODUCT_BLUEPRINT_V0.1.md) · [发行状态](docs/RELEASE_STATUS.md)
 
 **V0.2.1 公开预览版。** 按实际订阅响应识别五小时、周与其他额度窗口，支持无固定窗口的明确服务许可；保留中英文、系统深色模式和原生菜单栏。安装前请阅读发行限制。
 
 ## Windows 原生预览
 
 Windows 版本提供 WPF 原生窗口和携带 Python 的每用户 EXE 安装器。程序功能、已验收范围与缺失项见 [Windows 移植清单](docs/WINDOWS_PORT.md)，安装说明见 [Windows 安装与卸载](windows/INSTALL_README.md)。**当前 Windows 预览尚未开放真实任务控制**：官方客户端安装及协议验收仍待完成，Windows 兼容表暂无已核验版本。控制界面与调度逻辑已移植，但不会对未核验客户端发送指令。
+
+[Windows 预览发行页（含 EXE、便携 ZIP 与校验摘要）](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-windows-preview.1)。Windows 10 x64 实机通过 190 项后端测试、4 项宿主测试，14 项平台专属测试跳过；原生渲染、安装器完整性和安装后后台接口检查通过。检查未向真实聊天发送消息；完整证据见 [Windows 验收记录](docs/windows-validation.json)。
+
+以下为 Windows 原生 WPF 窗口的模拟数据渲染，不代表真实客户端已连接。
+
+![Windows 原生窗口 · 简体中文 / 浅色](docs/previews-windows/main-zh-light.png)
+
+![Windows 原生窗口 · English / Dark](docs/previews-windows/main-en-dark.png)
 
 ## 界面预览
 

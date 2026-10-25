@@ -2,6 +2,8 @@
 
 V0.2.1 Windows 预览使用原生 WPF 窗口和共享 Python 后台，不使用 WebView。安装 EXE 携带固定版本的 Python 运行环境；Windows 10 x64（build 19041+）和 .NET Framework 4.8+ 是系统要求。安装与数据均限当前用户。
 
+[下载 EXE 安装器](https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-windows-preview.1/Codex-Mission-Manager-0.2.1-windows-x64-setup.exe) · [完整发行文件和 SHA-256](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-windows-preview.1) · [可复核验收记录](windows-validation.json)
+
 ## 已移植的程序功能
 
 - 聊天列表、来源筛选、搜索分页、当前状态和公开执行阶段。
@@ -30,6 +32,7 @@ Windows 控制使用本机命名管道，连接前检查服务端程序位置和
 - **后台与合盖：**保活选项只防空闲睡眠，不修改系统电源计划，也不保证合盖或手动睡眠后执行。macOS 管理员合盖辅助服务不适用于 Windows；没有新增对应 Windows 特权服务。
 - **发行：**当前 EXE 为未签名预览，未提供可信发布者签名或自动更新。主界面有中英文；外部错误、任务内容和后端原始说明可能保留来源语言。
 - **验收环境：**目前针对 Windows 10 x64；Windows 11、ARM64、多用户并行运行、登录启动、锁屏/熄屏/合盖发送完整流程仍需分别验证。
+- **桌面操作与卸载：**已验证安装后后台启动和接口访问，原生窗口已完成模拟数据渲染；交互式窗口打开尚未实测。每用户卸载入口已注册，安装器的数据保留契约已检查，尚未对当前安装副本执行实际卸载。
 
 ## 构建与验证
 
@@ -37,6 +40,18 @@ Windows 控制使用本机命名管道，连接前检查服务端程序位置和
 
 `windows/run_tests.py` 使用隔离账本执行共享后端与宿主回归，记录测试总数、失败和平台跳过情况。Unix 套接字和 Mac plist 专属测试在 Windows 跳过，不能计作 Windows 通过。原生 `--self-test`、四种模拟订阅的 `--ui-self-test` 以及安装器 `--self-test` 均不启动真实任务或发送聊天。
 
-可复核的 Windows 结果将记录在 `windows-validation.json`；当前包的摘要、源码提交和下载入口以 Windows 预览发行页为准。Mac 的历史验收记录不作为 Windows 实机证据。
+2026-10-26 的 Windows 10 x64 实机验收：后端总计 204 项，其中 190 项通过、14 项平台专属测试跳过；4 项宿主测试通过。原生应用、嵌入 Python 和安装器自检通过；5 个原生界面模拟数据渲染通过，已检查中文浅色和英文深色布局。
+
+任务管家已按当前用户安装成功，桌面安装包、程序快捷方式、开始菜单和 HKCU 卸载入口均已核对。安装后的单次后台检查确认接口可访问、采集间隔 30/10 秒、自动控制默认暂停；因客户端缺失，`healthy=false`、`control_available=false`。检查结束后本次进程退出，没有留下新增的计划任务，也没有发送真实聊天指令。
+
+源码提交 `6a995ff9dc3f4b48dd5603ff5518b7ae9736def8` 已完成 [Windows 独立构建](https://github.com/Dddysun/Codex-Mission-Manager/actions/runs/40244230683) 与 [Mac 回归构建](https://github.com/Dddysun/Codex-Mission-Manager/actions/runs/40244230714)。公开 EXE/ZIP 的下载摘要、安装器嵌入载荷和文件完整性核验通过。实机安装使用同一代码的本机构建；公开资产由 GitHub 独立生成，两者摘要分别记录，不能混用。
+
+完整结果见 [windows-validation.json](windows-validation.json)。Mac 的历史验收记录不作为 Windows 实机证据。
+
+## 官方客户端安装的当前阻塞
+
+官方签名包 `26.1021.3705.0` 在目标设备按当前用户安装失败，错误为 `0x80073CF9`，扩展错误为 `0x80070490`。未发现可直接注册的已暂存安装。其最低 Windows 版本符合设备，不能仅据此判定 Windows 10 不受支持，唯一根因尚未确认。
+
+下一条官方安装路径是 Microsoft Store，首次使用可能要求用户本人确认商店条款及设备地区信息传输，并完成登录。商店路径不保证避开同一包的注册问题。此项目未执行系统级预配、修改或重新签名官方包，也未关闭安全校验。客户端就绪后仍需完成只读协议核验，再发布明确适配的 Windows 兼容配置；安装成功本身不等于自动控制已通过验收。
 
 控制协议设计参考 MIT [cat2mao/codex-quota-monitor](https://github.com/cat2mao/codex-quota-monitor)，许可证随包保留。客户端安装参考 [OpenAI Windows 文档](https://learn.chatgpt.com/docs/app/windows)，嵌入运行环境参考 [Python 官方说明](https://docs.python.org/3.13/using/windows.html#the-embeddable-package)。
