@@ -4,9 +4,9 @@ macOS 原生聊天任务管理应用。根据可用额度暂停和续接已授�
 
 A native macOS companion for quota-aware Codex task control, one-time scheduled instructions, and confirmed delivery records.
 
-[下载 V0.2 原生预览 DMG](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.0-preview.4) · [产品总蓝图](docs/PRODUCT_BLUEPRINT_V0.1.md) · [发行状态](docs/RELEASE_STATUS.md)
+[下载 V0.2.1 原生预览 DMG](https://github.com/Dddysun/Codex-Mission-Manager/releases) · [产品总蓝图](docs/PRODUCT_BLUEPRINT_V0.1.md) · [发行状态](docs/RELEASE_STATUS.md)
 
-**V0.2.0 公开试用版。** 提供中英文界面、系统深色模式和菜单栏额度与控制面板。安装前请阅读下方发行限制。
+**V0.2.1 公开预览版。** 按实际订阅响应识别五小时、周与其他额度窗口，支持无固定窗口的明确服务许可；保留中英文、系统深色模式和原生菜单栏。安装前请阅读发行限制。
 
 ## 界面预览
 
@@ -18,12 +18,16 @@ A native macOS companion for quota-aware Codex task control, one-time scheduled 
 
 ![菜单栏 · English / Dark](docs/previews/menu-en-dark.png)
 
+## V0.2.1 订阅适配
+
+按服务返回的窗口时长和使用许可控制任务，不根据 Free、Plus、Pro 等名称猜测额度。没有五小时窗口时仍可识别实际周窗口或其他窗口；没有固定窗口时明确显示服务许可，未知数据禁止发送。一次性预约显示实际目标及刷新时间；同一账号更换订阅不再被误判为换账号。详见 [订阅适配规则](docs/SUBSCRIPTION_ADAPTATION.md)。
+
 ## 功能
 
 - 原生聊天列表，展示来源、当前状态、公开执行阶段和自动控制许可。
 - 在额度不足时暂停符合条件的受管任务；额度可靠恢复后核对原会话并续做。
 - 为下一额度窗口安排一次性自定义指令，或手动点击“立刻执行”并查看回执。
-- 查看账号实际返回的五小时、周额度与刷新时间，以及订阅类型和账号信息。
+- 查看账号实际返回的五小时、周及其他额度窗口与刷新时间，以及订阅类型和账号信息。
 - 原生操作记录，保留暂停、续接、预约和发送结果。
 
 V0.2 增加系统、浅色和深色外观，以及即时切换的简体中文和 English 界面。菜单栏保留固定图标，左键或右键均可打开额度与控制面板。
@@ -79,8 +83,9 @@ SwiftUI / AppKit 原生界面通过本机 JSON 接口连接 Python 标准库后�
 构建需要 Apple Silicon Mac、macOS 14+、Apple Command Line Tools 和可重定位 CPython 3.12 目录。应用使用者不需要这些工具。
 
 ```sh
-python3 scripts/build.py --python-runtime /path/to/relocatable-python --output dist/0.2.0-preview
-python3 scripts/make_dmg.py --build dist/0.2.0-preview
+python3 scripts/fetch_runtime.py --destination /tmp/mission-python-v021
+python3 scripts/build.py --python-runtime /tmp/mission-python-v021/python --output /tmp/mission-build-v021
+python3 scripts/make_dmg.py --build /tmp/mission-build-v021
 ```
 
 正式签名构建需同时提供 `MISSION_TEAM_ID` 与 `MISSION_SIGN_IDENTITY`，证书和密码不进入仓库。公证使用本机 Keychain 中配置的 notarytool profile。没有发行签名时，不开放管理员辅助服务。
@@ -99,4 +104,4 @@ PYTHONPATH=backend python3 -m unittest discover -s tests -v
 node backend/tests/test_sidebar.cjs
 ```
 
-V0.2 本机已通过 145 项后端测试、4 项打包宿主测试、原生控制契约与 6 个原生界面渲染检查；DMG 只读挂载和内置运行环境检查通过。测试与发行验证的范围、真实聊天是否参与以及剩余限制，统一记录在 [发行状态](docs/RELEASE_STATUS.md) 和 `docs/validation.json`。
+V0.2.1 新增订阅、额度窗口、一次性预约与旧记录迁移回归。最终测试和打包结果见发行记录。测试与发行验证的范围、真实聊天是否参与以及剩余限制，统一记录在 [发行状态](docs/RELEASE_STATUS.md) 和 `docs/validation.json`。

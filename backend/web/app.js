@@ -17,6 +17,38 @@ function ago(stamp) {
   return seconds < 10 ? "刚刚同步" : seconds < 60 ? `${seconds} 秒前同步` : `${Math.floor(seconds/60)} 分钟前同步`;
 }
 const subscriptionLabels = {free:"Free",go:"Go",plus:"Plus",pro:"Pro",team:"Team",business:"Business",enterprise:"Enterprise",edu:"Edu"};
+function quotaWindowTitle(w) {
+  const minutes=w?.minutes;
+  if (minutes===300) return "五小时额度";
+  if (minutes===10080) return "周额度";
+  if (Number.isFinite(minutes) && minutes>0) return minutes%1440===0 ? `${minutes/1440}天额度` : minutes%60===0 ? `${minutes/60}小时额度` : `${minutes}分钟额度`;
+  return "额度窗口";
+}
+function canScheduleUsage() {
+  const usage=state?.usage;
+  if (typeof usage?.scheduling_available==="boolean") return usage.scheduling_available;
+  if (Array.isArray(usage?.quota_windows)) return usage.quota_windows.length>0;
+  return Boolean(usage?.windows?.five_hour || usage?.windows?.weekly);
+}
+function quotaPermitsImmediate() {
+  const usage=state?.usage;
+  if (usage?.blocked===true || usage?.service_allowed===false) return false;
+  if (usage?.quota_state===undefined || usage?.quota_state===null) return true;
+  if (usage.service_allowed!==true) return false;
+  if (usage.quota_state==="service_only") return true;
+  if (usage.quota_state!=="metered") return false;
+  const minimum=state?.policy?.resume ?? 20, windows=usage.quota_windows;
+  return Number.isFinite(minimum) && Array.isArray(windows) && windows.length>0 && windows.every(w=>
+    typeof w.remaining==="number" && Number.isFinite(w.remaining) && w.remaining>=0 && w.remaining<=100 && (w.minutes===10080 ? w.remaining>0 : w.remaining>=minimum));
+}
+function schedulingUnavailableNote() {
+  const usage=state?.usage;
+  if (usage?.blocked===true) return "服务暂不允许使用，等待重新核验";
+  if (usage?.quota_state==="service_only" && usage.service_allowed===true) return "当前账号未提供可预约的额度刷新窗口，请使用立刻执行。";
+  if (usage?.quota_state==="unknown" || !usage) return "额度信息不完整，自动发送暂不可用";
+  if (usage?.service_allowed===false) return "服务使用许可待确认，自动发送暂不可用";
+  return "当前账号未提供可预约的额度刷新窗口。";
+}
 function renderUsage(disconnected = false) {
   const usage = state?.usage || {}, account = usage.account;
   const plan = account?.plan_type?.toLowerCase() || "unknown";
@@ -31,6 +63,8 @@ function renderUsage(disconnected = false) {
     const w = usage.windows?.[key];
     const value = typeof w?.remaining === "number" && Number.isFinite(w.remaining) && w.remaining >= 0 && w.remaining <= 100 ? w.remaining : null;
     const block=$("#"+prefix+"Quota"), progress=$("#"+prefix+"Progress");
+    block.hidden=Array.isArray(usage.quota_windows) || value===null;
+    progress.hidden=value===null;
     block.classList.toggle("unknown",value === null);
     block.classList.toggle("low",value !== null && value <= 10);
     block.classList.toggle("warning",value !== null && value > 10 && value <= 20);
@@ -40,15 +74,30 @@ function renderUsage(disconnected = false) {
     const reset=$("#"+prefix+"Reset"), countdown=$("#"+prefix+"Countdown");
     if (value !== null && Number.isFinite(w?.reset)) {
       reset.dateTime=new Date(w.reset*1000).toISOString();
-      reset.textContent="下次刷新 " + new Date(w.reset*1000).toLocaleString("zh-CN",{timeZone:"Asia/Dubai",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
-      reset.title="服务返回的刷新时间 · Asia/Dubai";
+      reset.textContent="下次刷新 " + new Date(w.reset*1000).toLocaleString("zh-CN",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false});
+      reset.title="服务返回的刷新时间 · 本机时区";
       const minutes=Math.ceil((w.reset-Date.now()/1000)/60);
       countdown.textContent=stale ? "上次记录，等待重新核验" : minutes <= 0 ? "已到刷新时间，等待核验" : minutes >= 1440 ? `${Math.floor(minutes/1440)} 天 ${Math.floor(minutes%1440/60)} 小时后` : minutes >= 60 ? `${Math.floor(minutes/60)} 小时 ${minutes%60} 分后` : `${minutes} 分钟后`;
     } else {
       reset.removeAttribute("datetime");reset.textContent="刷新时间未提供";countdown.textContent="以账号实际限额为准";
     }
   });
-  $("#usageFreshness").textContent=stale ? "额度待同步 · 显示上次记录" : "服务实时限额 · 迪拜时间";
+  const actual=Array.isArray(usage.quota_windows) ? usage.quota_windows : [];
+  $("#dynamicQuotas").innerHTML=actual.map(w=>{
+    const value=typeof w.remaining==="number" && Number.isFinite(w.remaining) && w.remaining>=0 && w.remaining<=100 ? w.remaining : null;
+    const title=quotaWindowTitle(w), reset=Number.isFinite(w.reset) ? "下次刷新 "+timeText(w.reset,true) : "刷新时间未提供";
+    return `<div class="quota-window${value!==null && value<=10?" low":""}"><div class="quota-line"><span>${escapeHTML(title)}</span><strong>${value===null?"未提供":Number(value.toFixed(1))+"%"}</strong></div>${value===null?"":`<progress max="100" value="${value}" aria-label="${escapeHTML(title)}" aria-valuetext="剩余 ${value}%${stale?"，上次记录":""}"></progress>`}<time>${escapeHTML(reset)}</time></div>`;
+  }).join("");
+  let availability="";
+  if (usage.blocked===true) availability="服务暂不允许使用，等待重新核验";
+  else if (usage.quota_state==="service_only" && usage.service_allowed===true) availability="服务已允许使用，未提供固定额度窗口";
+  else if (usage.quota_state==="unknown") availability="额度信息不完整，自动发送暂不可用";
+  else if (usage.service_allowed===false) availability="服务使用许可待确认，自动发送暂不可用";
+  else if (Array.isArray(usage.quota_windows) && !actual.some(w=>w.minutes===300)) availability=actual.some(w=>w.minutes===10080)?"未提供五小时窗口":"仅显示服务返回的额度窗口";
+  else if (Array.isArray(usage.quota_windows) && !actual.some(w=>w.minutes===10080)) availability="未提供周额度窗口";
+  $("#quotaAvailability").textContent=availability;
+  $("#quotaAvailability").hidden=!availability;
+  $("#usageFreshness").textContent=stale ? "额度待同步 · 显示上次记录" : "服务实际限额 · 本机时区";
   const name=account?.name || account?.email?.split("@")[0] || "未识别账号";
   $("#accountName").textContent=name;
   $("#accountEmail").textContent=account?.email || "登录信息暂未提供";
@@ -124,7 +173,7 @@ function renderTasks() {
   const focused=document.activeElement?.dataset?.toggle;
   const editing=document.activeElement?.dataset?.planInput;
   const selection=editing ? [document.activeElement.selectionStart,document.activeElement.selectionEnd] : null;
-  $("#taskRows").innerHTML=visible.map(t=>{const p=t.plan || {state:"off",prompt:"继续任务",revision:0},draft=planDrafts.get(t.key),prompt=draft?.text ?? p.prompt ?? "继续任务";return `<tr><td><div class="task-name-cell"><span class="task-icon">${t.category === "chatgpt" ? "◉" : t.goal ? "◎" : "▤"}</span><div><span class="task-name" title="${escapeHTML(t.name)}">${escapeHTML(t.name)}</span><span class="task-sub">${escapeHTML(t.source_label || "Codex")} / ${escapeHTML(t.id.slice(0,8))}</span>${executionStage(t)}</div></div></td><td class="status-cell">${badge(t)}${automaticControl(t)}</td><td class="plan-cell">${t.can_control === false ? `<span class="plan-unavailable">仅显示目录</span>` : `<div class="plan-top"><button class="switch ${scheduled(t)?"on":""}" role="switch" aria-checked="${scheduled(t)}" aria-label="${escapeHTML(t.name)}：额度恢复后执行一次" data-plan-toggle="${escapeHTML(t.key)}" ${busy || p.state === "sending"?"disabled":""}></button><span class="plan-status ${p.state === "needs_review"?"attention":""}">${escapeHTML(planLabels[p.state] || p.state)}</span></div><div class="plan-editor"><textarea rows="2" maxlength="8000" data-plan-input="${escapeHTML(t.key)}" aria-label="${escapeHTML(t.name)}：恢复后执行的指令" ${busy || p.state === "sending"?"disabled":""}>${escapeHTML(prompt)}</textarea><button class="plan-save" data-plan-save="${escapeHTML(t.key)}" ${busy || p.state === "sending"?"disabled":""}>${scheduled(t)?"保存指令":"保存并预约"}</button><button class="plan-execute" data-execute-now="${escapeHTML(t.key)}" aria-label="${escapeHTML(t.name)}：立刻执行输入框中的指令" title="发送当前输入框的指令，不等待额度刷新" ${busy || immediatePending(t) || p.state === "sending" || t.runtime?.type === "active" || t.runtime?.activeFlags?.length?"disabled":""}>立刻执行</button></div>${immediateReceipt(t)}${p.reason?`<p class="plan-reason">${escapeHTML(p.reason)}</p>`:""}${p.state === "needs_review"?`<button class="plan-cancel" data-plan-cancel="${escapeHTML(t.key)}">取消此预约</button>`:""}`}</td><td><button class="detail-button" data-detail="${escapeHTML(t.id)}" aria-label="查看${escapeHTML(t.name)}详情">↗</button></td></tr>`;}).join("") || '<tr><td colspan="4" class="empty">没有匹配的聊天</td></tr>';
+  $("#taskRows").innerHTML=visible.map(t=>{const p=t.plan || {state:"off",prompt:"继续任务",revision:0},draft=planDrafts.get(t.key),prompt=draft?.text ?? p.prompt ?? "继续任务";return `<tr><td><div class="task-name-cell"><span class="task-icon">${t.category === "chatgpt" ? "◉" : t.goal ? "◎" : "▤"}</span><div><span class="task-name" title="${escapeHTML(t.name)}">${escapeHTML(t.name)}</span><span class="task-sub">${escapeHTML(t.source_label || "Codex")} / ${escapeHTML(t.id.slice(0,8))}</span>${executionStage(t)}</div></div></td><td class="status-cell">${badge(t)}${automaticControl(t)}</td><td class="plan-cell">${t.can_control === false ? `<span class="plan-unavailable">仅显示目录</span>` : `<div class="plan-top"><button class="switch ${scheduled(t)?"on":""}" role="switch" aria-checked="${scheduled(t)}" aria-label="${escapeHTML(t.name)}：额度恢复后执行一次" data-plan-toggle="${escapeHTML(t.key)}" ${busy || p.state === "sending" || (!canScheduleUsage() && !scheduled(t))?"disabled":""}></button><span class="plan-status ${p.state === "needs_review"?"attention":""}">${escapeHTML(planLabels[p.state] || p.state)}</span></div><div class="plan-editor"><textarea rows="2" maxlength="8000" data-plan-input="${escapeHTML(t.key)}" aria-label="${escapeHTML(t.name)}：恢复后执行的指令" ${busy || p.state === "sending"?"disabled":""}>${escapeHTML(prompt)}</textarea><button class="plan-save" data-plan-save="${escapeHTML(t.key)}" ${busy || p.state === "sending" || !canScheduleUsage()?"disabled":""}>${scheduled(t)?"保存指令":"保存并预约"}</button><button class="plan-execute" data-execute-now="${escapeHTML(t.key)}" aria-label="${escapeHTML(t.name)}：立刻执行输入框中的指令" title="发送当前输入框的指令，不等待额度刷新" ${busy || immediatePending(t) || p.state === "sending" || t.runtime?.type === "active" || t.runtime?.activeFlags?.length || !quotaPermitsImmediate()?"disabled":""}>立刻执行</button></div>${!canScheduleUsage()?`<p class="plan-reason">${escapeHTML(schedulingUnavailableNote())}</p>`:""}${immediateReceipt(t)}${p.reason?`<p class="plan-reason">${escapeHTML(p.reason)}</p>`:""}${p.state === "needs_review"?`<button class="plan-cancel" data-plan-cancel="${escapeHTML(t.key)}">取消此预约</button>`:""}`}</td><td><button class="detail-button" data-detail="${escapeHTML(t.id)}" aria-label="查看${escapeHTML(t.name)}详情">↗</button></td></tr>`;}).join("") || '<tr><td colspan="4" class="empty">没有匹配的聊天</td></tr>';
   document.querySelectorAll("[data-toggle]").forEach(el=>el.addEventListener("click",()=>toggleTask(el.dataset.toggle)));
   document.querySelectorAll("[data-detail]").forEach(el=>el.addEventListener("click",()=>openDetail(el.dataset.detail)));
   document.querySelectorAll("[data-plan-toggle]").forEach(el=>el.addEventListener("click",()=>submitPlan(el.dataset.planToggle,true)));
@@ -164,7 +213,7 @@ function render() {
   $("#connectionAlert").hidden=state.healthy;
   $("#connectionText").textContent=!state.running ? "后台服务未运行。启动后，管家会重新核对任务状态。" : "后台尚未提供有效的新检查结果，自动续做会等待可靠状态。";
   const p=state.policy;
-  $("#policySummary").textContent=`剩余 ≤${p.pause}% 时暂停；恢复至 ≥${p.resume}% 后，再次复查原任务与使用许可。`;
+  $("#policySummary").textContent=`按实际额度窗口控制：非周窗口 ≤${p.pause}% 时暂停，≥${p.resume}% 后复核；周额度用尽或服务禁止使用时也暂停。`;
   $("#ruleList").innerHTML=[["暂停阈值",`≤ ${p.pause}%`],["恢复阈值",`≥ ${p.resume}%`],["恢复连续确认",`至少 ${p.confirm_seconds} 秒`],["常规内部检查",`${state.poll_seconds} 秒`],["恢复提交", "一次发送，确认到达"],["账号与额度", "跟随当前登录账号"]].map(([label,value])=>`<div class="rule-row"><span>${label}</span><strong>${value}</strong></div>`).join("");
   renderTasks(); renderEvents(); renderDetail(); renderUsage();
 }

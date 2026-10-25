@@ -20,6 +20,7 @@ import uuid
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from rpc import Rpc
+from quota import parse_bucket, classify, recovered, next_reset, sample_summary, window_map
 from control_policy import (active_turn, blocked_input, checkpoint_matches, decision, message_id,
                             quota_interrupted, quota_usable, same_goal, valid_goal)
 
@@ -145,71 +146,6 @@ class Store:
     def close(self):
         self.db.close()
 
-
-def parse_bucket(payload, limit_id, now, stale_grace=90):
-    buckets = payload.get("rateLimitsByLimitId")
-    if isinstance(buckets, dict):
-        bucket = buckets.get(limit_id)
-    else:
-        candidate = payload.get("rateLimits") or {}
-        bucket = candidate if candidate.get("limitId", "codex") == limit_id else None
-    if not isinstance(bucket, dict):
-        raise ValueError("requested quota bucket missing")
-    windows = {}
-    for name in ("primary", "secondary"):
-        raw = bucket.get(name)
-        if raw is None:
-            continue
-        used, minutes, reset = (raw.get(k) for k in ("usedPercent", "windowDurationMins", "resetsAt"))
-        if any(isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x)
-               for x in (used, minutes, reset)):
-            raise ValueError("unknown quota window")
-        if not 0 <= used <= 100 or minutes <= 0 or reset <= 0 or now > reset + stale_grace:
-            raise ValueError("invalid or expired quota window")
-        windows[name] = {"used": used, "remaining": round(100 - used, 3),
-                         "minutes": minutes, "reset": reset}
-    if "primary" not in windows or windows["primary"]["minutes"] != 300:
-        raise ValueError("a verified five-hour window is required")
-    return {"limit_id": limit_id, "observed_at": now, "windows": windows,
-            "service_allowed": payload.get("ordinaryUsageAllowed") is True,
-            "blocked": bool(bucket.get("rateLimitReachedType")) or bool(bucket.get("spendControlReached"))
-                or payload.get("ordinaryUsageAllowed") is False}
-
-
-def classify(sample, config):
-    primary = sample["windows"]["primary"]
-    secondary = sample["windows"].get("secondary")
-    if sample["blocked"] or (secondary is not None and secondary["remaining"] <= 0):
-        return "blocked"
-    if primary["remaining"] <= config["pause_remaining"]:
-        return "low"
-    if primary["remaining"] <= config["warn_remaining"]:
-        return "warning"
-    return "normal"
-
-
-def recovered(current, previous, config, now):
-    if now - current["observed_at"] > config["max_sample_age_seconds"] or current["blocked"]:
-        return False
-    if current["windows"]["primary"]["remaining"] < config["resume_remaining"]:
-        return False
-    for name, old in previous["windows"].items():
-        new = current["windows"].get(name)
-        if new is None:
-            return False
-        if name == "primary" and old["remaining"] <= config["pause_remaining"]:
-            if new["reset"] <= old["reset"]:
-                return False
-        if name == "secondary":
-            if new["remaining"] <= 0:
-                return False
-            if old["remaining"] <= 0 and new["reset"] <= old["reset"]:
-                return False
-    # An opaque service block may have causes other than a five-hour reset.
-    if previous["blocked"] and not any(
-            current["windows"][k]["reset"] > w["reset"] for k, w in previous["windows"].items()):
-        return False
-    return True
 
 
 class Controller:
@@ -358,6 +294,9 @@ class Controller:
         # A second fresh quota read immediately before dispatch, not only a timer.
         fresh = parse_bucket(await self.rpc.call("account/rateLimits/read"),
                              self.config["limit_id"], self.clock())
+        if (fresh.get("quota_state") in ("metered", "service_only")
+                and not set(window_map(task.get("pause_sample") or {})).issubset(window_map(fresh))):
+            return self.review(task, "额度窗口已变化，请重新确认自动续接")
         if not self.recovery_allowed(task, fresh):
             task["recovery_first_seen"] = None
             self.store.save_task(task)
@@ -376,7 +315,7 @@ class Controller:
         task.update(state="resume_intent", action_id=str(uuid.uuid4()))
         if not self.store.save_task(task):
             return
-        message = ("额度管家：五小时额度已重新核验恢复。继续本会话原有任务，遵从用户最新指令。"
+        message = ("额度管家：可用额度已重新核验恢复。继续本会话原有任务，遵从用户最新指令。"
                    "先核对工作区、文件修改及仍在运行的命令，避免重复执行已完成步骤；"
                    "若原任务已完成、被取消或需要用户决定，请停止并说明。"
                    "本次续做标识：" + task["action_id"] + self.config.get("resume_message_suffix", ""))
@@ -493,7 +432,7 @@ class Controller:
             "observed_at": self.clock()} for tid, view in views.items()})
 
 
-async def identity_for(rpc):
+async def identity_for(rpc, store=None):
     account = (await rpc.call("account/read", {"refreshToken": False})).get("account")
     if not account or account.get("type") != "chatgpt":
         raise ValueError("Codex CLI must be signed in with ChatGPT")
@@ -505,8 +444,9 @@ async def identity_for(rpc):
         workspace = (auth.get("tokens") or {}).get("account_id") or auth.get("account_id")
     if not account.get("email") and not workspace:
         raise ValueError("stable account identity unavailable")
-    return fingerprint({"type": account["type"], "email": account.get("email"),
-                        "workspace": workspace, "plan": account.get("planType")})
+    from identity_scope import stable_account_scope
+    return stable_account_scope({"type": account["type"], "email": account.get("email"),
+                                 "workspace": workspace, "plan": account.get("planType")}, store)
 
 
 def server_command(config):
@@ -618,7 +558,7 @@ async def run(config, once=False):
                         rpc = DesktopAdapter(rpc, config)
                     await rpc.start()
                 stage = "account_identity"
-                new_identity = await identity_for(rpc)
+                new_identity = await identity_for(rpc, store)
                 if identity is not None and new_identity != identity:
                     store.put("supervisor_paused", True)
                 identity = new_identity
@@ -629,24 +569,23 @@ async def run(config, once=False):
                 sample = parse_bucket(quota_response, config["limit_id"], started)
                 sample["scope"] = identity
                 phase = classify(sample, config)
-                key = identity + ":" + config["limit_id"] + ":" + str(sample["windows"]["primary"]["reset"])
-                remaining = sample["windows"]["primary"]["remaining"]
-                reset = local_time(sample["windows"]["primary"]["reset"])
+                key = identity + ":" + config["limit_id"] + ":" + fingerprint({k: w["reset"] for k, w in window_map(sample).items()})
+                summary = sample_summary(sample)
                 if phase in ("low", "blocked"):
                     mode = "仅提醒模式，未中断任务" if config["mode"] == "notify" else "正在核对并暂停受管任务"
                     if config.get("quota_notifications", True):
-                        store.notice(key + ":low", "额度管家：额度不足", "五小时剩余 %s%%；重置 %s；%s" % (remaining, reset, mode))
+                        store.notice(key + ":low", "额度管家：额度不足", summary + "；" + mode)
                     store.put("last_low", sample)
                 elif phase == "warning":
                     if config.get("quota_notifications", True):
-                        store.notice(key + ":warning", "额度管家：额度预警", "五小时剩余 %s%%；重置 %s" % (remaining, reset))
+                        store.notice(key + ":warning", "额度管家：额度预警", summary)
                 old_low = store.get("last_low")
                 if old_low and old_low.get("scope") == identity and recovered(sample, old_low, config, started):
                     if config.get("quota_notifications", True):
-                        store.notice(key + ":restored", "额度管家：额度已恢复", "五小时剩余 %s%%；已重新核验" % remaining)
+                        store.notice(key + ":restored", "额度管家：额度已恢复", summary + "；已重新核验")
                     store.put("last_low", None)
                 supervisor_paused = store.get("supervisor_paused", False)
-                controller = Controller(rpc, store, config, identity, identity_check=lambda: identity_for(rpc))
+                controller = Controller(rpc, store, config, identity, identity_check=lambda: identity_for(rpc, store))
                 if config.get("desktop_control_enabled"):
                     # Directory faults never stop quota protection for loaded chats.
                     try:
@@ -681,7 +620,7 @@ async def run(config, once=False):
                     from plans import PlanRunner
                     await PlanRunner(controller).tick(sample)
                     await controller.tick(sample)
-                report = {"version": "0.1.0", "pid": os.getpid(), "observed_at": started,
+                report = {"version": "0.2.1", "pid": os.getpid(), "observed_at": started,
                           "observed_at_dubai": local_time(started), "mode": config["mode"],
                           "phase": phase, "supervisor_paused": supervisor_paused, "quota": sample,
                           "tasks": [{k: t.get(k) for k in ("id", "name", "state", "reason")} for t in store.tasks()],
@@ -700,7 +639,8 @@ async def run(config, once=False):
                 from plans import all_plans
                 pending_plan = any(p["state"] in ("armed", "sending") for p in all_plans(store))
                 delay = config["near_limit_poll_seconds"] if phase in ("warning", "low", "blocked") or pending_plan else config["poll_seconds"]
-                until_reset = sample["windows"]["primary"]["reset"] - time.time()
+                reset = next_reset(sample)
+                until_reset = reset - time.time() if reset is not None else 0
                 if until_reset > 0:
                     delay = min(delay, max(2, until_reset + 2))
             except Exception as exc:

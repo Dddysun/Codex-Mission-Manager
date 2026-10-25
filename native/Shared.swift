@@ -8,7 +8,7 @@ enum MissionIdentity {
     static let bundle = "com.dddysun.CodexMissionManager"
     static let helper = "com.dddysun.CodexMissionManager.PowerHelper"
     static let helperPlist = helper + ".plist"
-    static let version = "0.2.0"
+    static let version = "0.2.1"
     // Substituted at build time. Empty in the local preview: helper rejects all peers.
     static let team = "__TEAM_ID__"
     static var releaseSigned: Bool { !team.isEmpty && team != "__TEAM_ID__" }

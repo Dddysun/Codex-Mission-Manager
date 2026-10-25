@@ -37,6 +37,37 @@ assert(elements.get('#copyAccountId').disabled);
 assert.equal(elements.get('#planBadge').textContent,'待识别');
 console.log('Sidebar render checks passed: Free / Plus / Pro, account switch, zero, missing window, stale data and accessibility.');
 
+render({...usage,account:{...usage.account,plan_type:'pro'},windows:{five_hour:null,weekly:{remaining:42,reset:Date.now()/1000+86400}},quota_windows:[{id:'duration:10080',kind:'weekly',minutes:10080,remaining:42,reset:Date.now()/1000+86400}],quota_state:'metered',service_allowed:true,scheduling_available:true});
+assert(elements.get('#fiveHourQuota').hidden);
+assert(elements.get('#dynamicQuotas').innerHTML.includes('周额度'));
+assert(!elements.get('#dynamicQuotas').innerHTML.includes('五小时额度'));
+assert(elements.get('#quotaAvailability').textContent.includes('未提供五小时窗口'));
+assert.equal(vm.runInContext('canScheduleUsage()',sandbox),true);
+assert.equal(vm.runInContext('quotaPermitsImmediate()',sandbox),true);
+render({...usage,quota_windows:[{id:'duration:15',kind:'custom',minutes:15,remaining:36,reset:Date.now()/1000+900},{id:'duration:1440',kind:'custom',minutes:1440,remaining:76,reset:Date.now()/1000+86400}],quota_state:'metered',service_allowed:true,scheduling_available:true});
+assert(elements.get('#dynamicQuotas').innerHTML.includes('15分钟额度'));
+assert(elements.get('#dynamicQuotas').innerHTML.includes('1天额度'));
+assert.equal(vm.runInContext('quotaPermitsImmediate()',sandbox),true);
+vm.runInContext('state.usage.quota_windows[0].remaining=19',sandbox);
+assert.equal(vm.runInContext('quotaPermitsImmediate()',sandbox),false);
+vm.runInContext('state.policy={resume:15}',sandbox);
+assert.equal(vm.runInContext('quotaPermitsImmediate()',sandbox),true);
+render({...usage,quota_windows:[],quota_state:'service_only',service_allowed:true,scheduling_available:false});
+assert.equal(elements.get('#dynamicQuotas').innerHTML,'');
+assert(elements.get('#fiveHourQuota').hidden && elements.get('#weeklyQuota').hidden);
+assert(elements.get('#quotaAvailability').textContent.includes('服务已允许使用'));
+assert(!elements.get('#quotaAvailability').textContent.includes('无限'));
+assert.equal(vm.runInContext('canScheduleUsage()',sandbox),false);
+assert.equal(vm.runInContext('quotaPermitsImmediate()',sandbox),true);
+vm.runInContext('state.usage.blocked=true',sandbox);
+assert.equal(vm.runInContext('quotaPermitsImmediate()',sandbox),false);
+render({...usage,quota_windows:[],quota_state:'unknown',service_allowed:false,scheduling_available:false});
+assert(elements.get('#quotaAvailability').textContent.includes('自动发送暂不可用'));
+assert.equal(elements.get('#dynamicQuotas').innerHTML,'');
+assert.equal(vm.runInContext('canScheduleUsage()',sandbox),false);
+assert.equal(vm.runInContext('quotaPermitsImmediate()',sandbox),false);
+console.log('Subscription UI passed: weekly-only Pro, custom durations, no fabricated meter, explicit permission and schedule availability.');
+
 // Directory rendering: current state is independent from permission; plans are
 // separate controls and untrusted titles/prompts stay text inside the template.
 elements.get('#search').value='';

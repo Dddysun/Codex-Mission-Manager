@@ -5,9 +5,10 @@ control decisions. Tokens and arbitrary claims must never leave this module.
 """
 import base64
 import json
-import math
 from pathlib import Path
 from urllib.parse import urlparse
+
+from quota import parse_bucket, window_map, plan_window
 
 
 def text(value, limit=200):
@@ -44,24 +45,15 @@ def avatar_url(value):
     return value
 
 
-def window(raw):
-    if not isinstance(raw, dict):
-        return None
-    used, minutes, reset = (raw.get(k) for k in ("usedPercent", "windowDurationMins", "resetsAt"))
-    if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)
-           for v in (used, minutes, reset)):
-        return None
-    if not 0 <= used <= 100 or minutes <= 0 or reset <= 0:
-        return None
-    return {"remaining": round(100 - used, 3), "minutes": minutes, "reset": reset}
-
-
 def display_snapshot(account_response, quota_response, limit_id, observed_at, auth_path=None):
+    account_response = account_response if isinstance(account_response, dict) else {}
+    quota_response = quota_response if isinstance(quota_response, dict) else {}
     account = (account_response or {}).get("account") or {}
+    account = account if isinstance(account, dict) else {}
     local = local_profile(account, auth_path)
     buckets = quota_response.get("rateLimitsByLimitId")
     raw = (buckets.get(limit_id) if isinstance(buckets, dict) else quota_response.get("rateLimits")) or {}
-    if raw.get("limitId", limit_id) != limit_id:
+    if not isinstance(raw, dict) or raw.get("limitId", limit_id) != limit_id:
         raw = {}
     plan = text(raw.get("planType") or account.get("planType"), 80)
     profile = None
@@ -72,14 +64,28 @@ def display_snapshot(account_response, quota_response, limit_id, observed_at, au
                    "plan_type": plan,
                    "avatar_url": avatar_url(account.get("picture") or account.get("avatarUrl") or local.get("picture"))}
     windows = {"five_hour": None, "weekly": None}
-    # Window duration, not subscription name or primary/secondary position,
-    # determines which meter a quota belongs to. Null is never unlimited.
-    for key in ("primary", "secondary"):
-        value = window(raw.get(key))
-        if value:
-            if value["minutes"] == 300:
-                windows["five_hour"] = value
-            elif value["minutes"] == 10080:
-                windows["weekly"] = value
+    quota_windows = []
+    try:
+        sample = parse_bucket(quota_response, limit_id, observed_at)
+    except (ValueError, TypeError, AttributeError):
+        sample = {"windows": {}, "quota_state": "unknown", "service_allowed": False,
+                  "blocked": bool(raw.get("rateLimitReachedType") or raw.get("spendControlReached"))
+                    or quota_response.get("ordinaryUsageAllowed") is False}
+    # The control parser and display share duration/validity decisions. A plan
+    # label never invents percentages or permission to execute.
+    for identifier, raw_window in sorted(window_map(sample).items(), key=lambda entry: (entry[1]["minutes"], entry[0])):
+        value = {k: raw_window[k] for k in ("remaining", "minutes", "reset")}
+        kind = "five_hour" if value["minutes"] == 300 else "weekly" if value["minutes"] == 10080 else "custom"
+        quota_windows.append(dict(value, id=identifier, kind=kind))
+        if kind in windows and windows[kind] is None:
+            windows[kind] = value
+    selected = plan_window(sample)
+    scheduling_window = next((w for w in quota_windows if selected and w["id"] == selected[0]), None)
     return {"account": profile, "windows": windows, "observed_at": observed_at,
-            "limit_id": limit_id, "source": "account/rateLimits/read"}
+            "quota_windows": quota_windows, "quota_state": sample["quota_state"],
+            "service_allowed": sample.get("service_allowed") is True,
+            "blocked": sample.get("blocked") is True,
+            "scheduling_available": bool(quota_windows),
+            "scheduling_window": scheduling_window,
+            "limit_id": limit_id, "limit_name": text(raw.get("limitName")),
+            "source": "account/rateLimits/read"}

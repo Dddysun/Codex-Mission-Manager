@@ -49,6 +49,63 @@ import Foundation
         precondition(L("暂停所有任务") == "Pause all tasks")
         precondition(L("客户端 %@ · 兼容配置已匹配", "21828") == "Client 21828 · Compatibility profile matched")
         precondition(!NativeLocalization.english.values.contains { $0.contains("本机预览") })
+        let fixtureDirectory = URL(fileURLWithPath: CommandLine.arguments[1]).deletingLastPathComponent()
+        func fixture(_ name: String) throws -> MissionSnapshot {
+            try JSONDecoder().decode(MissionSnapshot.self, from: Data(contentsOf: fixtureDirectory.appendingPathComponent(name)))
+        }
+        NativeLocalization.testLanguage = "zh"
+        precondition(state.usage?.visibleWindows.count == 2 && state.usage?.canSchedule == true,
+                     "V0.2 snapshots must continue decoding without new quota metadata")
+        precondition(state.usage?.permitsImmediate(minimum:20) == true)
+        let weekly = try fixture("native-pro-weekly.json")
+        precondition(weekly.usage?.account?.subscription == "Pro")
+        precondition(weekly.usage?.visibleWindows.count == 1 && weekly.usage?.visibleWindows.first?.minutes == 10080)
+        precondition(weekly.usage?.visibleWindows.first?.title == "周额度" && weekly.usage?.canSchedule == true)
+        precondition(weekly.usage?.missingWindowNote == "未提供五小时窗口")
+        precondition(weekly.usage?.scheduleWindow?.minutes == 10080)
+        var weeklyUsage = weekly.usage!
+        precondition(weeklyUsage.permitsImmediate(minimum:20))
+        weeklyUsage.quota_windows?[0].remaining = 1
+        precondition(weeklyUsage.permitsImmediate(minimum:20), "Weekly windows remain usable above zero")
+        weeklyUsage.quota_windows?[0].remaining = 0
+        precondition(!weeklyUsage.permitsImmediate(minimum:20))
+        let custom = try fixture("native-custom-windows.json")
+        precondition(custom.usage?.visibleWindows.map { $0.title } == ["15分钟额度", "1天额度"])
+        precondition(custom.usage?.scheduleWindow?.minutes == 15)
+        var customUsage = custom.usage!
+        precondition(customUsage.permitsImmediate(minimum:20))
+        customUsage.quota_windows?[0].remaining = 19
+        precondition(!customUsage.permitsImmediate(minimum:20))
+        precondition(customUsage.permitsImmediate(minimum:15), "Use the configured recovery threshold")
+        let service = try fixture("native-service-only.json")
+        precondition(service.usage?.visibleWindows.isEmpty == true && service.usage?.canSchedule == false)
+        precondition(service.usage?.scheduleWindow == nil)
+        precondition(service.usage?.availabilityNote == "服务已允许使用，未提供固定额度窗口")
+        var serviceUsage = service.usage!
+        precondition(serviceUsage.permitsImmediate(minimum:20))
+        serviceUsage.service_allowed = false
+        precondition(!serviceUsage.permitsImmediate(minimum:20))
+        serviceUsage.service_allowed = true
+        serviceUsage.blocked = true
+        precondition(!serviceUsage.permitsImmediate(minimum:20))
+        let unknown = try fixture("native-quota-unknown.json")
+        precondition(unknown.usage?.account?.subscription == "future-plan")
+        precondition(unknown.usage?.visibleWindows.isEmpty == true && unknown.usage?.canSchedule == false)
+        precondition(unknown.usage?.scheduleWindow == nil)
+        precondition(unknown.usage?.availabilityNote == "额度信息不完整，自动发送暂不可用")
+        precondition(!unknown.healthy && !unknown.control_enabled)
+        precondition(unknown.usage?.permitsImmediate(minimum:20) == false)
+        var object = try JSONSerialization.jsonObject(with: data) as! [String: Any]
+        var usage = object["usage"] as! [String: Any]
+        usage["quota_windows"] = []
+        object["usage"] = usage
+        let explicitlyEmpty = try JSONDecoder().decode(MissionSnapshot.self, from: JSONSerialization.data(withJSONObject: object))
+        precondition(explicitlyEmpty.usage?.visibleWindows.isEmpty == true && explicitlyEmpty.usage?.canSchedule == false,
+                     "Explicit new empty windows must not resurrect cached V0.2 meters")
+        NativeLocalization.testLanguage = "en"
+        precondition(custom.usage?.visibleWindows.map { $0.title } == ["15-minute quota", "1-day quota"])
+        precondition(weekly.usage?.visibleWindows.first?.title == "Weekly quota")
+        precondition(service.usage?.availabilityNote == "The service allows usage; no fixed quota window was provided.")
         print("Native snapshot / status / control contract checks passed")
     }
 }

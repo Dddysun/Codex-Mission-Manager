@@ -125,7 +125,7 @@ def build(args):
     if identity != "-": command += ["--options", "runtime", "--timestamp"]
     run(command + [app])
     run(["codesign", "--verify", "--deep", "--strict", app])
-    manifest = {"version": "0.2.0", "architecture": "arm64", "minimum_macos": "14.0",
+    manifest = {"version": "0.2.1", "architecture": "arm64", "minimum_macos": "14.0",
         "python": pyversion, "signing": "developer-id" if team else "ad-hoc-local-preview",
         "notarized": False, "privileged_helper_enabled": bool(team), "live_closed_lid_verified": False,
         "ui": "SwiftUI-AppKit", "webview": False, "private_runtime_data_included": False, "external_dependency": "Compatible installed ChatGPT/Codex desktop client"}

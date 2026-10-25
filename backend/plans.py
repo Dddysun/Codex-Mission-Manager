@@ -1,9 +1,11 @@
 """Durable, once-only instructions explicitly scheduled by the local UI."""
 import json
+import math
 import time
 import uuid
 
 from control_policy import active_turn, blocked_input, message_id, quota_usable
+from quota import plan_window, window_map
 
 ACTIVE = {"armed", "sending"}
 DEFAULT_PROMPT = "继续任务"
@@ -43,11 +45,18 @@ def set_plan(store, chat, enabled, prompt, revision, sample, now=None):
         raise ValueError("计划已变化，请刷新后重试")
     if old and old["state"] == "sending":
         raise ValueError("指令已提交发送，正在确认结果，暂不能修改")
-    editing = enabled and old and old["state"] == "armed"
+    selected = plan_window(sample)
+    if enabled and selected is None:
+        raise ValueError("当前账号未提供可预约的额度刷新窗口，请使用立刻执行。")
+    editing = (enabled and old and old["state"] == "armed"
+               and old.get("scope") == sample.get("scope")
+               and PlanRunner.anchor_window(old, sample) is not None)
     plan = dict(old) if editing or (not enabled and old) else {"id": str(uuid.uuid4()), "key": chat["key"],
         "thread_id": chat["id"], "name": chat["name"], "kind": chat["kind"], "host_id": chat["host_id"],
         "scope": sample.get("scope"), "armed_at": now,
-        "armed_window_reset": ((sample.get("windows") or {}).get("primary") or {}).get("reset")}
+        "armed_window_key": selected[0] if selected else None,
+        "armed_window_minutes": selected[1]["minutes"] if selected else None,
+        "armed_window_reset": selected[1]["reset"] if selected else None}
     plan.update(state="armed" if enabled else "cancelled", prompt=prompt.strip(), revision=revision + 1,
                 updated_at=now, recovery_first_seen=None, reason=None)
     if not save_plan(store, plan, revision):
@@ -64,10 +73,26 @@ class PlanRunner:
         self.controller = controller
         self.store, self.rpc, self.config = controller.store, controller.rpc, controller.config
 
+    @staticmethod
+    def anchor_window(plan, sample):
+        windows = window_map(sample)
+        key = plan.get("armed_window_key")
+        if key:
+            value = windows.get(key)
+            return value if value and value["minutes"] == plan.get("armed_window_minutes") else None
+        # V0.2 plans always used a five-hour primary. Never reinterpret that
+        # scalar timestamp as a newly returned weekly or custom window.
+        minutes = plan.get("armed_window_minutes") or 300
+        values = [w for w in windows.values() if w["minutes"] == minutes]
+        return values[0] if len(values) == 1 else None
+
     def ready(self, plan, sample):
+        target = self.anchor_window(plan, sample)
+        reset = plan.get("armed_window_reset")
         return (sample.get("scope", self.controller.identity) == plan["scope"]
                 and self.controller.clock() - sample["observed_at"] <= self.config["max_sample_age_seconds"]
-                and sample["windows"]["primary"]["reset"] > plan["armed_window_reset"]
+                and target is not None and not isinstance(reset, bool) and isinstance(reset, (int, float))
+                and math.isfinite(reset) and target["reset"] > reset
                 and quota_usable(sample, self.config))
 
     def finish(self, plan, state, reason=None, turn_id=None):
@@ -110,6 +135,10 @@ class PlanRunner:
                         self.track_sent(plan, latest.get("id"))
                     else:
                         self.finish(plan, "needs_review", "上次发送结果未确认，不重复发送")
+                    continue
+                if (sample.get("quota_state") in ("metered", "service_only")
+                        and self.anchor_window(plan, sample) is None):
+                    self.finish(plan, "needs_review", "额度窗口已变化，请重新确认预约")
                     continue
                 if not self.ready(plan, sample):
                     if plan.get("recovery_first_seen") is not None:

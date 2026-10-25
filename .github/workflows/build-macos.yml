@@ -1,4 +1,4 @@
-name: Build macOS V0.2 preview
+name: Build macOS V0.2.1 preview
 on:
   push:
     branches: [main]
@@ -43,10 +43,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v0.2.0-preview.${GITHUB_RUN_NUMBER}" \
+          gh release create "v0.2.1-preview.${GITHUB_RUN_NUMBER}" \
             "$RUNNER_TEMP/mission-build/"*.dmg \
             "$RUNNER_TEMP/mission-build/SHA256SUMS" \
             "$RUNNER_TEMP/mission-build/build-manifest.json" \
             --target "$GITHUB_SHA" --prerelease \
-            --title "V0.2 Native SwiftUI preview ${GITHUB_RUN_NUMBER}" \
+            --title "V0.2.1 Native SwiftUI preview ${GITHUB_RUN_NUMBER}" \
             --notes-file docs/RELEASE_STATUS.md

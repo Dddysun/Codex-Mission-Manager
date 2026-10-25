@@ -1,0 +1,136 @@
+{
+  "observed_at": 1792785600,
+  "now": 1792785600,
+  "running": true,
+  "healthy": true,
+  "stale": false,
+  "control_paused": false,
+  "control_enabled": true,
+  "control_revision": 4,
+  "tasks": [
+    {
+      "id": "demo-chat-0",
+      "key": "codex:local:demo-chat-0",
+      "name": "整理项目的部署说明",
+      "state": "watching",
+      "auto_resume": true,
+      "manual_hold": false,
+      "revision": 3,
+      "can_control": true,
+      "category": "codex",
+      "source_label": "Codex · 本机",
+      "runtime": {
+        "type": "active"
+      },
+      "execution_stage": {
+        "text": "正在核对已完成的部署步骤，随后整理发布说明。",
+        "phase": "progress",
+        "updated_at": 1792785600
+      },
+      "plan": {
+        "state": "off",
+        "prompt": "继续任务",
+        "revision": 2
+      }
+    },
+    {
+      "id": "demo-chat-1",
+      "key": "codex:local:demo-chat-1",
+      "name": "检查发布清单与已有进度",
+      "state": "watching",
+      "auto_resume": false,
+      "manual_hold": false,
+      "revision": 3,
+      "can_control": true,
+      "category": "codex",
+      "source_label": "Codex · 本机",
+      "runtime": {
+        "type": "idle"
+      },
+      "execution_stage": {
+        "text": "上一轮检查已完成。等待你的下一条指令。",
+        "phase": "progress",
+        "updated_at": 1792785600
+      },
+      "plan": {
+        "state": "off",
+        "prompt": "继续任务",
+        "revision": 2
+      }
+    },
+    {
+      "id": "demo-chat-2",
+      "key": "chatgpt:local:demo-chat-2",
+      "name": "梳理下周的学习计划",
+      "state": "watching",
+      "auto_resume": false,
+      "manual_hold": false,
+      "revision": 3,
+      "can_control": false,
+      "category": "chatgpt",
+      "source_label": "ChatGPT · 目录快照",
+      "runtime": {
+        "type": "unknown"
+      },
+      "execution_stage": {
+        "text": "当前仅同步目录，执行阶段暂不可读。",
+        "phase": "progress",
+        "updated_at": 1792785600
+      },
+      "plan": {
+        "state": "off",
+        "prompt": "继续任务",
+        "revision": 2
+      }
+    }
+  ],
+  "events": [
+    {
+      "id": 1,
+      "created": 1792785600,
+      "state": "watching",
+      "name": "整理项目的部署说明",
+      "detail": {}
+    }
+  ],
+  "usage": {
+    "account": {
+      "id": "demo-account-preview",
+      "name": "Pro Preview",
+      "email": "preview@example.invalid",
+      "type": "chatgpt",
+      "plan_type": "pro"
+    },
+    "windows": {
+      "five_hour": null,
+      "weekly": {
+        "remaining": 42,
+        "reset": 1792872000
+      }
+    },
+    "observed_at": 1792785600,
+    "stale": false,
+    "quota_windows": [
+      {
+        "id": "duration:10080",
+        "kind": "weekly",
+        "minutes": 10080,
+        "remaining": 42,
+        "reset": 1792872000
+      }
+    ],
+    "quota_state": "metered",
+    "service_allowed": true,
+    "blocked": false,
+    "scheduling_available": true
+  },
+  "catalog": {
+    "observed_at": 1792785600
+  },
+  "policy": {
+    "pause": 10,
+    "resume": 20,
+    "confirm_seconds": 5
+  },
+  "poll_seconds": 30
+}

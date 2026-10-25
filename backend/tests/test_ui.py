@@ -144,7 +144,7 @@ class InterfaceTests(unittest.TestCase):
 
     def prepare_catalog(self):
         now=time.time()
-        report={"observed_at":now,"phase":"normal","quota":{"observed_at":now,"scope":"test","windows":{"primary":{"remaining":8,"reset":2000000000}}}}
+        report={"observed_at":now,"phase":"normal","quota":{"observed_at":now,"scope":"test","windows":{"primary":{"remaining":8,"minutes":300,"reset":2000000000}}}}
         (Path(self.temp.name)/"state/status.json").write_text(json.dumps(report))
         self.store.put("last_report",report)
         local=entry("task-1","Renamed chat")

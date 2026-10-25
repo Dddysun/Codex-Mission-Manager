@@ -15,8 +15,14 @@ struct MissionMenuPanel: View {
                 Text(model.snapshot?.usage?.account?.subscription ?? L("待识别")).font(.caption).foregroundStyle(.secondary)
             }
             VStack(alignment:.leading,spacing:14) {
-                meter(L("五小时额度"),quota:model.snapshot?.usage?.windows.five_hour)
-                meter(L("周额度"),quota:model.snapshot?.usage?.windows.weekly)
+                ForEach(model.snapshot?.usage?.visibleWindows ?? []) { window in
+                    meter(window.title,quota:window.value)
+                }
+                if let note=model.snapshot?.usage?.availabilityNote {
+                    Text(note).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                } else if let note=model.snapshot?.usage?.missingWindowNote {
+                    Text(note).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
+                }
                 if !model.connected || model.snapshot?.usage?.stale != false { Label(L("额度待同步"),systemImage:"clock").font(.caption).foregroundStyle(.orange) }
             }
             HStack(spacing:8) {
@@ -69,7 +75,9 @@ struct MissionMenuPanel: View {
     func meter(_ title:String,quota:MissionQuota?) -> some View {
         VStack(alignment:.leading,spacing:6) {
             HStack { Text(L(title)).font(.callout); Spacer(); Text(quota?.validRemaining.map { String(format:"%.1f%%",$0) } ?? L("未提供")).font(.callout.bold()).monospacedDigit() }
-            ProgressView(value:quota?.validRemaining ?? 0,total:100).tint((quota?.validRemaining ?? 100)<=10 ? .orange : .accentColor)
+            if let remaining=quota?.validRemaining {
+                ProgressView(value:remaining,total:100).tint(remaining<=10 ? .orange : .accentColor)
+            }
             Text(quota?.reset.map { L("下次刷新 %@",missionTime($0)) } ?? L("刷新时间未提供")).font(.caption).foregroundStyle(.secondary)
         }
     }

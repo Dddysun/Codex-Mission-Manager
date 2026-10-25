@@ -31,7 +31,7 @@ def main():
         "首次新安装默认暂停自动控制；确认账号与聊天后再开启。\n"
         "当前需要已安装且兼容的 ChatGPT/Codex 桌面客户端，本包不分发原客户端。\n"
         "源码、产品蓝图与验证结果：https://github.com/Dddysun/Codex-Mission-Manager\n", encoding="utf-8")
-    image = build / "Codex-Mission-Manager-0.2.0-arm64-preview.dmg"
+    image = build / "Codex-Mission-Manager-0.2.1-arm64-preview.dmg"
     subprocess.run(["hdiutil", "create", "-volname", "Codex Mission Manager", "-srcfolder", str(stage),
                     "-format", "UDZO", "-ov", str(image)], check=True)
     # DiskImages can retain a short-lived handle after create on hosted macOS.

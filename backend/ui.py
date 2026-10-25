@@ -119,7 +119,7 @@ class Application:
                     result['auto_error'] = None
                 result["immediate"] = dispatches.get(chat["key"])
                 plan = get_plan(store, chat["key"])
-                result["plan"] = ({k: plan.get(k) for k in ("state", "prompt", "revision", "armed_at", "armed_window_reset", "reason", "finished_at")}
+                result["plan"] = ({k: plan.get(k) for k in ("state", "prompt", "revision", "armed_at", "armed_window_reset", "armed_window_minutes", "armed_window_key", "reason", "finished_at")}
                     if plan and (not scope or plan["scope"] == scope) else {"state": "off", "prompt": "继续任务", "revision": (plan or {}).get("revision", 0)})
                 tasks.append(result)
             tasks.sort(key=lambda t: next((x.get("updated_at") or 0 for x in chats.values() if x["key"] == t["key"]), 0), reverse=True)
@@ -135,7 +135,9 @@ class Application:
             global_revision = store.get("control_revision", 0)
             stop_requested = store.get("stop_requested", False)
             usage = store.get("account_display") or {"account": None,
-                "windows": {"five_hour": None, "weekly": None}, "observed_at": None}
+                "windows": {"five_hour": None, "weekly": None}, "quota_windows": [],
+                "quota_state": "unknown", "service_allowed": False, "blocked": False,
+                "scheduling_available": False, "observed_at": None}
             usage["stale"] = not running or now - (usage.get("observed_at") or 0) > cfg["max_sample_age_seconds"]
             store.db.rollback()
             return {

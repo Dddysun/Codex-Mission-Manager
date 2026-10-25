@@ -30,6 +30,68 @@ struct MissionUsage: Decodable {
     var windows: MissionWindows
     var observed_at: Double?
     var stale: Bool?
+    var quota_windows: [MissionQuotaWindow]?
+    var quota_state: String?
+    var service_allowed: Bool?
+    var blocked: Bool?
+    var scheduling_available: Bool?
+    var scheduling_window: MissionQuotaWindow?
+    var limit_name: String?
+    var visibleWindows: [MissionQuotaWindow] {
+        if let quota_windows { return quota_windows }
+        // A V0.2 snapshot has only the two legacy display slots.
+        var result: [MissionQuotaWindow] = []
+        if let value=windows.five_hour { result.append(MissionQuotaWindow(id:"duration:300",kind:"five_hour",minutes:300,remaining:value.remaining,reset:value.reset)) }
+        if let value=windows.weekly { result.append(MissionQuotaWindow(id:"duration:10080",kind:"weekly",minutes:10080,remaining:value.remaining,reset:value.reset)) }
+        return result
+    }
+    var canSchedule: Bool { scheduling_available ?? !visibleWindows.isEmpty }
+    func permitsImmediate(minimum: Double) -> Bool {
+        // V0.2 snapshots do not advertise the new permission state. Keep their
+        // existing button behavior; the backend always rechecks before sending.
+        guard blocked != true, service_allowed != false else { return false }
+        guard let quota_state else { return true }
+        guard service_allowed == true, minimum.isFinite else { return false }
+        if quota_state == "service_only" { return true }
+        guard quota_state == "metered", !visibleWindows.isEmpty else { return false }
+        return visibleWindows.allSatisfy { window in
+            guard let remaining=window.value.validRemaining else { return false }
+            return window.minutes == 10080 ? remaining > 0 : remaining >= minimum
+        }
+    }
+    var schedulingUnavailableNote: String {
+        if quota_state == "service_only", service_allowed == true, blocked != true {
+            return L("当前账号未提供可预约的额度刷新窗口，请使用立刻执行。")
+        }
+        if let availabilityNote { return availabilityNote }
+        return L("当前账号未提供可预约的额度刷新窗口。")
+    }
+    var scheduleWindow: MissionQuotaWindow? {
+        guard canSchedule else { return nil }
+        if let scheduling_window { return scheduling_window }
+        func priority(_ window: MissionQuotaWindow) -> Int { window.minutes == 300 ? 0 : window.minutes == 10080 ? 2 : 1 }
+        return visibleWindows.sorted {
+            if priority($0) != priority($1) { return priority($0) < priority($1) }
+            if $0.minutes != $1.minutes { return $0.minutes < $1.minutes }
+            return $0.id < $1.id
+        }.first
+    }
+    var availabilityNote: String? {
+        if blocked == true { return L("服务暂不允许使用，等待重新核验") }
+        if quota_state == "service_only", service_allowed == true { return L("服务已允许使用，未提供固定额度窗口") }
+        if quota_state == "unknown" || visibleWindows.isEmpty { return L("额度信息不完整，自动发送暂不可用") }
+        if service_allowed == false { return L("服务使用许可待确认，自动发送暂不可用") }
+        return nil
+    }
+    var missingWindowNote: String? {
+        guard !visibleWindows.isEmpty else { return nil }
+        let hasFive=visibleWindows.contains { $0.kind == "five_hour" }
+        let hasWeek=visibleWindows.contains { $0.kind == "weekly" }
+        if !hasFive && !hasWeek { return L("仅显示服务返回的额度窗口") }
+        if !hasFive { return L("未提供五小时窗口") }
+        if !hasWeek { return L("未提供周额度窗口") }
+        return nil
+    }
 }
 struct MissionAccount: Decodable {
     var id: String?; var name: String?; var email: String?; var type: String?
@@ -50,10 +112,26 @@ struct MissionQuota: Decodable {
         return remaining
     }
 }
+struct MissionQuotaWindow: Decodable, Identifiable {
+    var id: String
+    var kind: String
+    var minutes: Double
+    var remaining: Double?
+    var reset: Double?
+    var value: MissionQuota { MissionQuota(remaining:remaining,reset:reset) }
+    var title: String {
+        if minutes == 300 { return L("五小时额度") }
+        if minutes == 10080 { return L("周额度") }
+        if minutes > 0 && minutes.truncatingRemainder(dividingBy:1440) == 0 { return L("%@天额度",String(format:"%.0f",minutes/1440)) }
+        if minutes > 0 && minutes.truncatingRemainder(dividingBy:60) == 0 { return L("%@小时额度",String(format:"%.0f",minutes/60)) }
+        return L("%@分钟额度",String(format:"%.0f",minutes))
+    }
+}
 struct MissionRuntime: Decodable { var type: String?; var activeFlags: [String]? }
 struct MissionStage: Decodable { var text: String?; var phase: String?; var updated_at: Double? }
 struct MissionPlan: Decodable {
     var state: String; var prompt: String?; var revision: Int; var reason: String?
+    var armed_window_minutes: Double?; var armed_window_reset: Double?
     var scheduled: Bool { ["armed", "sending"].contains(state) }
     var label: String {
         ["off":L("未预约"), "armed":L("等待下一窗口恢复"), "sending":L("正在确认发送"), "sent":L("已发送一次，预约已关闭"), "cancelled":L("已取消预约"), "needs_review":L("需要重新确认预约")][state] ?? state

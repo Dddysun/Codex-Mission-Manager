@@ -395,7 +395,27 @@ enum NativeLocalization {
   "额度数据已过期": "Usage reading expired",
   "暂停前账号已变更": "Account changed before pause",
   "无法确认暂停结果": "Pause could not be confirmed",
-  "上次暂停结果需核对，不会重复执行": "Previous pause result requires review; not replayed"
+  "上次暂停结果需核对，不会重复执行": "Previous pause result requires review; not replayed",
+  "服务暂不允许使用，等待重新核验": "The service does not currently allow usage. Waiting for verification.",
+  "服务已允许使用，未提供固定额度窗口": "The service allows usage; no fixed quota window was provided.",
+  "额度信息不完整，自动发送暂不可用": "Quota information is incomplete. Automatic sending is unavailable.",
+  "服务使用许可待确认，自动发送暂不可用": "Service permission is unconfirmed. Automatic sending is unavailable.",
+  "仅显示服务返回的额度窗口": "Only quota windows returned by the service are shown.",
+  "未提供五小时窗口": "No 5-hour window was provided.",
+  "未提供周额度窗口": "No weekly quota window was provided.",
+  "%@天额度": "%@-day quota",
+  "%@小时额度": "%@-hour quota",
+  "%@分钟额度": "%@-minute quota",
+  "当前账号未提供可预约的额度刷新窗口，请使用立刻执行。": "This account has no quota reset window available for scheduling. Use Run now.",
+  "按服务返回的实际额度窗口控制任务。五小时及其他非周窗口剩余 ≤%@% 时暂停，恢复至 ≥%@% 后复核；周窗口用尽或服务禁止使用时也暂停。连续复核至少 %@ 秒，并核对账号、原聊天与使用许可。": "Control follows the quota windows returned by the service. Pause at ≤%@% remaining in a 5-hour or other non-weekly window and verify recovery at ≥%@%. An exhausted weekly window or a service block also pauses work. Recheck for at least %@ seconds and verify the account, chat and service permission.",
+  "预约开关独立于单聊自动控制，按服务提供的实际刷新窗口执行一次。没有固定窗口时可使用立刻执行。保存指令不会立刻发送；关闭全局自动控制会阻止预约发送。": "Scheduling is independent of per-chat automatic control and runs once after an actual reset window. If no fixed window is available, use Run now. Saving does not send immediately; pausing global automation also pauses scheduled sending.",
+  "订阅与额度": "Subscription and quota",
+  "订阅名称只用于显示。缺失额度不会视为无限；未提供固定窗口时，只有服务明确允许使用才能发送。额度信息不完整时暂停自动发送。": "Subscription names are display information. Missing quota is never unlimited. Without fixed windows, sending requires explicit service permission. Incomplete quota information prevents automatic sending.",
+  "额度窗口已变化，请重新确认预约": "Quota windows changed. Review the scheduled instruction.",
+  "额度窗口已变化，请重新确认自动续接": "Quota windows changed. Review automatic continuation.",
+  "预约窗口：%@": "Schedule window: %@",
+  "刷新时间 %@": "Reset time %@",
+  "当前账号未提供可预约的额度刷新窗口。": "This account has no quota reset window available for scheduling."
 }
 """#.data(using:.utf8)!
         return try! JSONDecoder().decode([String:String].self,from:data)

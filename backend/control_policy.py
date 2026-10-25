@@ -6,6 +6,8 @@ Copyright (c) 2026 cat2mao. MIT; see third-party/QUOTA-MONITOR-LICENSE.
 The macOS service keeps its own persistence and transport implementation.
 """
 
+from quota import quota_usable, pause_needed
+
 
 def same_goal(goal, saved):
     return bool(goal and saved) and all(goal.get(k) == saved.get(k)
@@ -40,12 +42,6 @@ def quota_interrupted(view):
     return bool(latest.get("id")) and ((view.get("goal") or {}).get("status") == "usageLimited"
         or (latest.get("status") == "failed" and error == "usageLimitExceeded"))
 
-
-def quota_usable(sample, config):
-    weekly = sample["windows"].get("secondary")
-    return (not sample["blocked"] and (sample.get("service_allowed") or not config.get("require_service_allowed"))
-            and sample["windows"]["primary"]["remaining"] >= config["resume_remaining"]
-            and (weekly is None or weekly["remaining"] > 0))
 
 
 def checkpoint_matches(task, view):
@@ -95,8 +91,7 @@ def decision(task, view, sample, config):
         return "wait"
     if state == "watching" and quota_interrupted(view):
         return "quota_interrupted"
-    low = (sample["blocked"] or sample["windows"]["primary"]["remaining"] <= config["pause_remaining"]
-           or ((sample["windows"].get("secondary") or {}).get("remaining", 100) <= 0))
+    low = pause_needed(sample, config)
     if low and not blocked_input(view) and (active or (goal and goal.get("status") == "active")):
         return "pause"
     return "wait"

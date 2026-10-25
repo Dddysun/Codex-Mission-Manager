@@ -93,8 +93,16 @@ struct MissionWindow: View {
     var usage: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack { Text(L("当前额度")).font(.subheadline.bold()); Spacer(); Text(model.snapshot?.usage?.account?.subscription ?? L("待识别")).font(.caption.bold()).padding(.horizontal, 8).padding(.vertical, 4).background(.white.opacity(0.12)).clipShape(Capsule()) }
-            quota(L("五小时额度"), value: model.snapshot?.usage?.windows.five_hour)
-            quota(L("周额度"), value: model.snapshot?.usage?.windows.weekly)
+            ForEach(model.snapshot?.usage?.visibleWindows ?? []) { window in
+                quota(window.title, value: window.value)
+            }
+            if let note=model.snapshot?.usage?.availabilityNote {
+                Text(note).font(.caption).foregroundStyle(.white.opacity(0.75)).fixedSize(horizontal:false,vertical:true)
+            } else if let note=model.snapshot?.usage?.missingWindowNote {
+                Text(note).font(.caption2).foregroundStyle(.white.opacity(0.58)).fixedSize(horizontal:false,vertical:true)
+            } else if model.snapshot?.usage == nil {
+                Text(L("额度待同步")).font(.caption).foregroundStyle(.white.opacity(0.65))
+            }
             Text(usageStale ? L("额度待同步 · 上次记录") : L("服务实际限额 · 本机时区"))
                 .font(.caption2).foregroundStyle(usageStale ? Color.orange : .white.opacity(0.5))
         }
@@ -106,9 +114,11 @@ struct MissionWindow: View {
     func quota(_ title: String, value: MissionQuota?) -> some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack { Text(title); Spacer(); Text(value?.validRemaining.map { String(format: "%.1f%%", $0) } ?? L("未提供")).monospacedDigit() }.font(.caption)
-            ProgressView(value: value?.validRemaining ?? 0, total: 100)
-                .tint((value?.validRemaining ?? 100) <= 10 ? .orange : Color(red: 0.51, green: 0.75, blue: 0.61))
-                .accessibilityLabel(title).accessibilityValue(value?.validRemaining.map { L("剩余 %@%", String(describing: $0)) } ?? L("未提供"))
+            if let remaining=value?.validRemaining {
+                ProgressView(value: remaining, total: 100)
+                    .tint(remaining <= 10 ? .orange : Color(red: 0.51, green: 0.75, blue: 0.61))
+                    .accessibilityLabel(title).accessibilityValue(L("剩余 %@%", String(describing: remaining)))
+            }
             Text(value?.reset == nil ? L("刷新时间未提供") : L("下次刷新 ") + missionTime(value?.reset))
                 .font(.caption2).foregroundStyle(.white.opacity(0.58)).fixedSize(horizontal: false, vertical: true)
         }
@@ -213,8 +223,9 @@ struct MissionWindow: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
                 Text(L("运行规则")).font(.largeTitle.bold())
-                rule(L("自动暂停与续接"), L("五小时剩余 ≤%@% 时暂停允许接管的执行中聊天。真实恢复窗口且余量 ≥%@% 后，连续复核至少 %@ 秒，再核对周额度、账号、原聊天与使用许可。", String(describing: Int(model.snapshot?.policy.pause ?? 10)), String(describing: Int(model.snapshot?.policy.resume ?? 20)), String(describing: Int(model.snapshot?.policy.confirm_seconds ?? 5))))
-                rule(L("下个窗口执行一次"), L("预约开关独立于单聊自动控制。可以安排空闲聊天；真实恢复后只发送一次。保存指令不会立刻发送。关闭全局自动控制会阻止预约发送。"))
+                rule(L("自动暂停与续接"), L("按服务返回的实际额度窗口控制任务。五小时及其他非周窗口剩余 ≤%@% 时暂停，恢复至 ≥%@% 后复核；周窗口用尽或服务禁止使用时也暂停。连续复核至少 %@ 秒，并核对账号、原聊天与使用许可。", String(describing: Int(model.snapshot?.policy.pause ?? 10)), String(describing: Int(model.snapshot?.policy.resume ?? 20)), String(describing: Int(model.snapshot?.policy.confirm_seconds ?? 5))))
+                rule(L("下个窗口执行一次"), L("预约开关独立于单聊自动控制，按服务提供的实际刷新窗口执行一次。没有固定窗口时可使用立刻执行。保存指令不会立刻发送；关闭全局自动控制会阻止预约发送。"))
+                rule(L("订阅与额度"), L("订阅名称只用于显示。缺失额度不会视为无限；未提供固定窗口时，只有服务明确允许使用才能发送。额度信息不完整时暂停自动发送。"))
                 rule(L("立刻执行"), L("发送当前指令框内容，不等待刷新。发送后等待真实回执，不把提交成功当作已执行。执行中、等待审批、额度或账号异常时，后台会拒绝发送。结果不明确时不会自动重复发送。"))
                 rule(L("手动操作优先"), L("人工新指令、审批与 Goal 约束优先。聊天完成后等待下一条指令，不会无限续做。ChatGPT 普通聊天仅显示目录。"))
                 rule(L("后台运行"), L("关闭主窗口后继续运行。退出应用停止管家和自身电源保护，不中断原客户端正在执行的聊天。锁屏、熄屏与合盖是不同的运行条件。"))
@@ -250,6 +261,15 @@ struct MissionChatRow: View {
     let chat: MissionChat
     var showDetail: () -> Void
     var locked: Bool { model.busy || !model.connected }
+    var canSchedule: Bool { model.snapshot?.usage?.canSchedule == true }
+    var quotaPermitsImmediate: Bool { model.snapshot?.usage?.permitsImmediate(minimum:model.snapshot?.policy.resume ?? 20) ?? true }
+    var scheduleTarget: MissionQuotaWindow? {
+        if let plan=chat.plan, ["armed","sending","needs_review"].contains(plan.state), let reset=plan.armed_window_reset {
+            let minutes=plan.armed_window_minutes ?? 300
+            return MissionQuotaWindow(id:"plan",kind:minutes == 300 ? "five_hour" : minutes == 10080 ? "weekly" : "custom",minutes:minutes,remaining:nil,reset:reset)
+        }
+        return model.snapshot?.usage?.scheduleWindow
+    }
     var prompt: Binding<String> { Binding(get: { model.drafts[chat.key]?.text ?? chat.plan?.prompt ?? L("继续任务") }, set: { model.editPrompt(chat, text: $0) }) }
     var statusColor: Color { !model.connected ? .secondary : chat.attention ? .orange : chat.active ? missionGreen : chat.waiting ? .orange : .secondary }
     var body: some View {
@@ -290,16 +310,23 @@ struct MissionChatRow: View {
                     Text(L(chat.capability_note ?? L("此聊天没有后台自动执行通道"))).font(.caption).foregroundStyle(.secondary)
                 } else {
                     Toggle(isOn: Binding(get: { chat.plan?.scheduled == true }, set: { model.savePlan(chat, enabled: $0) })) { Text(L(chat.plan?.label ?? L("未预约"))).font(.caption) }
-                        .toggleStyle(.switch).controlSize(.small).disabled(locked || chat.plan?.state == "sending")
+                        .toggleStyle(.switch).controlSize(.small).disabled(locked || chat.plan?.state == "sending" || (!canSchedule && chat.plan?.scheduled != true))
                         .help(L("额度恢复后执行一次；独立于自动控制开关"))
+                    if let target=scheduleTarget {
+                        VStack(alignment:.leading,spacing:3) {
+                            Text(L("预约窗口：%@",target.title))
+                            Text(L("刷新时间 %@",missionTime(target.reset)))
+                        }.font(.caption2).foregroundStyle(.secondary)
+                    }
                     TextEditor(text: prompt).font(.body).scrollContentBackground(.hidden).padding(6).frame(height: 78)
                         .background(Color(nsColor: .textBackgroundColor)).clipShape(RoundedRectangle(cornerRadius: 6))
                         .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.2)))
                         .disabled(locked || chat.plan?.state == "sending").accessibilityLabel(L("%@：执行指令", String(describing: chat.name)))
                     HStack {
-                        Button(chat.plan?.scheduled == true ? L("保存指令") : L("保存并预约")) { model.savePlan(chat, enabled: true) }.disabled(locked || chat.plan?.state == "sending")
-                        Button(L("立刻执行")) { model.executeNow(chat) }.buttonStyle(.borderedProminent).disabled(locked || !chat.canExecute)
+                        Button(chat.plan?.scheduled == true ? L("保存指令") : L("保存并预约")) { model.savePlan(chat, enabled: true) }.disabled(locked || chat.plan?.state == "sending" || !canSchedule)
+                        Button(L("立刻执行")) { model.executeNow(chat) }.buttonStyle(.borderedProminent).disabled(locked || !chat.canExecute || !quotaPermitsImmediate)
                     }
+                    if !canSchedule { Text(model.snapshot?.usage?.schedulingUnavailableNote ?? L("额度信息不完整，自动发送暂不可用")).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true) }
                     if let receipt = chat.immediate {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(L(receipt.label)).font(.caption.bold()).foregroundStyle(receipt.state == "sent" ? missionGreen : .secondary)

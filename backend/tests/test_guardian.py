@@ -66,7 +66,7 @@ class PolicyTests(unittest.TestCase):
 
     def test_invalid_duration_or_expired_read_is_rejected(self):
         raw = payload()
-        raw["rateLimitsByLimitId"]["codex"]["primary"]["windowDurationMins"] = 60
+        raw["rateLimitsByLimitId"]["codex"]["primary"]["windowDurationMins"] = 0
         with self.assertRaises(ValueError):
             parse_bucket(raw, "codex", NOW)
         with self.assertRaises(ValueError):
