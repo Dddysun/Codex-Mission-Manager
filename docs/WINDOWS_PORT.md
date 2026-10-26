@@ -2,9 +2,9 @@
 
 V0.2.1 Windows 使用原生 WPF 窗口和共享 Python 后台，不使用 WebView。安装 EXE 携带固定版本 Python；系统要求为 Windows 10 x64 build 19041+、.NET Framework 4.8+。安装与私人数据均限当前用户。
 
-[下载 Windows preview.2 EXE](https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-windows-preview.2/Codex-Mission-Manager-0.2.1-windows-x64-setup.exe) · [preview.2 发行文件与校验摘要](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-windows-preview.2) · [安装与卸载](../windows/INSTALL_README.md) · [界面还原说明](WINDOWS_UI_PARITY.md)
+[下载 Windows preview.3 EXE](https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-windows-preview.3/Codex-Mission-Manager-0.2.1-windows-x64-setup.exe) · [preview.3 发行文件与校验摘要](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-windows-preview.3) · [安装与卸载](../windows/INSTALL_README.md) · [界面还原说明](WINDOWS_UI_PARITY.md)
 
-`v0.2.1-windows-preview.2` 已公开发布，包含每用户 EXE 安装器、便携 ZIP、构建清单和 SHA-256 校验摘要。本次二进制构建源提交为 `ef83e86df96e62a2e33ceac1c3cf7260d4c10017`，Windows 与 macOS 构建检查通过。已完成 Windows 当前用户安装更新并保留既有配置与账本；这不代表真实聊天控制或额度恢复闭环已通过验收。
+`v0.2.1-windows-preview.3` 已公开发布，包含每用户 EXE 安装器、便携 ZIP、构建清单和 SHA-256 校验摘要。本次二进制构建源提交为 `9f361dfb6df43d79d4a16f3e0b14ac7d021fdfaa`，Windows 与 macOS 构建检查通过。已完成 Windows 当前用户安装更新并保留既有配置与账本；这不代表真实聊天控制或额度恢复闭环已通过验收。
 
 ## 本轮更新
 
@@ -44,6 +44,9 @@ Windows 内容界面按当前 Mac 原生应用重新实现，包括深绿侧栏�
 
 ## 仍须单独验收或尚未提供的功能
 
+原生离线测试已验证关闭隐藏、托盘按钮重开、重复关闭和旧回调隔离。公开 preview.3 已安装并通过真实后台只读检查；通过实际系统托盘点击重开的最终复验尚未完成，不将离线测试记为该项实机验收。
+
+- **非定时额度恢复：**管家提前暂停的任务及一次性预约目前用窗口刷新时间前进来确认新窗口。官方提前恢复余额、但刷新时间未前进的情况仍需补充适配；可选的服务端重置权益字段尚未解析和展示。
 - **真实动作：**真实暂停、续接、Goal 控制、立刻执行、预约送达和自然额度恢复闭环尚未完成实机动作验收；不能把离线 frame 测试计为真实发送通过。
 - **普通 ChatGPT/云端聊天：**仅显示可用目录，没有普通聊天自动执行或完整云端历史同步。
 - **通知：**使用托盘通知，尚未接入现代 Windows Toast/通知中心，也未声称系统通知投递授权已核验。
