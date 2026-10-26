@@ -4,6 +4,8 @@ V0.2.1 Windows 预览使用原生 WPF 窗口和共享 Python 后台，不使用 
 
 [下载 EXE 安装器](https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-windows-preview.1/Codex-Mission-Manager-0.2.1-windows-x64-setup.exe) · [完整发行文件和 SHA-256](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-windows-preview.1) · [可复核验收记录](windows-validation.json)
 
+**2026-10-26 最新接续状态：**用户已完成官方客户端安装并确认登录。`26.1021.3705.0` 在桌面运行，只读管道 initialize 及同用户/官方包位置校验成功。包内 CLI 直接启动报 `WinError 5`，真实账号额度读取和会话快照仍待验收，控制尚未开放。详见 [Windows 本机 agent 交接](WINDOWS_HANDOFF.md) 与 [最新只读证据](windows-handoff-validation.json)；下文客户端安装失败和 `client_missing` 为此前历史检查。
+
 ## 已移植的程序功能
 
 - 聊天列表、来源筛选、搜索分页、当前状态和公开执行阶段。
@@ -22,11 +24,11 @@ Windows 控制使用本机命名管道，连接前检查服务端程序位置和
 
 当前 Windows 兼容表尚无已实机核验的客户端版本，因此这个首发预览不会启用真实任务控制。下面列出的控制界面和共享后台逻辑均已移植；在官方客户端安装、登录及协议验收完成后，仍需更新兼容配置才能开放。
 
-目前目标电脑的官方 ChatGPT 当前用户安装遇到 Windows 包注册错误，客户端安装和登录尚未完成。因此，Windows 的真实账号额度读取、当前客户端管道协议、自动暂停/续接、即时发送及预约送达尚未通过实机验收。对应程序逻辑已移植，但不能将离线回归或界面渲染当作这些路径已实际可用。
+首轮验收时，目标电脑的官方 ChatGPT 当前用户安装遇到 Windows 包注册错误。用户随后完成安装并确认登录，管道初始化已通过；Windows 的真实账号额度读取、会话快照、自动暂停/续接、即时发送及预约送达仍未通过实机验收。对应程序逻辑已移植，但不能将离线回归或界面渲染当作这些路径已实际可用。
 
 ## 与 macOS 的差异和未完成项
 
-- **真实控制验收待完成：**需先成功安装官方 Windows ChatGPT 并由用户本人登录，再只读验证当前版本的管道、会话状态和控制能力。未验证时程序停止发送。
+- **真实控制验收待完成：**官方 Windows ChatGPT 安装与用户确认登录已完成；仍需解决 CLI 读取启动问题，并验证当前版本会话状态和控制能力。未验证时程序停止发送。
 - **普通 ChatGPT/云端聊天：**保留只读目录能力，不提供自动执行；也未新增完整云端目录同步。这是共享后端原有边界。
 - **通知：**当前采用原生托盘通知，未实现现代 Windows Toast/通知中心集成；应用通知开关不等于已自动核验系统通知投递许可。
 - **后台与合盖：**保活选项只防空闲睡眠，不修改系统电源计划，也不保证合盖或手动睡眠后执行。macOS 管理员合盖辅助服务不适用于 Windows；没有新增对应 Windows 特权服务。
@@ -48,10 +50,10 @@ Windows 控制使用本机命名管道，连接前检查服务端程序位置和
 
 完整结果见 [windows-validation.json](windows-validation.json)。Mac 的历史验收记录不作为 Windows 实机证据。
 
-## 官方客户端安装的当前阻塞
+## 官方客户端安装的历史阻塞
 
 官方签名包 `26.1021.3705.0` 在目标设备按当前用户安装失败，错误为 `0x80073CF9`，扩展错误为 `0x80070490`。未发现可直接注册的已暂存安装。其最低 Windows 版本符合设备，不能仅据此判定 Windows 10 不受支持，唯一根因尚未确认。
 
-下一条官方安装路径是 Microsoft Store，首次使用可能要求用户本人确认商店条款及设备地区信息传输，并完成登录。商店路径不保证避开同一包的注册问题。此项目未执行系统级预配、修改或重新签名官方包，也未关闭安全校验。客户端就绪后仍需完成只读协议核验，再发布明确适配的 Windows 兼容配置；安装成功本身不等于自动控制已通过验收。
+此前已提供 Microsoft Store 路径，由用户本人处理条款、安装和登录。用户现已确认安装并登录，包安装和运行已只读核实；本次未独立确认用户最终使用的安装路径或此前错误的根因。此项目未执行系统级预配、修改或重新签名官方包，也未关闭安全校验。后续仍需完成额度读取与会话协议核验，再发布明确适配的 Windows 兼容配置；安装成功本身不等于自动控制已通过验收。
 
 控制协议设计参考 MIT [cat2mao/codex-quota-monitor](https://github.com/cat2mao/codex-quota-monitor)，许可证随包保留。客户端安装参考 [OpenAI Windows 文档](https://learn.chatgpt.com/docs/app/windows)，嵌入运行环境参考 [Python 官方说明](https://docs.python.org/3.13/using/windows.html#the-embeddable-package)。
