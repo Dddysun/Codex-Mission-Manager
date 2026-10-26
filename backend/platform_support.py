@@ -3,6 +3,51 @@ import errno
 import os
 from pathlib import Path
 import sys
+import tempfile
+
+IS_WINDOWS = os.name == 'nt'
+
+
+def private_directory(path, *, enforce_mode=False):
+    """Use inherited Windows ACLs; POSIX keeps its existing private modes."""
+    directory = Path(path)
+    if IS_WINDOWS:
+        # Python 3.13 treats mode 0700 specially on Windows. An elevated
+        # creator can then exclude the same user's normal desktop token.
+        directory.mkdir(parents=True, exist_ok=True)
+    else:
+        directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        if enforce_mode:
+            os.chmod(directory, 0o700)
+    return directory
+
+
+def private_file_permissions(path):
+    if not IS_WINDOWS:
+        os.chmod(path, 0o600)
+
+
+def check_writable_directory(directory, existing_files=()):
+    """Check real file access without changing existing contents or ACLs."""
+    directory = Path(directory)
+    target = directory
+    try:
+        with tempfile.TemporaryFile(prefix='.write-check-', dir=directory) as probe:
+            probe.write(b'write-check')
+            probe.flush()
+            os.fsync(probe.fileno())
+        for name in existing_files:
+            target = directory / name
+            if target.exists():
+                # Request write access, but do not modify user data to test it.
+                with target.open('r+b'):
+                    pass
+    except OSError as exc:
+        raise RuntimeError(
+            'app_data_not_writable: Application data cannot be written: %s. '
+            'Check free disk space and ask the folder owner or administrator '
+            'to restore write access for your account, then reopen the app '
+            'normally. Existing permissions were not changed.' % target) from exc
 
 
 def lock_file(stream):

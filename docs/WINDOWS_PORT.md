@@ -2,13 +2,17 @@
 
 V0.2.1 Windows 使用原生 WPF 窗口和共享 Python 后台，不使用 WebView。安装 EXE 携带固定版本 Python；系统要求为 Windows 10 x64 build 19041+、.NET Framework 4.8+。安装与私人数据均限当前用户。
 
-[Windows 发行文件](https://github.com/Dddysun/Codex-Mission-Manager/releases) · [安装与卸载](../windows/INSTALL_README.md) · [界面还原说明](WINDOWS_UI_PARITY.md)
+[下载 Windows preview.2 EXE](https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-windows-preview.2/Codex-Mission-Manager-0.2.1-windows-x64-setup.exe) · [preview.2 发行文件与校验摘要](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-windows-preview.2) · [安装与卸载](../windows/INSTALL_README.md) · [界面还原说明](WINDOWS_UI_PARITY.md)
+
+`v0.2.1-windows-preview.2` 已公开发布，包含每用户 EXE 安装器、便携 ZIP、构建清单和 SHA-256 校验摘要。本次二进制构建源提交为 `ef83e86df96e62a2e33ceac1c3cf7260d4c10017`，Windows 与 macOS 构建检查通过。已完成 Windows 当前用户安装更新并保留既有配置与账本；这不代表真实聊天控制或额度恢复闭环已通过验收。
 
 ## 本轮更新
 
 Windows 内容界面按当前 Mac 原生应用重新实现，包括深绿侧栏、品牌图标、底部账号与设置入口、面包屑、四项统计、来源与状态筛选、搜索、三列聊天列表、执行阶段、状态徽章、自动控制和一次性预约。设置为独立原生窗口，托盘为原生面板；浅色、深色、中英文共用同一套视觉层级。保留 Windows 的窗口装饰和系统字体，未分发 Apple 字体。
 
 修复了复用聊天行时重复挂载到 WPF 逻辑树的异常、后台退出后无法重新连接的问题，并增加后台退出原因记录。应用图标复用项目现有 Mac 盾牌资产，替代此前的系统 UAC 图标。
+
+后续实机检查发现并修复了管理员环境创建数据目录后普通桌面进程无法写入的问题，以及从托盘重新打开窗口时的关闭事件重入问题。Windows 新目录继承用户目录权限；后台启动前检查数据目录可写性，失败时显示可处理的提示，不自动提权或重置 ACL。原生窗口在内存中保留有界启动诊断，即使日志无法写入也能显示原因；偏好保存失败会明确提示当前更改仅本次运行生效。
 
 官方客户端在 WindowsApps 目录的 CLI 直接启动可能被拒绝。本轮增加受限的定位方式：只允许注册包内文件，或与其 SHA-256 完全相同的客户端释放副本。每次后端重新解析命令时重新校验，默认不执行任意 PATH 候选；此改变没有放宽管道服务端 PID、包安装位置和用户 SID 校验。
 
@@ -34,7 +38,7 @@ Windows 内容界面按当前 Mac 原生应用重新实现，包括深绿侧栏�
 
 当前仅为 exact `26.1021.3705.0` 提供 Windows 兼容配置，后续版本不会自动继承。准入证据包括实际只读路径、Windows 假命名管道的控制 frame 回归，以及当前官方包内对应版本的消息结构。**兼容配置不等于真实暂停、续接或发送已通过验收；`live_control_tested` 仍为 false。** 未核验版本停止新的控制与发送，已有本地许可和预约仍可撤销。
 
-最终 Windows 实机回归为 219 项，其中 215 项通过、4 项 Mac plist 专属测试跳过；6 项宿主测试通过。此前跳过的 10 项控制通信测试已改为 Windows 唯一假命名管道执行，不连接真实客户端。最终发行的具体测试数量、源提交和资产摘要以验收记录与构建结果为准。
+修复后的 Windows 实机回归为 226 项，其中 221 项通过、5 项非 Windows 测试跳过；9 项宿主测试通过。新增的 Windows 实际 ACL 继承检查及原生关闭、托盘重开生命周期检查均通过。此前跳过的 10 项控制通信测试已改为 Windows 唯一假命名管道执行，不连接真实客户端。最终发行的具体测试数量、源提交和资产摘要以验收记录与构建结果为准。
 
 界面离屏验收覆盖主窗口、设置、操作记录、规则、托盘和额度变体；主窗口为 1380×900 逻辑尺寸，2倍渲染与 Mac 同数据基准比对。所有公开预览仅含示例数据。
 

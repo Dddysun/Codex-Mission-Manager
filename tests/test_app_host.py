@@ -5,7 +5,9 @@ import sqlite3
 import tempfile
 import threading
 import unittest
+from unittest import mock
 
+import app_host
 from app_host import legacy_service, make_config, migrate_legacy, read_host_input
 from guardian import Store, load_config, process_alive
 
@@ -78,3 +80,44 @@ class PackagingHostTests(unittest.TestCase):
         read_host_input(iter(()), stop, detail)
         self.assertTrue(stop.is_set())
         self.assertEqual(detail['reason'], 'parent_input_closed')
+
+    def test_windows_preflight_stops_before_executor_for_unwritable_existing_data(self):
+        for relative in ('native-preferences.json', 'state/guardian.sqlite3'):
+            with self.subTest(relative=relative):
+                directory = self.root / relative.replace('/', '-')
+                marker = directory / relative
+                marker.parent.mkdir(parents=True)
+                marker.write_bytes(b'preserve existing private bytes')
+                original_open = Path.open
+                def checked_open(path, mode='r', *args, **kwargs):
+                    if path == marker and mode == 'r+b':
+                        raise PermissionError('fixture existing file ACL')
+                    return original_open(path, mode, *args, **kwargs)
+                with mock.patch('app_host.IS_WINDOWS', True), \
+                        mock.patch.object(Path, 'open', checked_open), \
+                        mock.patch('platform_support.open_lock') as lock, \
+                        mock.patch('app_host.run_owned') as owned, \
+                        mock.patch('app_host.subprocess.Popen') as child:
+                    with self.assertRaisesRegex(RuntimeError, 'app_data_not_writable'):
+                        app_host.run(directory)
+                lock.assert_not_called()
+                owned.assert_not_called()
+                child.assert_not_called()
+                self.assertEqual(marker.read_bytes(), b'preserve existing private bytes')
+                self.assertFalse((directory / 'config.json').exists())
+
+    def test_windows_preflight_reports_uncreatable_directory_before_executor(self):
+        with mock.patch('app_host.IS_WINDOWS', True), \
+                mock.patch('app_host.private_directory', side_effect=PermissionError('fixture parent ACL')), \
+                mock.patch('app_host.run_owned') as owned:
+            with self.assertRaisesRegex(RuntimeError, 'app_data_not_writable.*restore write access'):
+                app_host.run(self.root / 'blocked')
+        owned.assert_not_called()
+
+    def test_mac_startup_does_not_gain_windows_write_preflight(self):
+        with mock.patch('app_host.IS_WINDOWS', False), \
+                mock.patch('app_host.preflight_application_data') as preflight, \
+                mock.patch('app_host.run_owned', return_value='existing Mac behavior') as owned:
+            self.assertEqual(app_host.run(self.root, False), 'existing Mac behavior')
+        preflight.assert_not_called()
+        owned.assert_called_once_with(self.root, False, None)

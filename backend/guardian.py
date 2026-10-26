@@ -18,7 +18,8 @@ import uuid
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from platform_support import lock_file, open_lock, process_alive, python_command
+from platform_support import (lock_file, open_lock, private_directory,
+                              private_file_permissions, process_alive, python_command)
 from rpc import Rpc
 from quota import parse_bucket, classify, recovered, next_reset, sample_summary, window_map
 from control_policy import (active_turn, blocked_input, checkpoint_matches, decision, message_id,
@@ -38,7 +39,7 @@ def atomic_json(path, value):
         json.dump(value, handle, ensure_ascii=False, indent=2)
         handle.flush()
         os.fsync(handle.fileno())
-    os.chmod(temp, 0o600)
+    private_file_permissions(temp)
     os.replace(str(temp), str(path))
 
 
@@ -67,8 +68,7 @@ def load_config(path):
 class Store:
     def __init__(self, directory):
         self.directory = Path(directory)
-        self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-        os.chmod(self.directory, 0o700)
+        private_directory(self.directory, enforce_mode=True)
         self.db = sqlite3.connect(str(self.directory / "guardian.sqlite3"), timeout=10)
         self.db.row_factory = sqlite3.Row
         self.db.executescript("""
@@ -84,7 +84,7 @@ class Store:
             CREATE TABLE IF NOT EXISTS plans (key TEXT PRIMARY KEY, value TEXT NOT NULL);
         """)
         self.db.commit()
-        os.chmod(self.directory / "guardian.sqlite3", 0o600)
+        private_file_permissions(self.directory / "guardian.sqlite3")
 
     def get(self, key, default=None):
         row = self.db.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()

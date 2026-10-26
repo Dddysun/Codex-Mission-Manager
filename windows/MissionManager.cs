@@ -98,8 +98,9 @@ namespace CodexMissionManager
             catch (UnauthorizedAccessException) { }
             catch (ArgumentException) { }
         }
-        public void Save()
+        public bool TrySave(out Exception failure)
         {
+            failure = null;
             try
             {
                 Directory.CreateDirectory(DirectoryPath);
@@ -107,9 +108,96 @@ namespace CodexMissionManager
                 File.WriteAllText(file + ".tmp", Json.Stringify(Json.Values("language", Language, "theme", Theme, "notifications", Notifications, "keep_awake", KeepAwake)), new UTF8Encoding(false));
                 if (File.Exists(file)) File.Replace(file + ".tmp", file, null);
                 else File.Move(file + ".tmp", file);
+                return true;
             }
-            catch (Exception) { }
+            catch (Exception ex) { failure = ex; return false; }
         }
+
+    }
+
+    // Startup diagnostics must survive a non-writable application data folder.
+    // Each owned process gets a separate, bounded in-memory buffer. No stderr
+    // from an older process can replace a newer process's connection state.
+    sealed class StartupDiagnostic
+    {
+        const int MaximumLines = 12, MaximumCharacters = 4096;
+        readonly object gate = new object();
+        readonly List<string> lines = new List<string>();
+        int characters;
+        bool appDataFailure, genericAccessFailure, logWriteFailure;
+        public static string Shorten(string value, int length)
+        {
+            value = (value ?? "").Replace('\0', ' ').Replace('\r', ' ').Replace('\n', ' ').Trim();
+            return value.Length <= length ? value : value.Substring(0, length - 1) + "…";
+        }
+        public static bool IsAccessFailure(string message)
+        {
+            string value = (message ?? "").ToLowerInvariant();
+            return value.Contains("app_data_not_writable") || value.Contains("permissionerror") || value.Contains("permission denied") || value.Contains("unauthorizedaccess")
+                || value.Contains("access denied") || value.Contains("access is denied") || value.Contains("accessdenied")
+                || value.Contains("winerror 5") || value.Contains("拒绝访问") || value.Contains("访问被拒绝");
+        }
+        public static bool IsAccessFailure(Exception error)
+        { return error is UnauthorizedAccessException || error is System.Security.SecurityException || (error != null && IsAccessFailure(error.GetType().Name + ": " + error.Message)); }
+        public void Append(string line)
+        {
+            if (String.IsNullOrWhiteSpace(line)) return;
+            string value = Shorten(line, 768);
+            lock (gate)
+            {
+                appDataFailure = appDataFailure || line.IndexOf("app_data_not_writable", StringComparison.OrdinalIgnoreCase) >= 0;
+                genericAccessFailure = genericAccessFailure || IsAccessFailure(line); lines.Add(value); characters += value.Length;
+                while (lines.Count > MaximumLines || characters > MaximumCharacters) { characters -= lines[0].Length; lines.RemoveAt(0); }
+            }
+        }
+        public void RecordDataDirectoryFailure(Exception error)
+        { lock (gate) { appDataFailure = appDataFailure || IsAccessFailure(error); } }
+        public void RecordLogFailure(Exception error)
+        { lock (gate) { logWriteFailure = true; appDataFailure = appDataFailure || IsAccessFailure(error); } }
+        public static string AccessHint(bool chinese, string directory)
+        {
+            return chinese ? "当前用户无法写入应用数据目录。请在文件夹属性的“安全”中核对读写权限后重试。目录：" + directory
+                : "The current user cannot write to the app data folder. Check read/write access in the folder's Security properties, then retry. Folder: " + directory;
+        }
+        public string Describe(bool chinese, string directory)
+        {
+            lock (gate)
+            {
+                if (appDataFailure) return AccessHint(chinese, directory);
+                string last = "";
+                for (int index = lines.Count - 1; index >= 0; index--)
+                {
+                    string line = lines[index]; if (line.StartsWith("File ", StringComparison.Ordinal) || line.StartsWith("Traceback", StringComparison.Ordinal)) continue;
+                    if (line.IndexOf("Error", StringComparison.OrdinalIgnoreCase) >= 0 || line.IndexOf("Exception", StringComparison.OrdinalIgnoreCase) >= 0) { last = Shorten(line, 220); break; }
+                }
+                if (last.Length == 0 && lines.Count > 0) last = Shorten(lines[lines.Count - 1], 220);
+                if (genericAccessFailure) last += (last.Length > 0 ? " " : "") + (chinese ? "启动所需文件或程序的访问被拒绝，请核对当前用户的访问权限。" : "Access to a required startup file or program was denied. Check access for the current user.");
+                if (logWriteFailure) last += (last.Length > 0 ? " " : "") + (chinese ? "诊断日志未能保存，请检查应用数据目录是否可写。目录：" : "The diagnostic log could not be saved. Check that the app data folder is writable. Folder: ") + directory;
+                return last;
+            }
+        }
+        public static bool SelfTest()
+        {
+            var denied = new StartupDiagnostic(); denied.Append("PermissionError: [WinError 5] Access is denied");
+            denied.RecordLogFailure(new UnauthorizedAccessException("fixture log is not writable"));
+            if (!denied.Describe(true, "fixture-app-data").Contains("读写权限") || !denied.Describe(false, "fixture-app-data").Contains("Security properties")) return false;
+            for (int index = 0; index < 100; index++) denied.Append(new String('x', 10000));
+            if (denied.lines.Count > MaximumLines || denied.characters > MaximumCharacters || !denied.Describe(false, "fixture-app-data").Contains("cannot write")) return false;
+            var early = new StartupDiagnostic(); early.Append("app_data_not_writable: Current account lacks application data access");
+            if (!early.Describe(false, "fixture-app-data").Contains("Security properties")) return false;
+            var runtimeAccess = new StartupDiagnostic(); runtimeAccess.Append("PermissionError: [WinError 5] Cannot execute fixture-runtime.exe");
+            string runtimeMessage = runtimeAccess.Describe(false, "fixture-app-data");
+            if (!runtimeMessage.Contains("fixture-runtime.exe") || !runtimeMessage.Contains("required startup") || runtimeMessage.Contains("app data") || runtimeMessage.Contains("Security properties")) return false;
+            var imports = new StartupDiagnostic(); imports.Append("Traceback (most recent call last):"); imports.Append("ModuleNotFoundError: No module named fixture_missing");
+            return imports.Describe(false, "fixture-app-data").Contains("fixture_missing");
+        }
+    }
+
+    sealed class TrayPopupWindow : Window
+    {
+        // Deterministically exercises the real Deactivated callback in the
+        // offline lifecycle test, even on a non-interactive CI desktop.
+        public void RaiseDeactivatedForFixture() { OnDeactivated(EventArgs.Empty); }
     }
 
     sealed class MissionWindow : Window
@@ -126,8 +214,11 @@ namespace CodexMissionManager
         Forms.NotifyIcon tray;
         System.Drawing.Icon trayBrandIcon;
         DispatcherTimer timer;
-        bool refreshing, busy, quitting, firstNotices = true;
+        bool refreshing, busy, quitting, firstNotices = true, lifecycleFixture;
         string notice = "", connectionError = "", currentView = "tasks", source = "all", search = "";
+        string connectionErrorDetail = "", connectionExitCode = "";
+        StartupDiagnostic startupDiagnostic;
+        bool preferenceSaveFailed, preferenceSaveAccessFailure;
         string statusFilter = "all";
         Brush background, surface, foreground, secondary, border, accent, accentText, sideBackground, groupSurface;
         Grid root;
@@ -437,8 +528,8 @@ namespace CodexMissionManager
             if (connectionBanner.Visibility != Visibility.Visible) return;
             var row = new DockPanel(); var check = MakeButton(T("重新检查", "Check again"), async delegate { await RefreshAsync(); }); DockPanel.SetDock(check, Dock.Right); row.Children.Add(check);
             var icon = Glyph("warning", Brushes.DarkOrange, 15); icon.Margin = new Thickness(0, 2, 10, 0); icon.VerticalAlignment = VerticalAlignment.Top; DockPanel.SetDock(icon, Dock.Left); row.Children.Add(icon);
-            var copy = new StackPanel(); var title = Text(connected ? T("检查状态待恢复", "Status check pending") : T("正在连接本机后台", "Connecting to the local service"), 12, true); title.Margin = new Thickness(0, 0, 0, 4); copy.Children.Add(title);
-            var description = Text(String.IsNullOrEmpty(connectionError) ? T("正在核对账号、额度和聊天状态；取得可靠状态后才能自动续接。", "Checking the account, quota and chat status. Automatic recovery requires a reliable reading.") : connectionError, 12); description.Margin = new Thickness(0); copy.Children.Add(description); row.Children.Add(copy); connectionBanner.Child = row;
+            var copy = new StackPanel(); var title = Text(connected ? T("检查状态待恢复", "Status check pending") : String.IsNullOrEmpty(connectionError) ? T("正在连接本机后台", "Connecting to the local service") : T("后台连接待恢复", "Backend connection unavailable"), 12, true); title.Margin = new Thickness(0, 0, 0, 4); copy.Children.Add(title);
+            var description = Text(String.IsNullOrEmpty(connectionError) ? T("正在核对账号、额度和聊天状态；取得可靠状态后才能自动续接。", "Checking the account, quota and chat status. Automatic recovery requires a reliable reading.") : ConnectionErrorText(), 12); description.Margin = new Thickness(0); copy.Children.Add(description); row.Children.Add(copy); connectionBanner.Child = row;
         }
         void BuildContent()
         {
@@ -817,7 +908,7 @@ namespace CodexMissionManager
         {
             var body = new StackPanel { Margin = new Thickness(28) };
             var title = Text(T("设置", "Settings"), 26, true); title.Margin = new Thickness(0, 0, 0, 8); body.Children.Add(title);
-            var description = Text(T("管理外观、后台运行与系统权限。", "Manage appearance, background operation and system permissions."), 13); description.Foreground = secondary; description.Margin = new Thickness(0, 0, 0, 24); body.Children.Add(description);
+            var description = Text(preferenceSaveFailed ? PreferenceFailureText() : T("管理外观、后台运行与系统权限。", "Manage appearance, background operation and system permissions."), 13); description.Foreground = preferenceSaveFailed ? Brushes.DarkOrange : secondary; description.Margin = new Thickness(0, 0, 0, 24); body.Children.Add(description);
             var appearance = new StackPanel(); appearance.Children.Add(GroupHeading("palette", T("外观与语言", "Appearance and language")));
             appearance.Children.Add(SettingsChoiceRow(T("语言", "Language"), Segments(new[] { "简体中文", "English" }, new[] { "zh", "en" }, preferences.Language,
                 delegate(string value) { preferences.Language = value; SavePreferences(); RebuildPresentation(); }), 180));
@@ -855,7 +946,25 @@ namespace CodexMissionManager
             if (fixtureMode) return T("外接电源 · 电量 100% · 系统策略（示例）", "AC power · Battery 100% · System policy (sample)");
             try { var power = Forms.SystemInformation.PowerStatus; return (power.PowerLineStatus == Forms.PowerLineStatus.Online ? T("外接电源", "AC power") : T("电池", "Battery")) + " · " + Math.Round(power.BatteryLifePercent * 100) + "%"; } catch { return T("电源状态暂未提供", "Power status unavailable"); }
         }
-        void SavePreferences() { if (!fixtureMode) preferences.Save(); }
+        string PreferenceFailureText()
+        {
+            string detail = preferenceSaveAccessFailure ? StartupDiagnostic.AccessHint(preferences.Language == "zh", preferences.DirectoryPath)
+                : T("请检查应用数据目录是否可写。目录：", "Check that the app data folder is writable. Folder: ") + preferences.DirectoryPath;
+            return T("设置未保存；当前更改仅在本次运行生效。", "Settings were not saved; changes apply to this session only.") + " " + detail;
+        }
+        void SavePreferences()
+        {
+            if (fixtureMode) return;
+            Exception failure;
+            if (preferences.TrySave(out failure))
+            {
+                bool recovered = preferenceSaveFailed; preferenceSaveFailed = false;
+                if (recovered) { SetNotice(T("设置已保存。", "Settings saved.")); RefreshSettingsWindow(); }
+                return;
+            }
+            preferenceSaveFailed = true; preferenceSaveAccessFailure = StartupDiagnostic.IsAccessFailure(failure);
+            SetNotice(PreferenceFailureText()); RefreshSettingsWindow();
+        }
         void RefreshSettingsWindow()
         {
             if (settingsWindow == null || AnyOpenChoice(settingsWindow)) return;
@@ -894,7 +1003,7 @@ namespace CodexMissionManager
             uint result = SetThreadExecutionState(ExecutionContinuous | (enabled ? ExecutionSystemRequired : 0));
             if (result == 0) { preferences.KeepAwake = false; SetNotice(T("未能启用保持运行，请检查系统电源设置。", "Could not keep the system awake. Check Windows power settings.")); }
             else preferences.KeepAwake = enabled;
-            preferences.Save();
+            SavePreferences();
         }
         void SetNotice(string value) { notice = value; if (noticeBlock != null) noticeBlock.Text = notice; UpdateNotices(); BuildTrayMenu(); }
         public void ToggleGlobal()
@@ -904,6 +1013,27 @@ namespace CodexMissionManager
             if (Json.Bool(snapshot, "control_paused", true) && !ControlAvailable) { SetNotice(T("客户端控制尚未通过核验，暂不能启用自动控制。", "Client control has not passed verification. Automatic control cannot be enabled yet.")); return; }
             var action = Json.Bool(snapshot, "control_paused", true) ? "enable" : "pause";
             var ignored = PerformAsync(Json.Values("action", action, "revision", Json.Integer(snapshot, "control_revision")));
+        }
+        void SetConnectionFailure(string kind, string detail)
+        { connectionError = kind; connectionErrorDetail = StartupDiagnostic.Shorten(detail, 512); connectionExitCode = ""; }
+        string ConnectionErrorText()
+        {
+            if (connectionError == "files_missing") return T("应用文件不完整，请重新安装。", "Application files are incomplete. Reinstall the app.");
+            if (connectionError == "host_exited")
+            {
+                string detail = startupDiagnostic == null ? "" : startupDiagnostic.Describe(preferences.Language == "zh", preferences.DirectoryPath);
+                return T("后台已退出（退出码 ", "The backend exited (code ") + connectionExitCode + T("）。", ").") + " "
+                    + (detail.Length > 0 ? detail : T("请重新连接后台服务；如仍失败，请检查应用数据目录的访问权限。", "Reconnect to the background service. If the problem persists, check access to the app data folder."));
+            }
+            if (connectionError == "launch_failed") return T("无法启动后台服务。", "The background service could not start.") + " "
+                + (startupDiagnostic == null ? connectionErrorDetail : startupDiagnostic.Describe(preferences.Language == "zh", preferences.DirectoryPath));
+            if (connectionError == "request_failed") return T("后台连接待恢复：", "Backend connection unavailable: ") + connectionErrorDetail;
+            return connectionError;
+        }
+        void RefreshStartupDiagnostic(StartupDiagnostic diagnostic)
+        {
+            try { Dispatcher.BeginInvoke(new Action(delegate { if (Object.ReferenceEquals(startupDiagnostic, diagnostic) && connectionError == "host_exited") { UpdateNotices(); BuildTrayMenu(); } })); }
+            catch (InvalidOperationException) { }
         }
         void StartHost()
         {
@@ -916,10 +1046,11 @@ namespace CodexMissionManager
             string directory = AppDomain.CurrentDomain.BaseDirectory;
             string python = Path.Combine(directory, "runtime", "python", "python.exe");
             string script = Path.Combine(directory, "backend", "app_host.py");
-            if (!File.Exists(python) || !File.Exists(script)) { connectionError = T("应用文件不完整，请重新安装。", "Application files are incomplete. Reinstall the app."); RenderSnapshot(); return; }
+            if (!File.Exists(python) || !File.Exists(script)) { SetConnectionFailure("files_missing", ""); RenderSnapshot(); return; }
+            var diagnostic = new StartupDiagnostic(); startupDiagnostic = diagnostic;
             try
             {
-                Directory.CreateDirectory(preferences.DirectoryPath);
+                try { Directory.CreateDirectory(preferences.DirectoryPath); } catch (Exception ex) { diagnostic.RecordDataDirectoryFailure(ex); throw; }
                 var start = new ProcessStartInfo(python, "-X utf8 -I \"" + script + "\" --directory \"" + preferences.DirectoryPath + "\"") {
                     WorkingDirectory = directory, UseShellExecute = false, CreateNoWindow = true,
                     RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
@@ -936,37 +1067,47 @@ namespace CodexMissionManager
                     catch (Exception) { }
                 };
                 process.ErrorDataReceived += delegate(object sender, DataReceivedEventArgs e) {
-                    if (String.IsNullOrEmpty(e.Data)) return;
-                    try { File.AppendAllText(Path.Combine(preferences.DirectoryPath, "native-host.log"), DateTime.UtcNow.ToString("o") + " " + e.Data + Environment.NewLine, Encoding.UTF8); } catch { }
+                    // Retain stderr before attempting disk I/O. The folder may
+                    // be exactly the reason the owned host could not start.
+                    if (!String.IsNullOrEmpty(e.Data))
+                    {
+                        diagnostic.Append(e.Data);
+                        try { File.AppendAllText(Path.Combine(preferences.DirectoryPath, "native-host.log"), DateTime.UtcNow.ToString("o") + " " + e.Data + Environment.NewLine, Encoding.UTF8); }
+                        catch (Exception ex) { diagnostic.RecordLogFailure(ex); }
+                    }
+                    // stderr may drain after Process.Exited. Update only the
+                    // same attempt so late errors cannot overwrite a retry.
+                    RefreshStartupDiagnostic(diagnostic);
                 };
                 process.Exited += delegate { Dispatcher.BeginInvoke(new Action(delegate {
                     if (!Object.ReferenceEquals(host, process)) return;
                     host = null;
                     if (!quitting) {
                         string code; try { code = process.ExitCode.ToString(CultureInfo.InvariantCulture); } catch { code = "—"; }
-                        baseUri = null; connectionError = T("后台已退出（退出码 ", "The backend exited (code ") + code
-                            + T("）；本机记录保留。可启动后台服务或在设置中重新连接。", "). Local records are preserved. Start the service or reconnect in Settings."); RenderSnapshot();
+                        baseUri = null; SetConnectionFailure("host_exited", ""); connectionExitCode = code; RenderSnapshot();
                     }
                 })); };
                 process.Start(); host = process; process.BeginOutputReadLine(); process.BeginErrorReadLine();
             }
-            catch (Exception ex) { connectionError = ex.Message; RenderSnapshot(); }
+            catch (Exception ex) { diagnostic.Append(ex.GetType().Name + ": " + ex.Message); SetConnectionFailure("launch_failed", ex.GetType().Name + ": " + ex.Message); RenderSnapshot(); }
         }
         public void EnsureHostStarted() { StartHost(); }
         async Task RefreshAsync()
         {
             if (fixtureMode || quitting || refreshing || baseUri == null) return;
-            refreshing = true;
+            refreshing = true; Uri requestedBase = baseUri; StartupDiagnostic requestedAttempt = startupDiagnostic;
             try
             {
-                using (var handshake = await client.GetAsync(baseUri)) handshake.EnsureSuccessStatusCode();
-                using (var response = await client.GetAsync(new Uri(baseUri, "/api/state")))
+                using (var handshake = await client.GetAsync(requestedBase)) handshake.EnsureSuccessStatusCode();
+                using (var response = await client.GetAsync(new Uri(requestedBase, "/api/state")))
                 {
-                    response.EnsureSuccessStatusCode(); snapshot = Json.Parse(await response.Content.ReadAsStringAsync());
+                    response.EnsureSuccessStatusCode(); var observed = Json.Parse(await response.Content.ReadAsStringAsync());
+                    if (!Object.Equals(baseUri, requestedBase) || !Object.ReferenceEquals(startupDiagnostic, requestedAttempt) || quitting) return;
+                    snapshot = observed;
                 }
                 connectionError = ""; RenderSnapshot();
             }
-            catch (Exception ex) { connectionError = T("后台连接待恢复：", "Backend connection unavailable: ") + ex.Message; RenderSnapshot(); }
+            catch (Exception ex) { if (Object.Equals(baseUri, requestedBase) && Object.ReferenceEquals(startupDiagnostic, requestedAttempt) && !quitting) { SetConnectionFailure("request_failed", ex.Message); RenderSnapshot(); } }
             finally { refreshing = false; }
         }
         public async Task PerformAsync(Dictionary<string, object> payload)
@@ -1012,18 +1153,35 @@ namespace CodexMissionManager
         }
         void ToggleTrayPanel()
         {
-            if (quitting || fixtureMode) return;
-            if (trayPanelWindow != null) { trayPanelWindow.Close(); return; }
-            var panel = new Window { Width = 400, Height = 570, WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize,
+            if (quitting || (fixtureMode && !lifecycleFixture)) return;
+            if (trayPanelWindow != null) { CloseTrayPanel(); return; }
+            var panel = new TrayPopupWindow { Width = 400, Height = 570, WindowStyle = WindowStyle.None, ResizeMode = ResizeMode.NoResize,
                 ShowInTaskbar = false, Topmost = true, AllowsTransparency = true, Background = Brushes.Transparent, Foreground = foreground,
                 FontFamily = FontFamily, FontSize = 13, Content = BuildTraySurface() };
+            bool closing = false, deactivationQueued = false;
             trayPanelWindow = panel; var work = SystemParameters.WorkArea;
             panel.Left = Math.Max(work.Left, work.Right - panel.Width - 12); panel.Top = Math.Max(work.Top, work.Bottom - panel.Height - 12);
-            panel.Deactivated += delegate { if (!AnyOpenChoice(panel)) panel.Close(); };
+            panel.Deactivated += delegate {
+                if (closing || deactivationQueued || !Object.ReferenceEquals(trayPanelWindow, panel) || AnyOpenChoice(panel)) return;
+                deactivationQueued = true;
+                // Closing a window inside its own native deactivation callback
+                // can reenter WPF's close path. Close after the callback, and
+                // never let a queued old popup close its replacement.
+                Dispatcher.BeginInvoke(DispatcherPriority.Background, new Action(delegate {
+                    deactivationQueued = false;
+                    if (!closing && Object.ReferenceEquals(trayPanelWindow, panel) && !AnyOpenChoice(panel)) CloseTrayPanel();
+                }));
+            };
+            panel.Closing += delegate { closing = true; if (Object.ReferenceEquals(trayPanelWindow, panel)) trayPanelWindow = null; };
             panel.Closed += delegate { if (Object.ReferenceEquals(trayPanelWindow, panel)) trayPanelWindow = null; };
             panel.Show(); panel.Activate();
         }
-        void CloseTrayPanel() { if (trayPanelWindow != null) trayPanelWindow.Close(); }
+        void CloseTrayPanel()
+        {
+            var panel = trayPanelWindow; if (panel == null) return;
+            // Clear before Close can synchronously raise Deactivated/Closing.
+            trayPanelWindow = null; panel.Close();
+        }
         void BuildTrayMenu()
         {
             if (trayPanelWindow == null || AnyOpenChoice(trayPanelWindow)) return;
@@ -1033,7 +1191,7 @@ namespace CodexMissionManager
         {
             var line = new StackPanel { Orientation = Orientation.Horizontal }; var glyph = Glyph(iconName, foreground, 15); glyph.Margin = new Thickness(0, 0, 9, 0); line.Children.Add(glyph);
             var label = Text(name, 13); label.Margin = new Thickness(0); line.Children.Add(label);
-            var button = MakePlainButton(line, action); button.HorizontalAlignment = HorizontalAlignment.Stretch; button.Margin = new Thickness(0, 0, 0, 16); return button;
+            var button = MakePlainButton(line, action); button.Tag = iconName; button.HorizontalAlignment = HorizontalAlignment.Stretch; button.Margin = new Thickness(0, 0, 0, 16); return button;
         }
         FrameworkElement BuildTraySurface()
         {
@@ -1071,7 +1229,7 @@ namespace CodexMissionManager
                 var count = Text(T("暂停 ", "Paused ") + Json.Integer(bulk, "paused") + T(" · 跳过 ", " · Skipped ") + Json.Integer(bulk, "skipped") + T(" · 待处理 ", " · Needs attention ") + Json.Integer(bulk, "failed"), 10); count.Foreground = Json.Integer(bulk, "failed") > 0 ? Brushes.DarkOrange : secondary; count.Margin = new Thickness(0); result.Children.Add(count); body.Children.Add(result);
             }
             if (notice.Length > 0) { var message = Text(notice, 10); message.Foreground = secondary; message.Margin = new Thickness(0, 12, 0, 0); body.Children.Add(message); }
-            if (connectionError.Length > 0) { var error = Text(connectionError, 10); error.Foreground = Brushes.DarkOrange; error.Margin = new Thickness(0, 12, 0, 0); body.Children.Add(error); }
+            if (connectionError.Length > 0) { var error = Text(ConnectionErrorText(), 10); error.Foreground = Brushes.DarkOrange; error.Margin = new Thickness(0, 12, 0, 0); body.Children.Add(error); }
             body.Children.Add(DividerLine(border, new Thickness(0, 16, 0, 16)));
             body.Children.Add(TrayAction(T("打开任务管家", "Open Mission Manager"), "window", ShowMain));
             body.Children.Add(TrayAction(T("设置", "Settings"), "settings", delegate { CloseTrayPanel(); ShowSettingsWindow(); }));
@@ -1105,6 +1263,51 @@ namespace CodexMissionManager
             currentView = view == "activity" ? "events" : view == "rules" ? "rules" : "tasks"; BuildContent(); RenderSnapshot();
             var surface = Content as FrameworkElement; Content = null; return surface;
         }
+        static Button FindTaggedButton(DependencyObject parent, string tag)
+        {
+            var button = parent as Button; if (button != null && Object.Equals(button.Tag, tag)) return button;
+            int count = VisualTreeHelper.GetChildrenCount(parent);
+            for (int index = 0; index < count; index++) { var found = FindTaggedButton(VisualTreeHelper.GetChild(parent, index), tag); if (found != null) return found; }
+            return null;
+        }
+        async Task LifecycleIdleAsync()
+        {
+            await Task.Delay(70);
+            await Dispatcher.InvokeAsync(new Action(delegate { }), DispatcherPriority.ApplicationIdle);
+        }
+        static void LifecycleRequire(bool condition, string step)
+        { if (!condition) throw new InvalidOperationException("Native lifecycle check failed: " + step); }
+        public async Task<Dictionary<string, object>> RunLifecycleSelfTestAsync()
+        {
+            if (!fixtureMode) throw new InvalidOperationException("Lifecycle testing requires an offline fixture.");
+            lifecycleFixture = true;
+            var checks = Json.Values("native", true, "ui", "WPF", "webView", false, "privatePreferencesLoaded", false);
+            ShowMain(); await LifecycleIdleAsync(); LifecycleRequire(IsVisible, "main window shown"); checks["mainWindowShown"] = true;
+            Close(); await LifecycleIdleAsync(); LifecycleRequire(!IsVisible && !quitting, "close button hides main window"); checks["closeHidesWindow"] = true;
+            ToggleTrayPanel(); await LifecycleIdleAsync(); var panel = trayPanelWindow as TrayPopupWindow;
+            LifecycleRequire(panel != null && panel.IsVisible, "native tray popup opens"); checks["trayPopupShown"] = true;
+            var open = FindTaggedButton(panel, "window"); LifecycleRequire(open != null, "real open-main button exists");
+            open.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); await LifecycleIdleAsync();
+            LifecycleRequire(IsVisible && trayPanelWindow == null, "tray button reopens main window"); checks["trayButtonReopensWindow"] = true;
+            Close(); await LifecycleIdleAsync(); ToggleTrayPanel(); await LifecycleIdleAsync(); panel = trayPanelWindow as TrayPopupWindow;
+            LifecycleRequire(panel != null, "second native popup exists");
+            // Queue the actual production Deactivated handler, then invoke the
+            // actual Open action before it drains and create a replacement.
+            panel.RaiseDeactivatedForFixture(); open = FindTaggedButton(panel, "window");
+            LifecycleRequire(open != null, "second real open-main button exists"); open.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+            ToggleTrayPanel(); var replacement = trayPanelWindow; await LifecycleIdleAsync();
+            LifecycleRequire(replacement != null && replacement.IsVisible && Object.ReferenceEquals(trayPanelWindow, replacement), "old deactivation cannot close replacement popup");
+            checks["deactivationReplacementSafe"] = true;
+            CloseTrayPanel(); CloseTrayPanel(); ShowMain(); await LifecycleIdleAsync();
+            LifecycleRequire(IsVisible && trayPanelWindow == null, "repeated close and reopen are safe"); checks["repeatedCloseSafe"] = true;
+            LifecycleRequire(host == null && timer == null && tray == null, "no backend, poll timer or system tray created");
+            checks["hostStarted"] = false; checks["messagesSent"] = 0; checks["systemTrayCreated"] = false; checks["checksPassed"] = true; return checks;
+        }
+        public void EndLifecycleFixture()
+        {
+            if (!fixtureMode) throw new InvalidOperationException("Fixture cleanup cannot run in the installed application.");
+            quitting = true; CloseTrayPanel(); Close(); client.Dispose();
+        }
         void ReadNotifications()
         {
             try
@@ -1125,7 +1328,7 @@ namespace CodexMissionManager
         void ShowMain() { CloseTrayPanel(); Show(); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); }
         void OnClosing(object sender, CancelEventArgs e)
         {
-            if (fixtureMode || quitting) return; e.Cancel = true; Hide();
+            if (quitting || (fixtureMode && !lifecycleFixture)) return; e.Cancel = true; Hide();
         }
         async void Quit()
         {
@@ -1377,11 +1580,30 @@ namespace CodexMissionManager
         {
             if (args.Length > 0 && args[0] == "--self-test")
             {
-                bool revocationChecks = ChatControlPolicy.SelfTest();
+                bool revocationChecks = ChatControlPolicy.SelfTest(); bool startupChecks = StartupDiagnostic.SelfTest();
                 string result = Json.Stringify(Json.Values("version", "0.2.1", "platform", "windows", "native", true, "ui", "WPF", "webView", false,
-                    "hostStarted", false, "messagesSent", 0, "cacheRefreshSeconds", 5, "localRevocationChecks", revocationChecks));
+                    "hostStarted", false, "messagesSent", 0, "cacheRefreshSeconds", 5, "localRevocationChecks", revocationChecks, "startupDiagnosticFallbackChecks", startupChecks));
                 if (args.Length > 1) File.WriteAllText(args[1], result, new UTF8Encoding(false));
-                Console.WriteLine(result); return revocationChecks ? 0 : 1;
+                Console.WriteLine(result); return revocationChecks && startupChecks ? 0 : 1;
+            }
+            if (args.Length > 0 && args[0] == "--lifecycle-self-test")
+            {
+                if (args.Length != 2) return 1;
+                var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown }; var failures = new List<string>();
+                app.DispatcherUnhandledException += delegate(object sender, DispatcherUnhandledExceptionEventArgs e) { failures.Add(e.Exception.ToString()); e.Handled = true; };
+                var fixture = Json.Values("healthy", true, "stale", false, "running", true, "tasks", new object[0]);
+                var window = new MissionWindow(true, fixture, "en", "light"); app.MainWindow = window; int lifecycleExit = 1;
+                app.Startup += delegate { window.Dispatcher.BeginInvoke(new Action(async delegate {
+                    Dictionary<string, object> result;
+                    try { result = await window.RunLifecycleSelfTestAsync(); }
+                    catch (Exception ex) { result = Json.Values("native", true, "hostStarted", false, "messagesSent", 0, "checksPassed", false, "error", ex.ToString()); }
+                    try { window.EndLifecycleFixture(); } catch (Exception ex) { failures.Add(ex.ToString()); }
+                    result["dispatcherExceptions"] = failures.ToArray(); bool passed = Json.Bool(result, "checksPassed") && failures.Count == 0; result["checksPassed"] = passed;
+                    lifecycleExit = passed ? 0 : 1;
+                    try { string path = Path.GetFullPath(args[1]); Directory.CreateDirectory(Path.GetDirectoryName(path)); File.WriteAllText(path, Json.Stringify(result), new UTF8Encoding(false)); }
+                    catch { lifecycleExit = 1; }
+                    app.Shutdown(lifecycleExit);
+                })); }; app.Run(); return lifecycleExit;
             }
             if (args.Length > 0 && args[0] == "--ui-self-test")
             {

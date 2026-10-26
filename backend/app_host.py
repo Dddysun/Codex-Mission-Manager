@@ -13,7 +13,11 @@ import time
 
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))  # Trusted bundled modules, also in isolated Python mode.
-from platform_support import lock_held, sqlite_ro_uri, support_directory, python_command
+from platform_support import (check_writable_directory, lock_held, private_directory,
+                              private_file_permissions, sqlite_ro_uri,
+                              support_directory, python_command)
+
+IS_WINDOWS = os.name == 'nt'
 
 
 def locked(path):
@@ -37,7 +41,7 @@ def legacy_service(home):
 
 def make_config(directory, home=None, port=8769, parent_pid=None):
     directory = Path(directory)
-    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    private_directory(directory)
     state = directory / "state"
     cfg = json.loads((ROOT / "config.example.json").read_text(encoding="utf-8"))
     cfg.update(state_dir=str(state), runtime_root=str(ROOT), ui_port=port,
@@ -64,7 +68,7 @@ def migrate_legacy(directory, home=None):
     if locked(source / "daemon.lock"):
         raise RuntimeError("Stop the existing Guardian before migration")
     destination = Path(directory) / "state"
-    destination.mkdir(parents=True, exist_ok=True, mode=0o700)
+    private_directory(destination)
     target = destination / "guardian.sqlite3"
     if target.exists():
         raise RuntimeError("Destination already contains a ledger; it was not overwritten")
@@ -72,14 +76,38 @@ def migrate_legacy(directory, home=None):
         with closing(sqlite3.connect(str(target))) as new:
             old.backup(new)
             new.commit()
-    os.chmod(target, 0o600)
+    private_file_permissions(target)
+
+
+def preflight_application_data(directory):
+    """Fail before opening a server or daemon; never repair an existing ACL."""
+    directory = Path(directory)
+    checks = (
+        (directory, ('config.json', 'config.json.tmp', 'backend.log',
+                     'native-host.log', 'native-preferences.json',
+                     'native-preferences.json.tmp', 'host.lock')),
+        (directory / 'state', ('guardian.sqlite3', 'guardian.sqlite3-wal',
+                               'guardian.sqlite3-shm', 'daemon.lock',
+                               'status.json', 'status.json.tmp',
+                               'native-notices.json', 'native-notices.json.tmp')),
+    )
+    for target, files in checks:
+        try:
+            private_directory(target)
+        except OSError as exc:
+            raise RuntimeError(
+                'app_data_not_writable: Application data folder cannot be created: %s. '
+                'Ask the folder owner or administrator to restore write access '
+                'for your account, then reopen the app normally. '
+                'Existing permissions were not changed.' % target) from exc
+        check_writable_directory(target, files)
 
 
 def run(directory, attach=True, home=None):
-    if os.name != 'nt':
+    if not IS_WINDOWS:
         return run_owned(directory, attach, home)
     directory = Path(directory)
-    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    preflight_application_data(directory)
     lease = None
     from platform_support import open_lock, lock_file
     try:

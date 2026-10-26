@@ -10,6 +10,10 @@ Run `Codex-Mission-Manager-0.2.1-windows-x64-setup.exe`, select **Install**, the
 
 运行安装 EXE，点击“安装”，然后从桌面或开始菜单打开“任务管家”。默认程序目录为 `%LOCALAPPDATA%\Programs\CodexMissionManager`。
 
+Install and open the application normally with your Windows account. **Run as administrator** is not required. The backend checks that its data folder is writable before starting; it does not request elevation or automatically change folder permissions. If access is denied, check the current user's access to the displayed application data folder.
+
+请使用当前 Windows 账户正常安装和打开，无需“以管理员身份运行”。后台启动前会检查应用数据目录是否可写，不会自动提权或重置目录权限。如提示无法访问，请检查当前用户对提示中应用数据目录的访问权限。
+
 The application requires a compatible official ChatGPT desktop client and the user's own sign-in. Credentials and chat histories are not included in the distribution. New installations start with global automatic control paused; check the displayed account and chats before enabling it.
 
 应用需要兼容的官方 ChatGPT 桌面客户端及用户本人登录。发行包不含凭据或聊天历史。首次安装默认暂停全局自动控制，请核对账号及聊天后再启用。

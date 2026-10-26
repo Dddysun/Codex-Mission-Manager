@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import stat
 import tempfile
 import time
 import unittest
@@ -208,6 +209,131 @@ class PlatformSafetyTests(unittest.TestCase):
         self.assertFalse(current['live_control_tested'])
         self.assertEqual(current['profile'],{'snapshot':11,'start_turn':2,'interrupt_turn':4})
         self.assertFalse(windows_compatibility({'version':'26.1021.3706.0'})['supported'])
+
+
+class PrivateDirectoryTests(unittest.TestCase):
+    def test_windows_creation_inherits_acl_without_posix_mode_or_chmod(self):
+        with tempfile.TemporaryDirectory() as root:
+            target = Path(root) / 'app' / 'state'
+            original_mkdir = Path.mkdir
+            modes = []
+            def checked_mkdir(path, mode=0o777, *args, **kwargs):
+                modes.append(mode)
+                return original_mkdir(path, mode, *args, **kwargs)
+            with mock.patch('platform_support.IS_WINDOWS', True), \
+                    mock.patch.object(Path, 'mkdir', checked_mkdir), \
+                    mock.patch('platform_support.os.chmod') as chmod:
+                platform_support.private_directory(target, enforce_mode=True)
+                marker = target / 'config.json'
+                marker.write_bytes(b'private fixture')
+                platform_support.private_file_permissions(marker)
+            self.assertTrue(target.is_dir())
+            self.assertTrue(modes)
+            self.assertTrue(all(mode == 0o777 for mode in modes))
+            chmod.assert_not_called()
+
+    @unittest.skipIf(os.name == 'nt', 'POSIX mode contract')
+    def test_posix_directory_and_file_modes_are_unchanged(self):
+        with tempfile.TemporaryDirectory() as root:
+            target = Path(root) / 'state'
+            target.mkdir(mode=0o755)
+            marker = target / 'ledger'
+            marker.write_bytes(b'fixture')
+            platform_support.private_directory(target, enforce_mode=True)
+            platform_support.private_file_permissions(marker)
+            self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o700)
+            self.assertEqual(stat.S_IMODE(marker.stat().st_mode), 0o600)
+
+    def test_preflight_writes_syncs_and_removes_probe_without_changing_data(self):
+        with tempfile.TemporaryDirectory() as root:
+            target = Path(root)
+            marker = target / 'config.json'
+            original = b'keep the existing private data'
+            marker.write_bytes(original)
+            with mock.patch('platform_support.os.fsync', wraps=os.fsync) as sync:
+                platform_support.check_writable_directory(target, ('config.json', 'missing.log'))
+            sync.assert_called_once()
+            self.assertEqual(marker.read_bytes(), original)
+            self.assertEqual(sorted(p.name for p in target.iterdir()), ['config.json'])
+
+    def test_preflight_reports_existing_file_denial_without_repairing_permissions(self):
+        with tempfile.TemporaryDirectory() as root:
+            target = Path(root)
+            marker = target / 'native-preferences.json'
+            marker.write_bytes(b'preserve preferences')
+            original_open = Path.open
+            def checked_open(path, mode='r', *args, **kwargs):
+                if path == marker and mode == 'r+b':
+                    raise PermissionError('fixture ACL denies write')
+                return original_open(path, mode, *args, **kwargs)
+            with mock.patch.object(Path, 'open', checked_open), \
+                    mock.patch('platform_support.os.chmod') as chmod:
+                with self.assertRaisesRegex(RuntimeError, 'app_data_not_writable.*native-preferences.json') as failure:
+                    platform_support.check_writable_directory(target, (marker.name,))
+            self.assertIsInstance(failure.exception.__cause__, PermissionError)
+            self.assertIn('restore write access', str(failure.exception))
+            self.assertEqual(marker.read_bytes(), b'preserve preferences')
+            chmod.assert_not_called()
+
+    def test_preflight_reports_denied_probe_without_trying_acl_repair(self):
+        with tempfile.TemporaryDirectory() as root:
+            with mock.patch('platform_support.tempfile.TemporaryFile', side_effect=PermissionError('fixture denied')), \
+                    mock.patch('platform_support.os.chmod') as chmod:
+                with self.assertRaisesRegex(RuntimeError, 'app_data_not_writable'):
+                    platform_support.check_writable_directory(root)
+            chmod.assert_not_called()
+
+    def test_windows_store_and_atomic_config_do_not_apply_posix_permissions(self):
+        with tempfile.TemporaryDirectory() as root:
+            directory = Path(root) / 'state'
+            with mock.patch('platform_support.IS_WINDOWS', True), \
+                    mock.patch('platform_support.os.chmod') as chmod:
+                store = guardian.Store(directory)
+                try:
+                    store.put('preserved', True)
+                    guardian.atomic_json(directory / 'config.json', {'fixture': True})
+                    self.assertTrue(store.get('preserved'))
+                finally:
+                    store.close()
+            self.assertEqual(json.loads((directory / 'config.json').read_text()), {'fixture': True})
+            chmod.assert_not_called()
+
+    @unittest.skipUnless(os.name == 'nt', 'Windows inherited DACL regression')
+    def test_windows_private_directory_dacl_matches_default_inheritance(self):
+        from ctypes import wintypes
+        advapi = ctypes.WinDLL('advapi32', use_last_error=True)
+        kernel = ctypes.WinDLL('kernel32', use_last_error=True)
+        advapi.GetNamedSecurityInfoW.argtypes = (
+            wintypes.LPWSTR, wintypes.DWORD, wintypes.DWORD,
+            ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p,
+            ctypes.POINTER(ctypes.c_void_p))
+        advapi.GetNamedSecurityInfoW.restype = wintypes.DWORD
+        advapi.ConvertSecurityDescriptorToStringSecurityDescriptorW.argtypes = (
+            ctypes.c_void_p, wintypes.DWORD, wintypes.DWORD,
+            ctypes.POINTER(wintypes.LPWSTR), ctypes.POINTER(wintypes.ULONG))
+        advapi.ConvertSecurityDescriptorToStringSecurityDescriptorW.restype = wintypes.BOOL
+        kernel.LocalFree.argtypes = (ctypes.c_void_p,)
+        kernel.LocalFree.restype = ctypes.c_void_p
+        def dacl(path):
+            descriptor = ctypes.c_void_p()
+            code = advapi.GetNamedSecurityInfoW(str(path), 1, 4, None, None, None, None, ctypes.byref(descriptor))
+            if code:
+                raise ctypes.WinError(code)
+            text = wintypes.LPWSTR()
+            try:
+                if not advapi.ConvertSecurityDescriptorToStringSecurityDescriptorW(
+                        descriptor, 1, 4, ctypes.byref(text), None):
+                    raise ctypes.WinError(ctypes.get_last_error())
+                return text.value
+            finally:
+                if text:
+                    kernel.LocalFree(text)
+                kernel.LocalFree(descriptor)
+        with tempfile.TemporaryDirectory() as root:
+            inherited = Path(root) / 'default'
+            inherited.mkdir()
+            private = platform_support.private_directory(Path(root) / 'application', enforce_mode=True)
+            self.assertEqual(dacl(private), dacl(inherited))
 
 
 class WindowsMonitorTests(unittest.IsolatedAsyncioTestCase):

@@ -47,6 +47,14 @@ jobs:
             $receipt = Get-Content -LiteralPath ($image+'.json') -Raw -Encoding UTF8 | ConvertFrom-Json
             if (!$receipt.native -or $receipt.webView -or $receipt.hostStarted -or $receipt.messagesSent -ne 0) { throw 'Fixture render violated the offline native-only contract.' }
           }
+      - name: Verify native close and tray reopen lifecycle
+        shell: powershell
+        run: |
+          $report = "$env:RUNNER_TEMP\mission-windows\native-lifecycle.json"
+          $p = Start-Process -FilePath "$env:RUNNER_TEMP\mission-windows\app\CodexMissionManager.exe" -ArgumentList @('--lifecycle-self-test',('"'+$report+'"')) -Wait -PassThru
+          if ($p.ExitCode -ne 0 -or !(Test-Path $report)) { throw 'Native lifecycle verification failed.' }
+          $receipt = Get-Content -LiteralPath $report -Raw -Encoding UTF8 | ConvertFrom-Json
+          if (!$receipt.checksPassed -or $receipt.hostStarted -or $receipt.messagesSent -ne 0 -or $receipt.systemTrayCreated) { throw 'Native lifecycle verification violated its offline contract.' }
       - uses: actions/upload-artifact@v4
         with:
           name: Codex-Mission-Manager-Windows-x64
@@ -57,6 +65,7 @@ jobs:
             ${{ runner.temp }}/mission-windows/build-manifest.json
             ${{ runner.temp }}/mission-windows/*.png
             ${{ runner.temp }}/mission-windows/*.png.json
+            ${{ runner.temp }}/mission-windows/native-lifecycle.json
             ${{ runner.temp }}/mission-windows/test-results/windows-test-results.json
       - name: Publish Windows preview assets
         shell: powershell
