@@ -8,10 +8,11 @@ import struct
 import sys
 import tempfile
 import unittest
+import uuid
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from desktop import DesktopAdapter, DesktopIPC, DesktopError, normalize_state
+from desktop import DesktopAdapter, DesktopIPC, DesktopError, normalize_state, windows_pipe_address
 from guardian import Controller, Store
 from test_guardian import CONFIG, NOW, payload, sample
 
@@ -44,6 +45,19 @@ class NormalizeTests(unittest.TestCase):
         self.assertNotIn("cancel", json.dumps(normalize_state(b)))
 
 
+class PipeEndpointTests(unittest.TestCase):
+    def test_default_is_the_real_client_pipe_but_explicit_local_endpoints_are_supported(self):
+        self.assertEqual(windows_pipe_address(), r'\\.\pipe\codex-ipc')
+        endpoint = r'\\.\pipe\cmm-test-' + uuid.uuid4().hex
+        self.assertEqual(windows_pipe_address(endpoint), endpoint)
+
+    def test_remote_or_filesystem_paths_cannot_replace_a_local_pipe(self):
+        for endpoint in (r'\\remote\pipe\codex-ipc', r'C:\temp\app.sock', '/tmp/app.sock',
+                         r'\\.\pipe\nested\codex-ipc', '\\\\.\\pipe\\'):
+            with self.assertRaises(DesktopError):
+                windows_pipe_address(endpoint)
+
+
 class Quota:
     def __init__(self):
         self.changed = asyncio.Event()
@@ -60,32 +74,78 @@ class Quota:
         raise AssertionError(method)
 
 
-@unittest.skipIf(os.name == "nt", "Unix socket regressions; Windows named-pipe transport is checked separately")
 class NativeProtocolTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         self.compatibility_patch = mock.patch("compatibility.require_supported", return_value={"supported": True})
         self.compatibility_patch.start()
         self.addCleanup(self.compatibility_patch.stop)
-        self.temp = tempfile.TemporaryDirectory(prefix="ug-ipc-", dir="/tmp")
-        self.socket = str(Path(self.temp.name) / "app.sock")
+        self.temp = tempfile.TemporaryDirectory(prefix="ug-ipc-", dir=None if os.name == 'nt' else '/tmp')
+        self.socket = (r'\\.\pipe\cmm-test-' + uuid.uuid4().hex if os.name == 'nt'
+                       else str(Path(self.temp.name) / 'app.sock'))
         self.state, self.requests = state(), []
         self.snapshot_burst = None
-        self.server = await asyncio.start_unix_server(self.handle, path=self.socket)
-        os.chmod(self.socket, 0o600)
+        self.connections = set()
+        self.handler_errors = []
+        self.pipe_servers = []
+        self.attestation = None
+        if os.name == 'nt':
+            self.assertNotEqual(self.socket, r'\\.\pipe\codex-ipc')
+            loop = asyncio.get_running_loop()
+            def protocol():
+                return asyncio.StreamReaderProtocol(asyncio.StreamReader(),self.accept)
+            self.pipe_servers = await loop.start_serving_pipe(protocol,self.socket)
+            package = mock.patch('compatibility.windows_client',return_value={
+                'install_location':self.temp.name,'version':'framed-fixture'})
+            self.package_lookup = package.start()
+            self.addCleanup(package.stop)
+            attestation = mock.patch('platform_support.verify_windows_pipe_server',return_value={
+                'pid':os.getpid(),'same_user':True,'installed_package_path':True})
+            self.attestation = attestation.start()
+            self.addCleanup(attestation.stop)
+            self.server = None
+        else:
+            self.server = await asyncio.start_unix_server(self.accept,path=self.socket)
+            os.chmod(self.socket, 0o600)
         self.adapter = DesktopAdapter(Quota(), {"desktop_app_build": "20770"})
         self.adapter.ipc = DesktopIPC(self.socket, timeout=2)
         # Avoid depending on the host app build in protocol fixture tests.
         await self.adapter.ipc.start()
+        if self.attestation is not None:
+            self.attestation.assert_called_once()
+            self.package_lookup.assert_called_once_with(verify_cli=False)
+            self.assertEqual(self.attestation.call_args.args[1],self.temp.name)
+            self.assertEqual(self.adapter.ipc.pipe_address,self.socket)
+            self.assertTrue(self.adapter.ipc.server_identity['same_user'])
+        self.adapter.control_available = True  # Only this isolated fake transport.
         self.adapter.available = ["one"]
         self.store = Store(Path(self.temp.name) / "state")
         self.controller = Controller(self.adapter, self.store, CONFIG, "scope-one", clock=lambda: NOW)
 
     async def asyncTearDown(self):
         await self.adapter.close()
-        self.server.close()
-        await self.server.wait_closed()
+        if self.server is not None:
+            self.server.close()
+            await self.server.wait_closed()
+        for server in self.pipe_servers:
+            server.close()
+        if self.connections:
+            await asyncio.gather(*list(self.connections),return_exceptions=True)
+        await asyncio.sleep(0)  # Let cancelled pipe accepts release their handles.
         self.store.close()
         self.temp.cleanup()
+        if self.handler_errors:
+            raise self.handler_errors[0]
+
+    def accept(self, reader, writer):
+        task = asyncio.create_task(self.handle(reader,writer))
+        self.connections.add(task)
+        def done(value):
+            self.connections.discard(value)
+            if not value.cancelled():
+                error = value.exception()
+                if error is not None:
+                    self.handler_errors.append(error)
+        task.add_done_callback(done)
 
     async def send(self, writer, value):
         data = json.dumps(value).encode()
@@ -149,6 +209,19 @@ class NativeProtocolTests(unittest.IsolatedAsyncioTestCase):
             result = await self.adapter.call("account/rateLimits/read")
             self.assertIn("rateLimitsByLimitId", result)
             guard.assert_not_called()
+
+    @unittest.skipUnless(os.name == 'nt','Windows pipe server identity rejection')
+    async def test_rejected_windows_pipe_identity_receives_no_protocol_frames(self):
+        before = len(self.requests)
+        refused = DesktopIPC(self.socket,timeout=2)
+        try:
+            with mock.patch('platform_support.verify_windows_pipe_server',side_effect=PermissionError('fixture wrong owner')):
+                with self.assertRaises(PermissionError):
+                    await refused.start()
+        finally:
+            await refused.close()
+        await asyncio.sleep(0)
+        self.assertEqual(len(self.requests),before)
 
     async def test_full_controller_through_native_framed_socket(self):
         await self.controller.adopt("one")

@@ -93,6 +93,17 @@ def run(directory, attach=True, home=None):
             lease.close()
 
 
+def read_host_input(stream, stop, detail):
+    """Only an explicit stop command or the owning parent's EOF ends a host."""
+    for line in stream:
+        if line.strip() == 'stop':
+            detail['reason'] = 'requested'
+            stop.set()
+            return
+    detail['reason'] = 'parent_input_closed'
+    stop.set()
+
+
 def run_owned(directory, attach=True, home=None):
     if attach and os.name != 'nt':
         existing = legacy_service(Path(home or Path.home()))
@@ -120,7 +131,8 @@ def run_owned(directory, attach=True, home=None):
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
     stop = threading.Event()
-    threading.Thread(target=lambda: (sys.stdin.readline(), stop.set()), daemon=True).start()
+    stop_detail = {}
+    threading.Thread(target=read_host_input, args=(sys.stdin, stop, stop_detail), daemon=True).start()
     with (Path(directory) / "backend.log").open("ab") as log:
         daemon = subprocess.Popen(python_command(ROOT / "guardian.py", "--config", config_path, "run", isolated=True),
             stdout=log, stderr=log, stdin=subprocess.DEVNULL,
@@ -133,6 +145,7 @@ def run_owned(directory, attach=True, home=None):
                     # Do not silently reissue stop requests; a user can reopen.
                     break
         finally:
+            exit_reason = stop_detail.get('reason', 'daemon_exited')
             ledger = Store(Path(directory) / "state")
             ledger.put("stop_requested", True)
             ledger.close()
@@ -146,6 +159,9 @@ def run_owned(directory, attach=True, home=None):
                     daemon.wait(timeout=5)
                 except subprocess.TimeoutExpired:
                     daemon.kill()
+                    daemon.wait(timeout=5)
+            print(json.dumps({'host_exit': {'reason':exit_reason,
+                                           'daemon_exit_code':daemon.poll()}}), file=sys.stderr, flush=True)
 
 
 def self_test():

@@ -3,9 +3,10 @@ import json
 from pathlib import Path
 import sqlite3
 import tempfile
+import threading
 import unittest
 
-from app_host import legacy_service, make_config, migrate_legacy
+from app_host import legacy_service, make_config, migrate_legacy, read_host_input
 from guardian import Store, load_config, process_alive
 
 
@@ -58,3 +59,22 @@ class PackagingHostTests(unittest.TestCase):
 
     def test_missing_host_process_is_detected(self):
         self.assertFalse(process_alive(-999999999))
+
+    def test_host_ignores_non_stop_input_without_stopping_backend(self):
+        stop, detail = threading.Event(), {}
+        def messages():
+            yield '\n'
+            self.assertFalse(stop.is_set())
+            yield 'status\n'
+            self.assertFalse(stop.is_set())
+            yield 'stop\n'
+            self.fail('Host continued reading after explicit stop')
+        read_host_input(messages(), stop, detail)
+        self.assertTrue(stop.is_set())
+        self.assertEqual(detail['reason'], 'requested')
+
+    def test_parent_eof_stops_host_with_an_explicit_diagnostic_reason(self):
+        stop, detail = threading.Event(), {}
+        read_host_input(iter(()), stop, detail)
+        self.assertTrue(stop.is_set())
+        self.assertEqual(detail['reason'], 'parent_input_closed')

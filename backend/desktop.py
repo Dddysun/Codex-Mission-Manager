@@ -11,6 +11,7 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import re
 import sqlite3
 import stat
 import struct
@@ -28,6 +29,13 @@ VERSIONS = {"initialize": 0, "thread-owner-discovery": 1,
 
 class DesktopError(RuntimeError):
     pass
+
+
+def windows_pipe_address(value=None):
+    address = r'\\.\pipe\codex-ipc' if value is None else str(value)
+    if not re.fullmatch(r'\\\\\.\\pipe\\[A-Za-z0-9._-]{1,128}', address):
+        raise DesktopError('desktop pipe must be a local named-pipe endpoint')
+    return address
 
 
 def digest(value):
@@ -65,6 +73,7 @@ def normalize_state(state):
 class DesktopIPC:
     def __init__(self, socket_path=None, timeout=30):
         self.path = Path(socket_path or Path.home() / ".codex/ipc/ipc.sock")
+        self.pipe_address = windows_pipe_address(socket_path) if IS_WINDOWS else None
         self.timeout = timeout
         self.client_id = "initializing-client"
         self.pending, self.states, self.sequences, self.owners, self.known = {}, {}, {}, {}, {}
@@ -78,13 +87,13 @@ class DesktopIPC:
         if IS_WINDOWS:
             from compatibility import windows_client
             from platform_support import verify_windows_pipe_server
-            info = windows_client()
+            info = windows_client(verify_cli=False)
             if not info:
                 raise DesktopError('installed Windows desktop package is unavailable')
             loop = asyncio.get_running_loop()
             reader = asyncio.StreamReader(limit=64*1024*1024)
             protocol = asyncio.StreamReaderProtocol(reader)
-            transport, _ = await loop.create_pipe_connection(lambda:protocol, r'\\.\pipe\codex-ipc')
+            transport, _ = await loop.create_pipe_connection(lambda:protocol, self.pipe_address)
             self.reader, self.writer = reader, asyncio.StreamWriter(transport, protocol, reader, loop)
             try:
                 handle = transport.get_extra_info('pipe')

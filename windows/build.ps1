@@ -7,7 +7,7 @@ $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $version = '0.2.1'
-$preview = 'windows.1'
+$preview = if ($env:GITHUB_RUN_NUMBER -match '^\d+$') { 'windows.'+$env:GITHUB_RUN_NUMBER } else { 'windows.2' }
 $lock = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'python-runtime.lock.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 if (!$OutputDirectory) { $OutputDirectory = Join-Path $root 'dist\windows-0.2.1-preview' }
 $output = [IO.Path]::GetFullPath($OutputDirectory)
@@ -73,10 +73,10 @@ $wpf = Join-Path $framework 'WPF'
 $references = @('System.dll','System.Core.dll','System.Net.Http.dll','System.Web.Extensions.dll','System.Xaml.dll','System.Windows.Forms.dll','System.Drawing.dll') | ForEach-Object { Join-Path $framework $_ }
 $references += @('PresentationFramework.dll','PresentationCore.dll','WindowsBase.dll') | ForEach-Object { Join-Path $wpf $_ }
 foreach ($reference in $references) { if (!(Test-Path -LiteralPath $reference)) { throw ('Required Windows framework assembly is missing: '+$reference) } }
-Add-Type -AssemblyName System.Drawing
 $icon = Join-Path $scratch 'AppIcon.ico'
-$iconStream = [IO.File]::Create($icon)
-try { [Drawing.SystemIcons]::Shield.Save($iconStream) } finally { $iconStream.Dispose() }
+$brandIcon = Join-Path $PSScriptRoot 'Assets\AppIcon.ico'
+if (!(Test-Path -LiteralPath $brandIcon)) { throw 'The Mission Manager brand icon is missing.' }
+Copy-Item -LiteralPath $brandIcon -Destination $icon
 $common = @('/nologo','/target:winexe','/platform:x64','/optimize+','/utf8output','/codepage:65001',('/win32manifest:'+(Join-Path $PSScriptRoot 'app.manifest')),('/win32icon:'+$icon))
 $appArgs = $common + @('/out:'+(Join-Path $app 'CodexMissionManager.exe')) + ($references | ForEach-Object { '/reference:'+$_ }) + @(Join-Path $PSScriptRoot 'MissionManager.cs')
 Write-Output 'Compiling native Windows application'

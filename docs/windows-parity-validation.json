@@ -1,0 +1,156 @@
+{
+  "reviewed_at_utc": "2026-10-26T13:01:59.664719+00:00",
+  "platform": "windows-x64",
+  "version": "0.2.1",
+  "preview": "windows.2",
+  "source_snapshot_sha256": "ca5340e3498e1310609a6fc2e5f688e333c3b5cee1f9ca2bad9caba8edb17e4d",
+  "native_source_sha256": "7d56206cd216699fbbfdfe97e648ffde4142f4950c196fe36673562e03156dd6",
+  "git_source_commit": "See the public build-manifest.json for the exact CI source commit",
+  "native": {
+    "ui": "WPF",
+    "webview": false,
+    "runtime_bundled": true,
+    "install_scope": "current-user",
+    "branding": "existing project shield asset, not Windows UAC icon"
+  },
+  "local_windows_final_regressions": {
+    "backend_total": 219,
+    "backend_passed": 215,
+    "backend_skipped": 4,
+    "skip_reason": "Mac plist profiles only",
+    "backend_failures": 0,
+    "backend_errors": 0,
+    "host_passed": 6,
+    "host_failures": 0,
+    "host_errors": 0,
+    "framed_controller_tests_use_windows_unique_fake_pipes": true
+  },
+  "transient_test_observation": {
+    "earlier_final_batch": "One WinError10053 aborted the unauthorized POST test connection before response; no assertion failure",
+    "targeted_recheck": "passed",
+    "complete_recheck": "all tests passed",
+    "authorization_checks_relaxed": false,
+    "automatic_test_retry_added": false
+  },
+  "native_validation": {
+    "final_compilation": true,
+    "embedded_runtime_selftest": true,
+    "native_selftest": true,
+    "installer_selftest": true,
+    "offline_views_passed": 10,
+    "views": [
+      "home zh/light",
+      "home en/dark",
+      "settings zh/light",
+      "settings en/dark",
+      "activity zh/light",
+      "rules zh/light",
+      "tray en/dark",
+      "pro weekly",
+      "service only",
+      "unknown quota"
+    ],
+    "offline_host_started": false,
+    "offline_messages_sent": 0,
+    "main_logical_size": [
+      1380,
+      900
+    ],
+    "main_render_scale": 2
+  },
+  "mac_visual_comparison": {
+    "same_fixture": true,
+    "current_installed_mac_offline_reference": true,
+    "reference_host_started": false,
+    "reference_messages_sent": 0,
+    "main_comparison_passed": true,
+    "stats_y": {
+      "mac": [
+        154,
+        231
+      ],
+      "windows": [
+        155,
+        231
+      ]
+    },
+    "first_task_y": {
+      "mac": [
+        321,
+        527
+      ],
+      "windows": [
+        322,
+        528
+      ]
+    },
+    "second_task_y": {
+      "mac": [
+        540,
+        746
+      ],
+      "windows": [
+        542,
+        748
+      ]
+    },
+    "platform_titlebar_and_font_rendering_retained": true,
+    "private_desktop_screenshot_published": false
+  },
+  "client_readonly_acceptance": {
+    "package": "OpenAI.Codex",
+    "version": "26.1021.3705.0",
+    "publisher_verified": true,
+    "extracted_cli_matches_package_sha256": true,
+    "cli_sha256": "1103e9e09c71fa2cd0afd6d8f3b9a2d63174fe8efd7cb5bd09f1cb14ef58a098",
+    "account_and_real_limits_read": true,
+    "actual_window_durations_minutes": [
+      300,
+      10080
+    ],
+    "native_pipe_same_user_and_package_attested": true,
+    "existing_chat_snapshots_passed": 2,
+    "owner_and_model_settings_reads_passed": true,
+    "public_execution_stage_read": true,
+    "isolated_host_fresh_samples_then_restart_passed": true,
+    "isolated_hosts_exited": true
+  },
+  "version_policy": {
+    "exact_windows_profile": "26.1021.3705.0",
+    "future_versions_blocked": true,
+    "static_schema_matches_installed_signed_package": true,
+    "live_control_tested": false
+  },
+  "upgrade_preflight": {
+    "global_paused": true,
+    "enabled_auto_preferences": 0,
+    "registered_tasks": 0,
+    "armed_or_sending_plans": 0,
+    "pending_requests": 0,
+    "private_state_modified_by_preflight": false
+  },
+  "real_action_acceptance": {
+    "messages_sent": 0,
+    "turns_interrupted": 0,
+    "live_pause_resume_tested": false,
+    "live_goal_tested": false,
+    "live_immediate_and_scheduled_delivery_tested": false,
+    "natural_quota_reset_cycle_tested": false
+  },
+  "boundaries": {
+    "mac_installed_deployment_modified": false,
+    "authentication_copied_between_devices": false,
+    "system_wide_provisioning": false,
+    "firewall_defender_execution_policy_or_power_settings_changed": false,
+    "persistent_launch_task_created": false
+  },
+  "release_and_deployment": "Final CI asset checksums and installation verification will be recorded after publication; local build and public CI are separate builds of the same source.",
+  "remaining_gaps": [
+    "Live control and natural reset acceptance",
+    "Ordinary ChatGPT/cloud chats are directory-only, without full cloud synchronization",
+    "Tray balloons, not modern Windows Toast integration",
+    "No privileged lid-closed service or manual-sleep guarantee",
+    "Unsigned preview without automatic update",
+    "Windows11/ARM64/multi-user/login-start and locked/display-off/closed-lid delivery need separate validation"
+  ]
+}

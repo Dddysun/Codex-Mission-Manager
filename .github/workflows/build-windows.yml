@@ -28,15 +28,24 @@ jobs:
         run: |
           & "$env:RUNNER_TEMP\mission-windows\app\runtime\python\python.exe" -X utf8 -I .\windows\run_tests.py --output "$env:RUNNER_TEMP\mission-windows\test-results"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-      - name: Verify four native fixture views
+      - name: Verify native pages, themes and quota variants
         shell: powershell
         run: |
           $exe = "$env:RUNNER_TEMP\mission-windows\app\CodexMissionManager.exe"
-          foreach ($name in @('native-state','native-pro-weekly','native-service-only','native-quota-unknown')) {
-            $fixture = Join-Path $env:GITHUB_WORKSPACE ("tests\fixtures\"+$name+".json")
-            $image = Join-Path "$env:RUNNER_TEMP\mission-windows" ($name+".png")
-            $p = Start-Process -FilePath $exe -ArgumentList @('--ui-self-test',('"'+$fixture+'"'),('"'+$image+'"')) -Wait -PassThru
-            if ($p.ExitCode -ne 0 -or !(Test-Path $image)) { throw ('Native render failed: '+$name) }
+          $views = @(
+            @('home','zh','light','native-state'), @('home','en','dark','native-state'),
+            @('settings','zh','light','native-state'), @('settings','en','dark','native-state'),
+            @('activity','zh','light','native-state'), @('rules','zh','light','native-state'),
+            @('tray','en','dark','native-state'), @('home','zh','light','native-pro-weekly'),
+            @('home','zh','light','native-service-only'), @('home','en','dark','native-quota-unknown')
+          )
+          foreach ($view in $views) {
+            $fixture = Join-Path $env:GITHUB_WORKSPACE ("tests\fixtures\"+$view[3]+".json")
+            $image = Join-Path "$env:RUNNER_TEMP\mission-windows" (($view -join '-')+".png")
+            $p = Start-Process -FilePath $exe -ArgumentList @('--ui-self-test',('"'+$fixture+'"'),('"'+$image+'"'),'--view',$view[0],'--language',$view[1],'--theme',$view[2],'--scale','2') -Wait -PassThru
+            if ($p.ExitCode -ne 0 -or !(Test-Path $image)) { throw ('Native render failed: '+($view -join '-')) }
+            $receipt = Get-Content -LiteralPath ($image+'.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+            if (!$receipt.native -or $receipt.webView -or $receipt.hostStarted -or $receipt.messagesSent -ne 0) { throw 'Fixture render violated the offline native-only contract.' }
           }
       - uses: actions/upload-artifact@v4
         with:

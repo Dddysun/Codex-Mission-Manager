@@ -4,17 +4,17 @@ macOS 与 Windows 原生聊天任务管理应用。根据可用额度暂停和�
 
 A native macOS and Windows companion for quota-aware Codex task control, one-time scheduled instructions, and confirmed delivery records.
 
-[下载 macOS DMG](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-preview.6) · [下载 Windows EXE](https://github.com/Dddysun/Codex-Mission-Manager/releases/download/v0.2.1-windows-preview.1/Codex-Mission-Manager-0.2.1-windows-x64-setup.exe) · [产品总蓝图](docs/PRODUCT_BLUEPRINT_V0.1.md) · [发行状态](docs/RELEASE_STATUS.md)
+[下载 macOS DMG](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-preview.6) · [Windows 预览安装包](https://github.com/Dddysun/Codex-Mission-Manager/releases) · [产品总蓝图](docs/PRODUCT_BLUEPRINT_V0.1.md) · [发行状态](docs/RELEASE_STATUS.md)
 
 **V0.2.1 公开预览版。** 按实际订阅响应识别五小时、周与其他额度窗口，支持无固定窗口的明确服务许可；保留中英文、系统深色模式和原生菜单栏。安装前请阅读发行限制。
 
 ## Windows 原生预览
 
-Windows 版本提供 WPF 原生窗口和携带 Python 的每用户 EXE 安装器。程序功能、已验收范围与缺失项见 [Windows 移植清单](docs/WINDOWS_PORT.md)，安装说明见 [Windows 安装与卸载](windows/INSTALL_README.md)。**当前 Windows 预览尚未开放真实任务控制**：目标设备已安装官方客户端并通过只读初始化，但 CLI 启动和会话快照验收仍待完成，Windows 兼容表暂无已核验版本。控制界面与调度逻辑已移植，但不会对未核验客户端发送指令。最新接续状态见 [Windows agent 交接说明](docs/WINDOWS_HANDOFF.md)。
+Windows 版本使用 WPF 原生窗口和携带 Python 的每用户 EXE 安装器。本轮按当前 Mac 原生设计重做主窗口、设置、托盘、中英文和浅深色主题，见 [界面还原说明](docs/WINDOWS_UI_PARITY.md)。官方客户端 `26.1021.3705.0` 已完成真实账号额度、两个已有聊天快照及执行阶段的只读核验，源码仅为该 exact 版本提供适配；真实暂停、续接及发送动作仍须单独验收。功能与剩余缺口见 [Windows 移植清单](docs/WINDOWS_PORT.md)，安装方法见 [Windows 安装与卸载](windows/INSTALL_README.md)。
 
-[Windows 预览发行页（含 EXE、便携 ZIP 与校验摘要）](https://github.com/Dddysun/Codex-Mission-Manager/releases/tag/v0.2.1-windows-preview.1)。Windows 10 x64 实机通过 190 项后端测试、4 项宿主测试，14 项平台专属测试跳过；原生渲染、安装器完整性和安装后后台接口检查通过。检查未向真实聊天发送消息；完整证据见 [Windows 验收记录](docs/windows-validation.json)。
+[Windows 发行文件（含 EXE、便携 ZIP 与校验摘要）](https://github.com/Dddysun/Codex-Mission-Manager/releases)。最终 Windows 10 x64 回归共 219 项，其中 215 项通过、4 项 Mac 专属测试跳过；6 项宿主测试及 10 组原生渲染通过。检查未向真实聊天发送消息，详见 [本轮验收记录](docs/windows-parity-validation.json)。
 
-以下为 Windows 原生 WPF 窗口的模拟数据渲染，不代表真实客户端已连接。
+以下为 Windows 原生 WPF 窗口的示例数据渲染，不展示真实账号或聊天。
 
 ![Windows 原生窗口 · 简体中文 / 浅色](docs/previews-windows/main-zh-light.png)
 

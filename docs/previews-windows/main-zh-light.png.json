@@ -1,15 +1,1 @@
-{
-  "native": true,
-  "ui": "WPF",
-  "webView": false,
-  "hostStarted": false,
-  "messagesSent": 0,
-  "fixtureChats": 3,
-  "renderedRoot": "content",
-  "width": 1420,
-  "height": 960,
-  "desktopResolutionIndependent": true,
-  "privatePreferencesLoaded": false,
-  "language": "zh",
-  "theme": "system"
-}
+{"native":true,"ui":"WPF","webView":false,"hostStarted":false,"messagesSent":0,"fixtureChats":3,"renderedRoot":"content","view":"home","width":2760,"height":1800,"logicalWidth":1380,"logicalHeight":900,"scale":2,"desktopResolutionIndependent":true,"privatePreferencesLoaded":false,"language":"zh","theme":"light"}

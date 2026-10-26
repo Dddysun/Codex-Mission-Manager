@@ -25,6 +25,7 @@ from control_policy import (active_turn, blocked_input, checkpoint_matches, deci
                             quota_interrupted, quota_usable, same_goal, valid_goal)
 
 ROOT = Path(__file__).resolve().parent
+IS_WINDOWS = os.name == 'nt'
 
 
 def fingerprint(value):
@@ -452,10 +453,10 @@ async def identity_for(rpc, store=None):
 def server_command(config):
     if config.get("server_command"):
         return config["server_command"]
-    if os.name == 'nt':
+    if IS_WINDOWS:
         from compatibility import windows_client
-        client = windows_client()
-        executable = (client or {}).get('cli') or shutil.which('codex.exe')
+        client = windows_client(force=True)
+        executable = (client or {}).get('cli')
         if not executable:
             raise ValueError('Open the installed ChatGPT desktop app or install the official Codex CLI')
     else:

@@ -7,17 +7,149 @@ import os
 from pathlib import Path
 import sqlite3
 import tempfile
+import time
 import unittest
 from unittest import mock
 
 import platform_support
 from platform_support import lock_file, lock_held, open_lock, process_alive, python_command, sqlite_ro_uri
-from compatibility import WINDOWS_PROFILES, windows_compatibility
+import compatibility
+from compatibility import WINDOWS_PROFILES, windows_compatibility, verified_windows_cli
+import guardian
 from desktop import DesktopAdapter, DesktopError
 from catalog import entry
 from plans import get_plan, set_plan
 from test_guardian import sample
 import test_ui
+
+
+class WindowsCliTrustTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name).resolve()
+        self.package = self.root/'package'
+        self.bundled = self.package/'app/resources/codex.exe'
+        self.bundled.parent.mkdir(parents=True)
+        self.bundled.write_bytes(b'official package bytes')
+        self.local = self.root/'local'
+        self.cache = self.local/'OpenAI/Codex/bin'
+        self.cache.mkdir(parents=True)
+        env = mock.patch.dict(os.environ,{'LOCALAPPDATA':str(self.local)})
+        env.start()
+        self.addCleanup(env.stop)
+
+    def cached(self,name='0123456789abcdef',data=None):
+        directory = self.cache/name
+        directory.mkdir(parents=True,exist_ok=True)
+        path = directory/'codex.exe'
+        path.write_bytes(self.bundled.read_bytes() if data is None else data)
+        return path
+
+    def test_client_cache_requires_exact_current_package_bytes(self):
+        cached = self.cached()
+        result = verified_windows_cli(self.package,self.cache)
+        self.assertEqual(result['cli'],str(cached))
+        self.assertEqual(result['cli_source'],'client-cache-sha256-match')
+        self.assertEqual(result['bundled_cli'],str(self.bundled))
+
+    def test_hash_mismatch_does_not_execute_a_plausibly_named_cache_file(self):
+        cached = self.cached(data=b'not the official bytes')
+        result = verified_windows_cli(self.package,self.cache)
+        self.assertNotEqual(result['cli'],str(cached))
+        self.assertEqual(result['cli'],str(self.bundled))
+        self.assertEqual(result['cli_source'],'registered-package')
+
+    def test_cache_enumeration_cannot_escape_its_fixed_root(self):
+        outside = self.root/'outside'/'fedcba9876543210'
+        outside.mkdir(parents=True)
+        (outside/'codex.exe').write_bytes(self.bundled.read_bytes())
+        with mock.patch.object(Path,'iterdir',return_value=iter([outside])):
+            result = verified_windows_cli(self.package,self.cache)
+        self.assertEqual(result['cli'],str(self.bundled))
+
+    def test_unreadable_package_never_authenticates_a_cache_copy(self):
+        self.cached()
+        with mock.patch('compatibility._sha256_file',side_effect=PermissionError('fixture denied')):
+            self.assertIsNone(verified_windows_cli(self.package,self.cache))
+
+    def test_changed_package_bytes_invalidate_the_previous_cache_version(self):
+        old = self.cached()
+        self.assertEqual(verified_windows_cli(self.package,self.cache)['cli'],str(old))
+        self.bundled.write_bytes(b'new official package!!')
+        self.assertEqual(verified_windows_cli(self.package,self.cache)['cli'],str(self.bundled))
+        current = self.cached('fedcba9876543210')
+        self.assertEqual(verified_windows_cli(self.package,self.cache)['cli'],str(current))
+
+    def test_metadata_ttl_does_not_cache_a_mutable_cli_trust_decision(self):
+        cached = self.cached()
+        metadata={'name':'OpenAI.Codex','version':'fixture-current','install_location':str(self.package),
+                  'publisher':compatibility.WINDOWS_PUBLISHER}
+        with mock.patch('compatibility._windows_cache',(time.monotonic(),metadata)), \
+                mock.patch('compatibility.subprocess.run') as discovery:
+            first = compatibility.windows_client()
+            info = cached.stat()
+            cached.write_bytes(b'x'*info.st_size)
+            os.utime(cached,ns=(info.st_atime_ns,info.st_mtime_ns))
+            second = compatibility.windows_client()
+        self.assertEqual(first['cli'],str(cached))
+        self.assertEqual(second['cli'],str(self.bundled))
+        discovery.assert_not_called()
+
+    def test_force_discovery_does_not_reuse_a_previous_package_version(self):
+        old = self.cached()
+        package2 = self.root/'package-v2'
+        bundled2 = package2/'app/resources/codex.exe'
+        bundled2.parent.mkdir(parents=True)
+        bundled2.write_bytes(b'new package version bytes')
+        current = self.cached('fedcba9876543210',data=bundled2.read_bytes())
+        def result(version,path):
+            value={'Name':'OpenAI.Codex','Version':version,'InstallLocation':str(path),
+                   'Publisher':compatibility.WINDOWS_PUBLISHER,'PackageFamilyName':'fixture'}
+            return mock.Mock(returncode=0,stdout=json.dumps(value).encode('utf-8'))
+        with mock.patch('compatibility._windows_cache',None), \
+                mock.patch('compatibility.subprocess.run',side_effect=[result('1.0',self.package),result('2.0',package2)]) as discovery:
+            first = compatibility.windows_client(force=True)
+            second = compatibility.windows_client(force=True)
+        self.assertEqual(first['version'],'1.0')
+        self.assertEqual(first['cli'],str(old))
+        self.assertEqual(second['version'],'2.0')
+        self.assertEqual(second['cli'],str(current))
+        self.assertEqual(discovery.call_count,2)
+
+    def test_display_only_compatibility_lookup_does_not_hash_cli_files(self):
+        metadata={'name':'OpenAI.Codex','version':'fixture-current','install_location':str(self.package),
+                  'publisher':compatibility.WINDOWS_PUBLISHER}
+        with mock.patch('compatibility._windows_cache',(time.monotonic(),metadata)), \
+                mock.patch('compatibility.os.name','nt'), \
+                mock.patch('compatibility.verified_windows_cli',side_effect=AssertionError('display must not hash')):
+            result = compatibility.desktop_compatibility()
+        self.assertEqual(result['version'],'fixture-current')
+        self.assertFalse(result['supported'])
+
+    def test_windows_default_has_no_unverified_path_fallback(self):
+        with mock.patch('guardian.IS_WINDOWS',True), \
+                mock.patch('compatibility.windows_client',return_value={'cli':None}) as client, \
+                mock.patch('guardian.shutil.which',return_value='untrusted-codex.exe') as which:
+            with self.assertRaises(ValueError):
+                guardian.server_command({'state_dir':str(self.root/'state')})
+        client.assert_called_once_with(force=True)
+        which.assert_not_called()
+
+    def test_windows_start_requests_fresh_metadata_and_hash_selection(self):
+        cached = self.cached()
+        with mock.patch('guardian.IS_WINDOWS',True), \
+                mock.patch('compatibility.windows_client',return_value={'cli':str(cached)}) as client:
+            command = guardian.server_command({'state_dir':str(self.root/'state')})
+        client.assert_called_once_with(force=True)
+        self.assertEqual(command[0],str(cached))
+        self.assertIn('app-server',command)
+
+    def test_explicit_server_command_keeps_existing_user_configuration_semantics(self):
+        explicit=['fixture-approved-server','stdio']
+        with mock.patch('guardian.IS_WINDOWS',True), mock.patch('compatibility.windows_client') as client:
+            self.assertEqual(guardian.server_command({'server_command':explicit}),explicit)
+        client.assert_not_called()
 
 
 class PlatformSafetyTests(unittest.TestCase):
@@ -69,6 +201,13 @@ class PlatformSafetyTests(unittest.TestCase):
             self.assertFalse(result['supported'])
             self.assertEqual(result['status'],'update_required')
         self.assertEqual(windows_compatibility(None)['status'],'client_missing')
+
+    def test_exact_windows_profile_keeps_successor_blocked_and_live_claim_false(self):
+        current = windows_compatibility({'version':'26.1021.3705.0'})
+        self.assertTrue(current['supported'])
+        self.assertFalse(current['live_control_tested'])
+        self.assertEqual(current['profile'],{'snapshot':11,'start_turn':2,'interrupt_turn':4})
+        self.assertFalse(windows_compatibility({'version':'26.1021.3706.0'})['supported'])
 
 
 class WindowsMonitorTests(unittest.IsolatedAsyncioTestCase):
