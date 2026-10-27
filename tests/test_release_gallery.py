@@ -194,6 +194,7 @@ class ReleaseGalleryTests(unittest.TestCase):
             path.write_text(json.dumps(original))
         self.arguments[self.arguments.index('--version') + 1] = '0.3.2'
         self.arguments[self.arguments.index('--tag') + 1] = 'v0.3.2-preview.1'
+        self.config['versions'].pop('0.3.2', None)
         with self.assertRaisesRegex(gallery.GalleryError, 'Explicit gallery configuration'): self.run_gallery()
 
     def test_png_signature_crc_dimensions_and_receipt_dimensions_are_checked(self):

@@ -276,6 +276,24 @@ jobs:
             $report = Get-Content -LiteralPath $receipt -Raw -Encoding UTF8 | ConvertFrom-Json
             if (!$report.checksPassed -or $report.hostStarted -or $report.messagesSent -ne 0 -or $report.systemTrayCreated) { throw 'Offline editor/lifecycle contract failed.' }
           }
+      - name: Verify native text-input layout and clipping regression
+        run: |
+          $exe = "$env:RUNNER_TEMP\mission-windows\app\CodexMissionManager.exe"
+          $receipt = "$env:RUNNER_TEMP\native-textbox-layout-windows-x64.json"
+          $comparison = "$env:RUNNER_TEMP\textbox-layout-comparison-windows-x64.png"
+          $process = Start-Process -FilePath $exe -ArgumentList @('--textbox-layout-self-test', ('"'+$receipt+'"'), '--image', ('"'+$comparison+'"')) -Wait -PassThru
+          if ($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $receipt -PathType Leaf) -or !(Test-Path -LiteralPath $comparison -PathType Leaf)) { throw 'Native text-input layout check failed or produced no evidence.' }
+          $report = Get-Content -LiteralPath $receipt -Raw -Encoding UTF8 | ConvertFrom-Json
+          foreach ($key in @('native', 'checksPassed', 'baselineRegressionReproduced', 'fixedAllTextFullyVisible', 'singlePaddingApplied', 'multilineScrollingPreserved', 'searchTextFullyVisible')) {
+            if ($report.$key -ne $true) { throw ('Native text-input layout contract failed: '+$key) }
+          }
+          foreach ($key in @('hostStarted', 'privatePreferencesLoaded', 'dpiSweepVerified', 'systemDpiSettingsChanged', 'systemTextSizeSettingsChanged')) {
+            if ($report.$key -ne $false) { throw ('Text-input checks must stay offline and must not change system settings: '+$key) }
+          }
+          if ($report.messagesSent -ne 0) { throw 'Text-input checks must not send chat messages.' }
+          foreach ($factor in @(1, 1.25, 1.5, 2)) {
+            if (@($report.layoutScaleFactors) -notcontains $factor -or @($report.textSizeStressFactors) -notcontains $factor) { throw 'The text-input stress matrix is incomplete.' }
+          }
       - name: Render isolated native pages and accent themes
         run: |
           $exe = "$env:RUNNER_TEMP\mission-windows\app\CodexMissionManager.exe"
@@ -288,6 +306,7 @@ jobs:
             }
           }
           $views += ,@('settings', 'zh', 'light', 'native-state', 'blue')
+          $views += ,@('rules', 'zh', 'light', 'native-state', 'blue')
           $views += ,@('rules', 'en', 'dark', 'native-state', 'purple')
           $views += ,@('tray', 'en', 'dark', 'native-state', 'yellow')
           $views += ,@('home', 'zh', 'light', 'native-pro-weekly', 'green')
@@ -319,7 +338,7 @@ jobs:
           Copy-Item -LiteralPath $portable[0].FullName -Destination $destination
           Copy-Item -LiteralPath "$build\build-manifest.json" -Destination "$destination\build-manifest-windows-x64.json"
           Copy-Item -LiteralPath "$env:RUNNER_TEMP\windows-tests\windows-test-results.json" -Destination "$destination\windows-smoke-test-results.json"
-          foreach ($name in @('native-self-test-windows-x64.json', 'native-editor-windows-x64.json', 'native-lifecycle-windows-x64.json', 'native-ui-windows-x64.json')) {
+          foreach ($name in @('native-self-test-windows-x64.json', 'native-editor-windows-x64.json', 'native-lifecycle-windows-x64.json', 'native-textbox-layout-windows-x64.json', 'native-ui-windows-x64.json')) {
             Copy-Item -LiteralPath (Join-Path $env:RUNNER_TEMP $name) -Destination $destination
           }
           $galleryConfig = Get-Content -LiteralPath '.\docs\release-gallery.json' -Raw -Encoding UTF8 | ConvertFrom-Json
@@ -352,6 +371,7 @@ jobs:
             ${{ runner.temp }}/windows-tests/*.log
             ${{ runner.temp }}/windows-ui/*
             ${{ runner.temp }}/native-*-windows-x64.json
+            ${{ runner.temp }}/textbox-layout-comparison-windows-x64.png
           if-no-files-found: ignore
           retention-days: 7
 
@@ -395,7 +415,7 @@ jobs:
               'Codex-Mission-Manager-' + version + '-windows-x64-setup.exe',
               'Codex-Mission-Manager-' + version + '-windows-x64-preview.zip',
               'build-manifest-macos-arm64.json', 'build-manifest-windows-x64.json',
-              'verification-macos-arm64.json', 'native-lifecycle-macos-arm64.json', 'windows-smoke-test-results.json',
+              'verification-macos-arm64.json', 'native-lifecycle-macos-arm64.json', 'native-textbox-layout-windows-x64.json', 'windows-smoke-test-results.json',
           ]
           if any(not (root / name).is_file() for name in expected):
               raise SystemExit('Both platform packages and verification reports are required')

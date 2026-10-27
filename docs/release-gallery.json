@@ -40,6 +40,46 @@
           "highlight": false, "caption": {"en": "Appearance, background operation and permissions", "zh": "外观、后台运行与权限设置"}
         }
       ]
+    },
+    "0.3.2": {
+      "images": [
+        {
+          "id": "rules-light", "platform": "windows", "kind": "rules", "view": "rules",
+          "file": "rules-zh-light-native-state-blue.png", "receipt": "rules-zh-light-native-state-blue.png.json",
+          "dimensions": [[2760, 1800]], "accent": "blue", "theme": "light", "language": "zh",
+          "highlight": true, "caption": {"en": "Readable numeric fields in Rules · Chinese / Light", "zh": "规则数值完整显示 · 中文／浅色"}
+        },
+        {
+          "id": "rules-dark", "platform": "windows", "kind": "rules", "view": "rules",
+          "file": "rules-en-dark-native-state-purple.png", "receipt": "rules-en-dark-native-state-purple.png.json",
+          "dimensions": [[2760, 1800]], "accent": "purple", "theme": "dark", "language": "en",
+          "highlight": true, "caption": {"en": "Readable numeric fields in Rules · English / Dark", "zh": "规则数值完整显示 · 英文／深色"}
+        },
+        {
+          "id": "main", "platform": "windows", "kind": "home", "view": "home",
+          "file": "home-zh-light-native-state-green.png", "receipt": "home-zh-light-native-state-green.png.json",
+          "dimensions": [[2760, 1800]], "accent": "green", "theme": "light", "language": "zh",
+          "highlight": false, "caption": {"en": "Windows Codex chats and task controls", "zh": "Windows Codex 聊天与任务控制"}
+        },
+        {
+          "id": "main", "platform": "macos", "kind": "home", "view": "home",
+          "file": "green-light.png", "receipt": "green-light.json",
+          "dimensions": [[1380, 900], [2760, 1800]], "accent": "green", "theme": "light", "language": "zh",
+          "highlight": false, "caption": {"en": "Mac Codex chats and task controls", "zh": "Mac Codex 聊天与任务控制"}
+        },
+        {
+          "id": "settings", "platform": "windows", "kind": "settings", "view": "settings",
+          "file": "settings-zh-light-native-state-blue.png", "receipt": "settings-zh-light-native-state-blue.png.json",
+          "dimensions": [[1600, 2200]], "accent": "blue", "theme": "light", "language": "zh",
+          "highlight": false, "caption": {"en": "Appearance, background operation and permissions", "zh": "外观、后台运行与权限设置"}
+        },
+        {
+          "id": "menu", "platform": "macos", "kind": "menu", "view": "menu",
+          "file": "menu-en-dark.png", "receipt": "menu-en-dark.json",
+          "dimensions": [[400, 570], [800, 1140]], "accent": "green", "theme": "dark", "language": "en",
+          "highlight": false, "caption": {"en": "Mac menu with the fixed Quit action", "zh": "Mac 菜单及固定退出入口"}
+        }
+      ]
     }
   }
 }

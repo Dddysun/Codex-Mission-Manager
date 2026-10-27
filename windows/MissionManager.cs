@@ -526,15 +526,20 @@ namespace CodexMissionManager
                 Stroke = stroke, StrokeThickness = 1.5, StrokeStartLineCap = PenLineCap.Round, StrokeEndLineCap = PenLineCap.Round,
                 StrokeLineJoin = PenLineJoin.Round, Stretch = Stretch.Uniform, Fill = Brushes.Transparent, VerticalAlignment = VerticalAlignment.Center };
         }
-        public void StyleTextBox(TextBox box)
+        public void StyleTextBox(TextBox box, bool legacyPaddingForFixture = false)
         {
+            if (legacyPaddingForFixture && !fixtureMode) throw new InvalidOperationException("Legacy templates are available only to offline layout checks.");
             box.Background = ColorBrush(dark ? "#1E1E1E" : "#FFFFFF"); box.Foreground = foreground; box.BorderBrush = border;
             var template = new ControlTemplate(typeof(TextBox));
             var frame = new FrameworkElementFactory(typeof(Border), "InputFrame");
             frame.SetValue(Border.CornerRadiusProperty, new CornerRadius(6)); frame.SetValue(Border.BorderThicknessProperty, new Thickness(1));
             frame.SetBinding(Border.BackgroundProperty, ParentBinding("Background")); frame.SetBinding(Border.BorderBrushProperty, ParentBinding("BorderBrush"));
             var scroll = new FrameworkElementFactory(typeof(ScrollViewer), "PART_ContentHost");
-            scroll.SetBinding(FrameworkElement.MarginProperty, ParentBinding("Padding")); frame.AppendChild(scroll); template.VisualTree = frame;
+            // TextBoxBase already forwards Padding to PART_ContentHost.Padding.
+            // Binding the same value to Margin subtracts it a second time and
+            // clips a 13-DIP line inside a 30-DIP single-line input.
+            if (legacyPaddingForFixture) scroll.SetBinding(FrameworkElement.MarginProperty, ParentBinding("Padding"));
+            frame.AppendChild(scroll); template.VisualTree = frame;
             var focused = new Trigger { Property = UIElement.IsKeyboardFocusWithinProperty, Value = true };
             focused.Setters.Add(new Setter(Border.BorderBrushProperty, Tint(accent, 0.6), "InputFrame")); template.Triggers.Add(focused);
             box.Template = template;
@@ -701,7 +706,7 @@ namespace CodexMissionManager
             filterBox.SelectedIndex = statusFilter == "waiting" ? 1 : statusFilter == "scheduled" ? 2 : statusFilter == "attention" ? 3 : 0;
             filterBox.SelectionChanged += delegate { statusFilter = filterBox.SelectedIndex == 1 ? "waiting" : filterBox.SelectedIndex == 2 ? "scheduled" : filterBox.SelectedIndex == 3 ? "attention" : "all"; RenderChats(); }; filterLine.Children.Add(filterBox); filters.Children.Add(filterLine);
             var searchFrame = new Grid { Width = 280, HorizontalAlignment = HorizontalAlignment.Right }; Grid.SetColumn(searchFrame, 1);
-            searchBox = new TextBox { Text = search, Height = 22, Padding = new Thickness(7, 2, 7, 2), FontSize = 12 }; StyleTextBox(searchBox); searchFrame.Children.Add(searchBox);
+            searchBox = MakeSearchInput(search); searchFrame.Children.Add(searchBox);
             var placeholder = Text(T("搜索聊天名称或 ID", "Search chats or IDs"), 12); placeholder.Foreground = secondary; placeholder.Margin = new Thickness(7, 0, 0, 0); placeholder.VerticalAlignment = VerticalAlignment.Center; placeholder.IsHitTestVisible = false; placeholder.Visibility = String.IsNullOrEmpty(search) ? Visibility.Visible : Visibility.Collapsed; searchFrame.Children.Add(placeholder);
             searchBox.TextChanged += delegate { search = searchBox.Text; placeholder.Visibility = String.IsNullOrEmpty(search) ? Visibility.Visible : Visibility.Collapsed; RenderChats(); }; filters.Children.Add(searchFrame); Grid.SetRow(filters, 2); pageRoot.Children.Add(filters);
             var columns = new Grid { Margin = new Thickness(18, 18, 18, 0) }; columns.ColumnDefinitions.Add(new ColumnDefinition()); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) }); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(360) });
@@ -1005,6 +1010,27 @@ namespace CodexMissionManager
                 {"immediate_failed",new[]{"立刻执行未发送","Immediate delivery failed"}}, {"rules_updated",new[]{"运行规则已更新","Operating rules updated"}} };
             string[] label; return labels.TryGetValue(value, out label) ? T(label[0],label[1]) : value;
         }
+        TextBox MakeRuleInput(string value, double fontSize = 13, bool legacyPaddingForFixture = false)
+        {
+            var input = new TextBox { Text = value, FontFamily = FontFamily, FontSize = fontSize,
+                Padding = new Thickness(8, 4, 8, 4), MaxLength = 4, VerticalContentAlignment = VerticalAlignment.Center };
+            // Auto height lets WPF's actual font line metrics raise the natural
+            // desired height. Leave two DIPs for glyph overhang/rounding in
+            // addition to the template's one-DIP border on each side.
+            if (legacyPaddingForFixture) input.Height = 30;
+            else input.MinHeight = SingleLineMinimumHeight(input, 30);
+            StyleTextBox(input, legacyPaddingForFixture); return input;
+        }
+        static double SingleLineMinimumHeight(TextBox input, double floor)
+        { return Math.Max(floor, Math.Ceiling(input.FontSize * input.FontFamily.LineSpacing) + input.Padding.Top + input.Padding.Bottom + 2 + 2); }
+        TextBox MakeSearchInput(string value, double fontSize = 12, bool legacyPaddingForFixture = false)
+        {
+            var input = new TextBox { Text = value, FontFamily = FontFamily, FontSize = fontSize,
+                Padding = new Thickness(7, 2, 7, 2), VerticalContentAlignment = VerticalAlignment.Center };
+            if (legacyPaddingForFixture) input.Height = 22;
+            else input.MinHeight = SingleLineMinimumHeight(input, 22);
+            StyleTextBox(input, legacyPaddingForFixture); return input;
+        }
         string[] RuleLabels()
         { return new[] { T("暂停阈值", "Pause threshold"), T("恢复阈值", "Resume threshold"), T("正常采集间隔", "Normal collection interval"), T("临近阈值采集间隔", "Near-limit collection interval"), T("恢复复核时长", "Recovery confirmation"), T("界面刷新间隔", "Interface refresh interval") }; }
         void LoadRulesDraft()
@@ -1026,7 +1052,7 @@ namespace CodexMissionManager
                 string field = RulesPolicy.Fields[i]; var fieldBounds = Json.Child(bounds, field); int lower = Json.Integer(fieldBounds, "min", RulesPolicy.Minimums[i]), upper = Json.Integer(fieldBounds, "max", RulesPolicy.Maximums[i]);
                 var row = new Grid { Margin = new Thickness(0, 0, 0, 14) }; row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(148) });
                 var label = Text(labels[i], 13); label.Margin = new Thickness(0, 0, 12, 0); label.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(label);
-                var input = new TextBox { Text = rulesDraft[field], FontSize = 13, Height = 30, Padding = new Thickness(8, 4, 8, 4), MaxLength = 4, VerticalContentAlignment = VerticalAlignment.Center }; StyleTextBox(input); Grid.SetColumn(input, 1); row.Children.Add(input); ruleInputs[field] = input;
+                var input = MakeRuleInput(rulesDraft[field]); Grid.SetColumn(input, 1); row.Children.Add(input); ruleInputs[field] = input;
                 input.TextChanged += delegate { if (!rulesUpdating) { rulesDraft[field] = input.Text; rulesDirty = true; rulesError = ""; RefreshRulesPresentation(); } };
                 var range = Text((i < 2 ? "%  ·  " : T("秒  ·  ", "sec  ·  ")) + lower + "–" + upper, 11); range.Foreground = secondary; range.Margin = new Thickness(12, 0, 0, 0); range.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(range, 2); row.Children.Add(range); editor.Children.Add(row);
             }
@@ -1524,6 +1550,131 @@ namespace CodexMissionManager
             currentView = view == "activity" ? "events" : view == "rules" ? "rules" : "tasks"; BuildContent(); RenderSnapshot();
             var surface = Content as FrameworkElement; Content = null; return surface;
         }
+        static FrameworkElement FindLayoutElement(DependencyObject root, Func<FrameworkElement, bool> predicate)
+        {
+            var element = root as FrameworkElement; if (element != null && predicate(element)) return element;
+            for (int index = 0; index < VisualTreeHelper.GetChildrenCount(root); index++)
+            { var found = FindLayoutElement(VisualTreeHelper.GetChild(root, index), predicate); if (found != null) return found; }
+            return null;
+        }
+        static object RectangleReport(Rect value)
+        { return value.IsEmpty ? null : Json.Values("x", value.X, "top", value.Top, "width", value.Width, "height", value.Height, "bottom", value.Bottom); }
+        static object ThicknessReport(Thickness value)
+        { return Json.Values("left", value.Left, "top", value.Top, "right", value.Right, "bottom", value.Bottom); }
+        static bool FitsVertically(Rect text, Rect viewport)
+        { return !text.IsEmpty && !viewport.IsEmpty && text.Height > 0 && text.Top >= viewport.Top - 0.5 && text.Bottom <= viewport.Bottom + 0.5; }
+        static void RenderLayoutElement(FrameworkElement view)
+        {
+            view.UpdateLayout();
+            var bitmap = new RenderTargetBitmap(Math.Max(1, (int)Math.Ceiling(view.ActualWidth)), Math.Max(1, (int)Math.Ceiling(view.ActualHeight)), 96, 96, PixelFormats.Pbgra32);
+            bitmap.Render(view);
+        }
+        static Dictionary<string, object> MeasureTextBoxLayout(TextBox input, int characterIndex = 0)
+        {
+            input.ApplyTemplate(); input.UpdateLayout(); RenderLayoutElement(input);
+            var host = input.Template.FindName("PART_ContentHost", input) as ScrollViewer;
+            if (host == null) throw new InvalidOperationException("Native TextBox content host is unavailable.");
+            var presenter = FindLayoutElement(host, delegate(FrameworkElement element) { return element is ScrollContentPresenter; });
+            var textView = FindLayoutElement(host, delegate(FrameworkElement element) { return element.GetType().Name == "TextBoxView"; });
+            if (presenter == null || textView == null) throw new InvalidOperationException("Native TextBox visual parts are unavailable.");
+            Rect viewport = presenter.TransformToAncestor(input).TransformBounds(new Rect(new Point(), presenter.RenderSize));
+            Rect character = input.GetRectFromCharacterIndex(Math.Max(0, Math.Min(input.Text.Length - 1, characterIndex)), false);
+            Rect ink = VisualTreeHelper.GetDescendantBounds(textView);
+            if (!ink.IsEmpty) ink = textView.TransformToAncestor(input).TransformBounds(ink);
+            bool characterVisible = FitsVertically(character, viewport), inkVisible = !ink.IsEmpty && FitsVertically(ink, viewport);
+            return Json.Values("fontFamily", input.FontFamily.Source, "fontSize", input.FontSize, "controlHeight", input.ActualHeight,
+                "hostMargin", ThicknessReport(host.Margin), "hostPadding", ThicknessReport(host.Padding),
+                "hostViewportHeight", host.ViewportHeight, "contentViewport", RectangleReport(viewport),
+                "textViewHeight", textView.ActualHeight, "characterLineHeight", character.IsEmpty ? 0 : character.Height,
+                "characterRect", RectangleReport(character), "glyphInkBounds", RectangleReport(ink),
+                "characterFullyVisible", characterVisible, "glyphInkFullyVisible", inkVisible,
+                "textFullyVisible", characterVisible && inkVisible,
+                "singlePadding", host.Margin == new Thickness(0) && host.Padding == input.Padding);
+        }
+        static void ArrangeLayoutFixture(System.Windows.Interop.HwndSource source, FrameworkElement view)
+        {
+            source.RootVisual = view; view.Measure(new Size(1500, 1000));
+            view.Arrange(new Rect(0, 0, 1500, 1000)); view.UpdateLayout();
+        }
+        public Dictionary<string, object> RunTextBoxLayoutSelfTest(string comparisonImage)
+        {
+            if (!fixtureMode) throw new InvalidOperationException("TextBox layout checks require isolated fixture mode.");
+            double[] factors = { 1, 1.25, 1.5, 2 }; var measurements = new List<object>();
+            bool fixedVisible = true, searchVisible = true, singlePadding = true, multilineScrolling = true, baselineReproduced = false;
+            var parameters = new System.Windows.Interop.HwndSourceParameters("Mission Manager offline TextBox layout") {
+                WindowStyle = unchecked((int)0x80000000), PositionX = -20000, PositionY = -20000, Width = 1500, Height = 1000 };
+            double actualDpiX = 0, actualDpiY = 0;
+            using (var source = new System.Windows.Interop.HwndSource(parameters))
+            {
+                actualDpiX = source.CompositionTarget.TransformToDevice.M11; actualDpiY = source.CompositionTarget.TransformToDevice.M22;
+                foreach (string language in new[] { "zh", "en" }) foreach (string theme in new[] { "light", "dark" })
+                {
+                    preferences.Language = language; preferences.Theme = theme; ApplyTheme();
+                    foreach (double layoutScale in factors) foreach (double textSize in factors)
+                    foreach (string inputKind in new[] { "rules", "search" })
+                    foreach (string text in new[] { "10", language == "zh" ? "中文90" : "Ag09" })
+                    {
+                        var old = inputKind == "rules" ? MakeRuleInput(text, 13 * textSize, true) : MakeSearchInput(text, 12 * textSize, true);
+                        var repaired = inputKind == "rules" ? MakeRuleInput(text, 13 * textSize) : MakeSearchInput(text, 12 * textSize);
+                        double inputWidth = inputKind == "rules" ? 100 : 280;
+                        var row = new Grid { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top,
+                            Margin = new Thickness(20), LayoutTransform = new ScaleTransform(layoutScale, layoutScale) };
+                        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(inputWidth) }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(inputWidth) });
+                        old.VerticalAlignment = VerticalAlignment.Top; repaired.VerticalAlignment = VerticalAlignment.Top;
+                        row.Children.Add(old); Grid.SetColumn(repaired, 2); row.Children.Add(repaired);
+                        var canvas = new Grid { Background = background }; canvas.Children.Add(row); ArrangeLayoutFixture(source, canvas);
+                        var before = MeasureTextBoxLayout(old); var after = MeasureTextBoxLayout(repaired);
+                        bool visible = Json.Bool(after, "textFullyVisible"); fixedVisible = fixedVisible && visible; singlePadding = singlePadding && Json.Bool(after, "singlePadding");
+                        if (inputKind == "search") searchVisible = searchVisible && visible;
+                        if (inputKind == "rules" && layoutScale == 1 && textSize == 1 && text == "10" && !Json.Bool(before, "textFullyVisible") && visible
+                                && Math.Abs(Json.Number(before, "controlHeight") - Json.Number(after, "controlHeight")) < 0.1
+                                && Math.Abs(Json.Number(before, "characterLineHeight") - Json.Number(after, "characterLineHeight")) < 0.1) baselineReproduced = true;
+                        measurements.Add(Json.Values("inputKind", inputKind, "language", language, "theme", theme, "layoutScale", layoutScale, "textSizeStress", textSize, "sample", text, "original", before, "fixed", after));
+                    }
+                    var multiline = new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Width = 320, Height = 104,
+                        FontFamily = FontFamily, FontSize = 13, Padding = new Thickness(9), VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                        Text = String.Join("\n", Enumerable.Repeat(language == "zh" ? "中文指令 Ag09 10" : "Command Ag09 10", 12)) };
+                    StyleTextBox(multiline); var multiCanvas = new Grid { HorizontalAlignment = HorizontalAlignment.Left, VerticalAlignment = VerticalAlignment.Top };
+                    multiCanvas.Children.Add(multiline); ArrangeLayoutFixture(source, multiCanvas);
+                    multiline.ScrollToEnd(); multiline.UpdateLayout(); RenderLayoutElement(multiline); multiline.ScrollToEnd(); multiline.UpdateLayout();
+                    var lastLine = MeasureTextBoxLayout(multiline, multiline.Text.Length - 1);
+                    multilineScrolling = multilineScrolling && multiline.AcceptsReturn && multiline.VerticalScrollBarVisibility == ScrollBarVisibility.Auto
+                        && multiline.ExtentHeight > multiline.ViewportHeight && Json.Bool(lastLine, "characterFullyVisible");
+                }
+                if (!String.IsNullOrEmpty(comparisonImage))
+                {
+                    preferences.Language = "en"; preferences.Theme = "light"; preferences.Accent = "blue"; ApplyTheme();
+                    var comparison = new StackPanel { Width = 620, Margin = new Thickness(24) };
+                    comparison.Children.Add(Text("Native WPF text layout: original / fixed", 20, true));
+                    comparison.Children.Add(Text("Same .NET process, font and 30-DIP base control size. Actual controls, not edited screenshots.", 12));
+                    foreach (string sample in new[] { "10", "300", "中文90" })
+                    {
+                        var line = new Grid { Margin = new Thickness(0, 12, 0, 8) };
+                        line.ColumnDefinitions.Add(new ColumnDefinition()); line.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(30) }); line.ColumnDefinitions.Add(new ColumnDefinition());
+                        var before = new StackPanel(); before.Children.Add(Text("Original: " + sample, 13)); before.Children.Add(MakeRuleInput(sample, 13, true));
+                        var after = new StackPanel(); after.Children.Add(Text("Fixed: " + sample, 13)); after.Children.Add(MakeRuleInput(sample));
+                        line.Children.Add(before); Grid.SetColumn(after, 2); line.Children.Add(after); comparison.Children.Add(line);
+                    }
+                    var frame = new Border { Background = background, Child = comparison, Width = 680, Height = 420 };
+                    ArrangeLayoutFixture(source, frame); frame.Measure(new Size(680, 420)); frame.Arrange(new Rect(0, 0, 680, 420)); frame.UpdateLayout();
+                    var bitmap = new RenderTargetBitmap(1360, 840, 192, 192, PixelFormats.Pbgra32); bitmap.Render(frame);
+                    var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
+                    string path = Path.GetFullPath(comparisonImage); Directory.CreateDirectory(Path.GetDirectoryName(path)); using (var file = File.Create(path)) encoder.Save(file);
+                }
+                source.RootVisual = null;
+            }
+            bool passed = baselineReproduced && fixedVisible && searchVisible && singlePadding && multilineScrolling;
+            return Json.Values("native", true, "ui", "WPF", "checksPassed", passed, "baselineRegressionReproduced", baselineReproduced,
+                "fixedAllTextFullyVisible", fixedVisible, "singlePaddingApplied", singlePadding, "multilineScrollingPreserved", multilineScrolling,
+                "searchTextFullyVisible", searchVisible,
+                "hostStarted", false, "messagesSent", 0, "privatePreferencesLoaded", false, "layoutScaleFactors", factors, "textSizeStressFactors", factors,
+                "languages", new[] { "zh", "en" }, "themes", new[] { "light", "dark" }, "caseCount", measurements.Count,
+                "presentationDpiScale", new[] { actualDpiX, actualDpiY }, "dpiSweepVerified", false, "systemDpiSettingsChanged", false, "systemTextSizeSettingsChanged", false,
+                "scaleCoverage", "WPF layout transforms and explicit font-size stress; no change to actual Windows monitor DPI or Accessibility settings.",
+                "frameworkRelease", Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full", "Release", null),
+                "wpfFileVersion", FileVersionInfo.GetVersionInfo(typeof(TextBox).Assembly.Location).FileVersion,
+                "comparisonImage", String.IsNullOrEmpty(comparisonImage) ? null : Path.GetFileName(comparisonImage), "measurements", measurements);
+        }
         public Dictionary<string, object> RunRulesEditorSelfTest()
         {
             if (!fixtureMode) throw new InvalidOperationException("Editor checks require isolated fixture mode.");
@@ -1962,6 +2113,20 @@ namespace CodexMissionManager
                     "hostStarted", false, "messagesSent", 0, "cacheRefreshSeconds", 5, "localRevocationChecks", revocationChecks, "startupDiagnosticFallbackChecks", startupChecks, "themePaletteChecks", paletteChecks, "rulesValidationChecks", rulesChecks));
                 if (args.Length > 1) File.WriteAllText(args[1], result, new UTF8Encoding(false));
                 Console.WriteLine(result); return revocationChecks && startupChecks && paletteChecks && rulesChecks ? 0 : 1;
+            }
+            if (args.Length > 0 && args[0] == "--textbox-layout-self-test")
+            {
+                if (args.Length != 2 && (args.Length != 4 || args[2] != "--image")) return 1;
+                try
+                {
+                    var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                    var fixture = Json.Values("healthy", true, "stale", false, "running", true, "tasks", new object[0]);
+                    var window = new MissionWindow(true, fixture, "en", "light");
+                    var result = window.RunTextBoxLayoutSelfTest(args.Length == 4 ? args[3] : null);
+                    string path = Path.GetFullPath(args[1]); Directory.CreateDirectory(Path.GetDirectoryName(path)); File.WriteAllText(path, Json.Stringify(result), new UTF8Encoding(false));
+                    bool passed = Json.Bool(result, "checksPassed"); window.EndLifecycleFixture(); app.Shutdown(); return passed ? 0 : 1;
+                }
+                catch (Exception error) { Console.Error.WriteLine(error.ToString()); return 1; }
             }
             if (args.Length > 0 && args[0] == "--editor-self-test")
             {

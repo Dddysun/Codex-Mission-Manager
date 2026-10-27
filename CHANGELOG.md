@@ -1,5 +1,14 @@
 # Changelog / 版本记录
 
+## 0.3.2 — Windows text layout / Windows 输入框布局修复
+
+- Removed duplicated padding from the shared Windows text-input template. / 修复 Windows 输入框模板重复扣除内边距的问题。
+- Replaced the fixed-height numeric-field constraint with font-aware minimum sizing, preventing clipped values in Operating Rules. / 运行规则数值框按字体确定最小高度，避免固定高度裁切文字。
+- Added native before/after geometry checks for numeric fields, search, and multiline instructions, with layout-scale and text-size stress cases. / 增加数值、搜索和多行指令框的原生修复前后测量，以及布局缩放和字号压力检查。
+- Highlighted the corrected Windows Rules page in light and dark release previews. Mac UI behavior remains unchanged. / 发行预览重点展示 Windows 规则页浅深色；Mac 界面行为保持不变。
+
+Logical rendering stress tests do not establish full coverage of actual monitor DPI or Windows accessibility text-size settings. See [0.3.2 release notes](docs/releases/0.3.2.md). / 逻辑渲染压力检查不代表已完整验收真实显示器 DPI 或 Windows 辅助功能文字缩放，详见 [0.3.2 发行说明](docs/releases/0.3.2.md)。
+
 ## 0.3.1 — Reliable quit / 退出修复
 
 - Made Quit visible in a fixed menu-panel footer and retained the application-menu keyboard shortcut. / 菜单面板固定显示退出入口，保留应用菜单快捷键。
