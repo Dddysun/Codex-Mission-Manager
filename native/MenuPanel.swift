@@ -7,6 +7,7 @@ struct MissionMenuPanel: View {
     var quit:()->Void
     @State private var showResults=false
     var body: some View {
+        VStack(spacing:0) {
         ScrollView {
         VStack(alignment:.leading,spacing:16) {
             HStack {
@@ -54,13 +55,16 @@ struct MissionMenuPanel: View {
             HStack { Text(L("语言")).font(.callout); Spacer(); Picker(L("语言"),selection:$model.language) { Text(L("简体中文")).tag("zh"); Text("English").tag("en") }.labelsHidden().frame(width:180) }
             HStack { Text(L("外观")).font(.callout); Spacer(); Picker(L("外观"),selection:$model.theme) { Text(L("跟随系统")).tag("system"); Text(L("浅色")).tag("light"); Text(L("深色")).tag("dark") }.labelsHidden().frame(width:180) }
             HStack {Text(L("主题色")).font(.callout);Spacer();Picker(L("主题色"),selection:$model.accent) {ForEach(MissionAccent.allCases,id:\.rawValue) {choice in Text(choice.title).tag(choice.rawValue)}}.labelsHidden().frame(width:180)}
-            Divider()
-            HStack {
-                Label(model.connected ? L("后台已连接") : L("后台未连接"),systemImage:model.connected ? "circle.fill" : "exclamationmark.circle").font(.caption).foregroundStyle(.secondary)
-                Spacer()
-                Button(L("退出"),action:quit).buttonStyle(.plain).font(.caption)
-            }
         }.padding(20).frame(maxWidth:.infinity,alignment:.leading)
+        }
+        Divider()
+        HStack {
+            Label(model.connected ? L("后台已连接") : L("后台未连接"),systemImage:model.connected ? "circle.fill" : "exclamationmark.circle").font(.caption).foregroundStyle(.secondary)
+            Spacer()
+            Button(action:quit) {
+                HStack(spacing:7) { Label(L("退出任务管家"),systemImage:"power"); Text("⌘Q").foregroundStyle(.secondary) }
+            }.buttonStyle(.plain).font(.callout).keyboardShortcut("q",modifiers:.command)
+        }.padding(.horizontal,20).padding(.vertical,14)
         }.frame(width:400,height:570).background(Color(nsColor:.windowBackgroundColor)).preferredColorScheme(model.colorScheme).tint(model.tint)
         .sheet(isPresented:$showResults) {
             VStack(alignment:.leading,spacing:16) {

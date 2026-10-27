@@ -117,6 +117,18 @@ jobs:
           assert all(report[key] for key in ('nativeTextView', 'markedTextPreserved', 'selectionPreserved', 'draftPreserved'))
           assert not report['hostStarted'] and report['messagesSent'] == 0 and not report['privatePreferencesLoaded']
           PY
+      - name: Verify bounded native quit lifecycle
+        run: |
+          "$RUNNER_TEMP/mission-macos/Codex Mission Manager.app/Contents/MacOS/CodexMissionManager" \
+            --lifecycle-self-test > "$RUNNER_TEMP/native-lifecycle-macos-arm64.json"
+          python3 - <<'PYCODE'
+          import json
+          import os
+          from pathlib import Path
+          report = json.loads((Path(os.environ['RUNNER_TEMP']) / 'native-lifecycle-macos-arm64.json').read_text())
+          assert report['checksPassed'] and report['noProductionHost']
+          assert report['messagesSent'] == 0 and not report['privatePreferencesLoaded'] and not report['systemPowerChanged']
+          PYCODE
       - name: Render isolated native pages and accent themes
         shell: bash
         run: |
@@ -181,7 +193,7 @@ jobs:
           destination.mkdir()
           shutil.copyfile(images[0], destination / images[0].name)
           shutil.copyfile(build / 'build-manifest.json', destination / 'build-manifest-macos-arm64.json')
-          for name in ('verification-macos-arm64.json', 'native-editor-macos-arm64.json', 'native-ui-macos-arm64.json'):
+          for name in ('verification-macos-arm64.json', 'native-editor-macos-arm64.json', 'native-lifecycle-macos-arm64.json', 'native-ui-macos-arm64.json'):
               shutil.copyfile(root / name, destination / name)
           PY
       - uses: actions/upload-artifact@v4
@@ -341,7 +353,7 @@ jobs:
               'Codex-Mission-Manager-' + version + '-windows-x64-setup.exe',
               'Codex-Mission-Manager-' + version + '-windows-x64-preview.zip',
               'build-manifest-macos-arm64.json', 'build-manifest-windows-x64.json',
-              'verification-macos-arm64.json', 'windows-smoke-test-results.json',
+              'verification-macos-arm64.json', 'native-lifecycle-macos-arm64.json', 'windows-smoke-test-results.json',
           ]
           if any(not (root / name).is_file() for name in expected):
               raise SystemExit('Both platform packages and verification reports are required')

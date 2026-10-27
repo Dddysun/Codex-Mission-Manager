@@ -6,7 +6,7 @@ The setup EXE installs the native WPF application, its Python backend and the pi
 
 ## Install / 安装
 
-Run `Codex-Mission-Manager-0.3.0-windows-x64-setup.exe`, select **Install**, then open **任务管家** from the desktop or Start menu. The default application directory is `%LOCALAPPDATA%\Programs\CodexMissionManager`.
+Run `Codex-Mission-Manager-0.3.1-windows-x64-setup.exe`, select **Install**, then open **任务管家** from the desktop or Start menu. The default application directory is `%LOCALAPPDATA%\Programs\CodexMissionManager`.
 
 运行安装 EXE，点击“安装”，然后从桌面或开始菜单打开“任务管家”。默认程序目录为 `%LOCALAPPDATA%\Programs\CodexMissionManager`。
 

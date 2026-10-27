@@ -1,5 +1,29 @@
 import Foundation
 
+// Repeated Quit requests must share one cleanup and one AppKit reply. Closing a
+// window is deliberately not a transition in this application lifecycle.
+struct MissionTerminationState {
+    enum Phase { case running, waiting, ready }
+    private(set) var phase: Phase = .running
+    mutating func request() -> Bool {
+        guard phase == .running else { return false }
+        phase = .waiting
+        return true
+    }
+    mutating func complete() -> Bool {
+        guard phase == .waiting else { return false }
+        phase = .ready
+        return true
+    }
+}
+
+struct MissionStopReceipt {
+    var hostExited: Bool
+    var terminateRequested: Bool
+    var forceKillRequested: Bool
+    var deadlineReached: Bool
+}
+
 // Public, allowlisted backend snapshot. Optional fields remain unknown rather than
 // being interpreted as unlimited quota or permission to execute.
 struct MissionSnapshot: Decodable {

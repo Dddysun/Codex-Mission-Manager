@@ -6,6 +6,12 @@ import Foundation
         let data = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))
         let state = try JSONDecoder().decode(MissionSnapshot.self, from: data)
         if CommandLine.arguments.contains("--decode-only") { print("Native decoder accepted live snapshot: \(state.tasks.count) chats, \(state.events.count) events"); return }
+        var termination = MissionTerminationState()
+        precondition(termination.phase == .running && !termination.complete())
+        precondition(termination.request() && termination.phase == .waiting)
+        precondition(!termination.request() && termination.phase == .waiting,"Repeated Quit must wait for the original cleanup")
+        precondition(termination.complete() && termination.phase == .ready)
+        precondition(!termination.complete() && !termination.request(),"Cleanup and termination reply must each occur once")
         var idle = state.tasks[1]
         precondition(idle.canExecute && !state.tasks[0].canExecute && !state.tasks[2].canExecute)
         precondition(idle.status == "等待指令")

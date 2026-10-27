@@ -5,6 +5,11 @@ import sqlite3
 import tempfile
 import threading
 import unittest
+import io
+import signal
+import subprocess
+import sys
+import time
 from unittest import mock
 
 import app_host
@@ -144,3 +149,130 @@ class PackagingHostTests(unittest.TestCase):
             self.assertEqual(app_host.run(self.root, False), 'existing Mac behavior')
         preflight.assert_not_called()
         owned.assert_called_once_with(self.root, False, None)
+
+    def test_legacy_shared_service_is_only_detached_on_stop_or_eof(self):
+        existing = {'url': 'http://127.0.0.1:54321', 'external': True, 'owned': False,
+                    'state_dir': str(self.root / 'shared'), 'config': str(self.root / 'shared/config.json')}
+        for text in ('stop\n', ''):
+            with self.subTest(text=text), mock.patch('app_host.IS_WINDOWS', False), \
+                    mock.patch('app_host.legacy_service', return_value=existing), \
+                    mock.patch('app_host.sys.stdin', io.StringIO(text)), \
+                    mock.patch('app_host.sys.stdout', io.StringIO()), \
+                    mock.patch('app_host.subprocess.run') as command, \
+                    mock.patch('app_host.OwnedProcess') as owned:
+                app_host.run_owned(self.root)
+            command.assert_not_called()
+            owned.assert_not_called()
+
+    def test_busy_ledger_and_hung_http_cannot_block_shutdown_or_late_stop_new_owner(self):
+        directory = self.root / 'app'
+        make_config(directory, self.root / 'home')
+        store = Store(directory / 'state')
+        store.put('last_report', {'pid': 123})
+        store.put('stop_requested', False)
+        store.put('intent_marker', 'preserve')
+        owner = mock.Mock()
+        owner.process.pid = 123
+        owner.process.poll.return_value = None
+        owner.stop.return_value = {'forced': True, 'daemon_exit_code': -9, 'errors': []}
+        release, ledger_done = threading.Event(), threading.Event()
+        server = mock.Mock()
+        server.shutdown.side_effect = lambda: release.wait(2)
+        original_stop = app_host.request_owned_stop
+        def stopped(*args):
+            try:
+                return original_stop(*args)
+            finally:
+                ledger_done.set()
+        busy = sqlite3.connect(str(directory / 'state/guardian.sqlite3'))
+        try:
+            busy.execute('BEGIN IMMEDIATE')
+            start = time.monotonic()
+            with mock.patch('app_host.request_owned_stop', side_effect=stopped):
+                result = app_host.shutdown_owned(owner, server, directory, budget=.1, grace_seconds=0)
+            self.assertLess(time.monotonic() - start, .5)
+            self.assertIn('http_shutdown_timeout', result['errors'])
+            # A replacement owner's false flag must survive a cancelled worker.
+            busy.execute("INSERT OR REPLACE INTO kv VALUES('stop_requested','false')")
+            busy.commit()
+            self.assertTrue(ledger_done.wait(1))
+            self.assertFalse(store.get('stop_requested'))
+            self.assertEqual(store.get('intent_marker'), 'preserve')
+        finally:
+            busy.close(); store.close(); release.set()
+
+    def test_stop_flag_requires_our_live_reported_daemon(self):
+        make_config(self.root / 'app', self.root / 'home')
+        store = Store(self.root / 'app/state')
+        try:
+            store.put('last_report', {'pid': 456})
+            process = mock.Mock(pid=123)
+            process.poll.return_value = None
+            self.assertFalse(app_host.request_owned_stop(self.root / 'app', process, threading.Event()))
+            self.assertIsNone(store.get('stop_requested'))
+            store.put('last_report', {'pid': 123})
+            self.assertTrue(app_host.request_owned_stop(self.root / 'app', process, threading.Event()))
+            self.assertTrue(store.get('stop_requested'))
+        finally:
+            store.close()
+
+    def run_isolated_host_quit(self, use_signal=False, use_eof=False):
+        fixture = self.root / 'hanging-rpc.py'
+        marker = self.root / 'pids.json'
+        fixture.write_text(
+            'import json,os,signal,subprocess,sys,time\nfrom pathlib import Path\n'
+            'signal.signal(signal.SIGTERM,signal.SIG_IGN)\n'
+            "child=subprocess.Popen([sys.executable,'-c','import signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);time.sleep(90)'])\n"
+            "marker=Path(sys.argv[1]);temporary=marker.with_suffix('.tmp')\n"
+            'temporary.write_text(json.dumps([os.getpid(),child.pid]));temporary.replace(marker)\n'
+            'while True:time.sleep(.1)\n')
+        launcher = self.root / 'host-fixture.py'
+        launcher.write_text(
+            'import sys\nfrom pathlib import Path\n'
+            'sys.path.insert(0,sys.argv[1])\nimport app_host\n'
+            'original=app_host.OwnedProcess\n'
+            'app_host.OwnedProcess=lambda script,args,**kw:original(Path(sys.argv[3]),[sys.argv[4]],**kw)\n'
+            'app_host.run_owned(Path(sys.argv[2]),attach=False,home=Path(sys.argv[2])/"fake-home")\n')
+        process = subprocess.Popen([sys.executable, str(launcher), str(app_host.ROOT), str(self.root / 'isolated'),
+                                    str(fixture), str(marker)], stdin=subprocess.PIPE,
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        try:
+            deadline = time.monotonic() + 5
+            while not marker.exists() and time.monotonic() < deadline and process.poll() is None:
+                time.sleep(.02)
+            self.assertTrue(marker.exists(), 'Isolated host did not release its test fixture')
+            pids = json.loads(marker.read_text())
+            start = time.monotonic()
+            if use_signal:
+                process.send_signal(signal.SIGTERM)
+                output, error = process.communicate(timeout=6)
+            else:
+                output, error = process.communicate(b'' if use_eof else b'stop\n', timeout=6)
+            self.assertLess(time.monotonic() - start, 6)
+            if not use_signal or sys.platform != 'win32':
+                self.assertIn(b'host_exit', error)
+            for pid in pids:
+                end = time.monotonic() + 2
+                while time.monotonic() < end:
+                    if sys.platform == 'win32':
+                        ended = not process_alive(pid)
+                    else:
+                        state = subprocess.run(['ps', '-p', str(pid), '-o', 'stat='], capture_output=True, text=True).stdout.strip()
+                        ended = not state or state.startswith('Z')
+                    if ended:
+                        break
+                    time.sleep(.02)
+                self.assertTrue(ended, 'An isolated owned fixture survived host exit')
+        finally:
+            if process.poll() is None:
+                process.kill()
+            process.communicate(timeout=2)
+
+    def test_stdin_quit_reaps_hung_owned_rpc_within_six_seconds(self):
+        self.run_isolated_host_quit()
+
+    def test_signal_quit_reaps_only_owned_fixture_family(self):
+        self.run_isolated_host_quit(use_signal=True)
+
+    def test_parent_eof_reaps_hung_owned_rpc_within_six_seconds(self):
+        self.run_isolated_host_quit(use_eof=True)

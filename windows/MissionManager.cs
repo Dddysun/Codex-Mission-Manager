@@ -259,6 +259,62 @@ namespace CodexMissionManager
         public void RaiseDeactivatedForFixture() { OnDeactivated(EventArgs.Empty); }
     }
 
+    sealed class ExitWork
+    {
+        public Action RequestStop, ForceStop, Dispose;
+        public Func<int, bool> WaitForExit;
+    }
+
+    sealed class ExitResult
+    {
+        public bool GracefulExit, ForceAttempted, ExitConfirmed, DisposeCompleted;
+        public int Errors;
+    }
+
+    static class ExitCleanup
+    {
+        // Match the backend's bounded cleanup budget. Every blocking process
+        // operation, including pipe writes and Dispose, stays off the UI thread.
+        public const int GraceMilliseconds = 6000;
+        public const int ForceMilliseconds = 1750;
+        public const int DisposeMilliseconds = 250;
+        public static async Task<bool> BoundedAsync(Action action, int milliseconds)
+        {
+            var work = Task.Run(delegate { try { action(); } catch (Exception) { } });
+            return await Task.WhenAny(work, Task.Delay(milliseconds)) == work;
+        }
+        static void Attempt(Action action, ExitResult result)
+        {
+            try { if (action != null) action(); }
+            catch (Exception) { Interlocked.Increment(ref result.Errors); }
+        }
+        static bool Wait(ExitWork work, int milliseconds, ExitResult result)
+        {
+            try { return work.WaitForExit != null && work.WaitForExit(milliseconds); }
+            catch (Exception) { Interlocked.Increment(ref result.Errors); return false; }
+        }
+        public static async Task<ExitResult> StopAsync(ExitWork work, int graceMilliseconds = GraceMilliseconds,
+                int forceMilliseconds = ForceMilliseconds, int disposeMilliseconds = DisposeMilliseconds)
+        {
+            var result = new ExitResult(); if (work == null) return result;
+            bool exited = false;
+            bool completed = await BoundedAsync(delegate {
+                Attempt(work.RequestStop, result); exited = Wait(work, graceMilliseconds, result);
+            }, graceMilliseconds);
+            result.GracefulExit = completed && exited; result.ExitConfirmed = result.GracefulExit;
+            if (!result.GracefulExit)
+            {
+                result.ForceAttempted = true; bool forcedExit = false;
+                bool forcedCompleted = await BoundedAsync(delegate {
+                    Attempt(work.ForceStop, result); forcedExit = Wait(work, forceMilliseconds, result);
+                }, forceMilliseconds);
+                result.ExitConfirmed = forcedCompleted && forcedExit;
+            }
+            result.DisposeCompleted = await BoundedAsync(delegate { Attempt(work.Dispose, result); }, disposeMilliseconds);
+            return result;
+        }
+    }
+
     sealed class MissionWindow : Window
     {
         readonly Preferences preferences;
@@ -274,6 +330,10 @@ namespace CodexMissionManager
         System.Drawing.Icon trayBrandIcon;
         DispatcherTimer timer;
         bool refreshing, busy, quitting, firstNotices = true, lifecycleFixture;
+        Task quitTask;
+        int shutdownRequests;
+        ExitWork fixtureExitWork;
+        ExitResult lastExitResult;
         string notice = "", connectionError = "", currentView = "tasks", search = "";
         string connectionErrorDetail = "", connectionExitCode = "";
         StartupDiagnostic startupDiagnostic;
@@ -379,6 +439,7 @@ namespace CodexMissionManager
         }
         void CheckSystemTheme()
         {
+            if (quitting) return;
             if (preferences.Theme == "system" && dark != SystemDark()) RebuildPresentation();
         }
         void RebuildPresentation()
@@ -704,6 +765,7 @@ namespace CodexMissionManager
         }
         void RenderSnapshot()
         {
+            if (quitting) return;
             ApplyUiPollInterval(); RenderQuota(); UpdateNavigation(); UpdateNotices();
             if (lastSync != null) lastSync.Text = T("最近同步 ", "Last updated ") + FormatTime(Json.Number(snapshot, "observed_at"));
             if (currentView == "tasks") { RenderHeader(); RenderChats(); }
@@ -836,6 +898,7 @@ namespace CodexMissionManager
         }
         void ShowSettingsWindow()
         {
+            if (quitting) return;
             if (fixtureMode) return;
             if (settingsWindow != null) { settingsWindow.Activate(); return; }
             settingsWindow = new Window { Title = T("设置", "Settings"), Width = 800, Height = 780, MinWidth = 740, MinHeight = 620,
@@ -982,7 +1045,7 @@ namespace CodexMissionManager
         }
         void RefreshRulesPresentation()
         {
-            if (rulesStatus == null || currentView != "rules") return;
+            if (quitting || rulesStatus == null || currentView != "rules") return;
             var rules = Json.Child(snapshot, "rules"); bool available = rules.Count > 0 && !quitting && (fixtureMode || baseUri != null);
             // Polling never assigns to a focused or dirty editor. Rebuilds use the
             // separate draft dictionary, so theme/language changes retain edits.
@@ -1218,10 +1281,15 @@ namespace CodexMissionManager
             if (connectionError == "request_failed") return T("后台连接待恢复：", "Backend connection unavailable: ") + connectionErrorDetail;
             return connectionError;
         }
+        void PostWhileRunning(Action action)
+        {
+            if (quitting || Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished) return;
+            try { Dispatcher.BeginInvoke(new Action(delegate { if (!quitting) action(); })); }
+            catch (InvalidOperationException) { }
+        }
         void RefreshStartupDiagnostic(StartupDiagnostic diagnostic)
         {
-            try { Dispatcher.BeginInvoke(new Action(delegate { if (Object.ReferenceEquals(startupDiagnostic, diagnostic) && connectionError == "host_exited") { UpdateNotices(); BuildTrayMenu(); } })); }
-            catch (InvalidOperationException) { }
+            PostWhileRunning(delegate { if (Object.ReferenceEquals(startupDiagnostic, diagnostic) && connectionError == "host_exited") { UpdateNotices(); BuildTrayMenu(); } });
         }
         void StartHost()
         {
@@ -1267,14 +1335,12 @@ namespace CodexMissionManager
                     // same attempt so late errors cannot overwrite a retry.
                     RefreshStartupDiagnostic(diagnostic);
                 };
-                process.Exited += delegate { Dispatcher.BeginInvoke(new Action(delegate {
+                process.Exited += delegate { PostWhileRunning(delegate {
                     if (!Object.ReferenceEquals(host, process)) return;
                     host = null;
-                    if (!quitting) {
-                        string code; try { code = process.ExitCode.ToString(CultureInfo.InvariantCulture); } catch { code = "—"; }
-                        baseUri = null; SetConnectionFailure("host_exited", ""); connectionExitCode = code; RenderSnapshot();
-                    }
-                })); };
+                    string code; try { code = process.ExitCode.ToString(CultureInfo.InvariantCulture); } catch { code = "—"; }
+                    baseUri = null; SetConnectionFailure("host_exited", ""); connectionExitCode = code; RenderSnapshot();
+                }); };
                 process.Start(); host = process; process.BeginOutputReadLine(); process.BeginErrorReadLine();
             }
             catch (Exception ex) { diagnostic.Append(ex.GetType().Name + ": " + ex.Message); SetConnectionFailure("launch_failed", ex.GetType().Name + ": " + ex.Message); RenderSnapshot(); }
@@ -1339,9 +1405,9 @@ namespace CodexMissionManager
         {
             try { trayBrandIcon = System.Drawing.Icon.ExtractAssociatedIcon(Process.GetCurrentProcess().MainModule.FileName); } catch { }
             tray = new Forms.NotifyIcon { Icon = trayBrandIcon ?? System.Drawing.SystemIcons.Application, Text = "Mission Manager", Visible = true };
-            tray.DoubleClick += delegate { Dispatcher.BeginInvoke(new Action(ShowMain)); };
+            tray.DoubleClick += delegate { PostWhileRunning(ShowMain); };
             tray.MouseUp += delegate(object sender, Forms.MouseEventArgs e) {
-                if (e.Button == Forms.MouseButtons.Left || e.Button == Forms.MouseButtons.Right) Dispatcher.BeginInvoke(new Action(ToggleTrayPanel));
+                if (e.Button == Forms.MouseButtons.Left || e.Button == Forms.MouseButtons.Right) PostWhileRunning(ToggleTrayPanel);
             };
         }
         void ToggleTrayPanel()
@@ -1433,7 +1499,7 @@ namespace CodexMissionManager
             theme.SelectionChanged += delegate { preferences.Theme = theme.SelectedIndex == 1 ? "light" : theme.SelectedIndex == 2 ? "dark" : "system"; SavePreferences(); RebuildPresentation(); }; body.Children.Add(SettingsChoiceRow(T("外观", "Appearance"), theme, 180));
             var colors = Choice(AccentLabels()); colors.SelectedIndex = Array.IndexOf(ThemePalette.Keys, preferences.Accent); colors.SelectionChanged += delegate { if (colors.SelectedIndex >= 0) { preferences.Accent = ThemePalette.Keys[colors.SelectedIndex]; SavePreferences(); RebuildPresentation(); } }; body.Children.Add(SettingsChoiceRow(T("主题色", "Accent color"), colors, 180));
             body.Children.Add(DividerLine(border, new Thickness(0, 4, 0, 16)));
-            var footer = new DockPanel(); var exit = MakePlainButton(T("退出", "Quit"), Quit); exit.FontSize = 10; DockPanel.SetDock(exit, Dock.Right); footer.Children.Add(exit);
+            var footer = new DockPanel(); var exit = MakePlainButton(T("退出", "Quit"), Quit); exit.Tag = "quit"; exit.FontSize = 10; DockPanel.SetDock(exit, Dock.Right); footer.Children.Add(exit);
             var connected = Text(fixtureMode || (baseUri != null && String.IsNullOrEmpty(connectionError)) ? T("●  后台已连接", "●  Backend connected") : T("●  后台未连接", "●  Backend disconnected"), 10); connected.Foreground = secondary; connected.Margin = new Thickness(0); footer.Children.Add(connected); body.Children.Add(footer);
             return new Border { Background = background, BorderBrush = border, BorderThickness = new Thickness(1), CornerRadius = new CornerRadius(10), Child = Scroller(body), ClipToBounds = true };
         }
@@ -1514,15 +1580,60 @@ namespace CodexMissionManager
             CloseTrayPanel(); CloseTrayPanel(); ShowMain(); await LifecycleIdleAsync();
             LifecycleRequire(IsVisible && trayPanelWindow == null, "repeated close and reopen are safe"); checks["repeatedCloseSafe"] = true;
             LifecycleRequire(host == null && timer == null && tray == null, "no backend, poll timer or system tray created");
+            int cooperativeStops = 0, cooperativeForces = 0, cooperativeDisposals = 0;
+            var cooperative = await ExitCleanup.StopAsync(new ExitWork {
+                RequestStop = delegate { cooperativeStops++; }, WaitForExit = delegate(int milliseconds) { return true; },
+                ForceStop = delegate { cooperativeForces++; }, Dispose = delegate { cooperativeDisposals++; }
+            }, 60, 40, 30);
+            LifecycleRequire(cooperative.GracefulExit && cooperative.ExitConfirmed && cooperativeStops == 1 && cooperativeForces == 0 && cooperativeDisposals == 1, "cooperative host exits without force");
+            checks["cooperativeExitAvoidsForce"] = true;
+            var releaseCleanup = new ManualResetEventSlim(false);
+            try
+            {
+                var cleanup = ExitCleanup.StopAsync(new ExitWork {
+                    WaitForExit = delegate(int milliseconds) { return false; },
+                    ForceStop = delegate { releaseCleanup.Wait(); }, Dispose = delegate { releaseCleanup.Wait(); }
+                }, 60, 40, 30);
+                LifecycleRequire(await Task.WhenAny(cleanup, Task.Delay(3000)) == cleanup, "blocked force and dispose remain bounded");
+                var result = await cleanup; LifecycleRequire(result.ForceAttempted && !result.DisposeCompleted, "cleanup deadline covers force and dispose");
+                checks["blockedForceAndDisposeAreBounded"] = true;
+            }
+            finally { releaseCleanup.Set(); }
+            var releaseStop = new ManualResetEventSlim(false); int forced = 0, disposed = 0;
+            fixtureExitWork = new ExitWork {
+                RequestStop = delegate { releaseStop.Wait(); }, WaitForExit = delegate(int milliseconds) { return false; },
+                ForceStop = delegate { Interlocked.Increment(ref forced); throw new IOException("fixture force failure"); },
+                Dispose = delegate { Interlocked.Increment(ref disposed); throw new IOException("fixture dispose failure"); }
+            };
+            try
+            {
+                ToggleTrayPanel(); await LifecycleIdleAsync(); var quit = FindTaggedButton(trayPanelWindow, "quit");
+                LifecycleRequire(quit != null, "explicit native tray Quit action exists");
+                var elapsed = Stopwatch.StartNew(); quit.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
+                Task firstQuit = quitTask, repeatedQuit = BeginQuitAsync();
+                LifecycleRequire(firstQuit != null && Object.ReferenceEquals(firstQuit, repeatedQuit), "repeated Quit shares one completion");
+                checks["quitIsIdempotent"] = true;
+                LifecycleRequire(await Task.WhenAny(firstQuit, Task.Delay(3000)) == firstQuit, "blocked stop cannot hold exit indefinitely"); await firstQuit;
+                LifecycleRequire(elapsed.ElapsedMilliseconds < 3000 && lastExitResult != null && lastExitResult.ForceAttempted && forced == 1, "stop timeout escalates within budget");
+                checks["blockedStopIsBounded"] = true;
+                LifecycleRequire(disposed == 1 && lastExitResult.Errors >= 2 && shutdownRequests == 1, "cleanup exceptions cannot prevent final shutdown request");
+                checks["cleanupErrorsDoNotBlockQuit"] = true;
+                LifecycleRequire(host == null && tray == null && trayPanelWindow == null && !IsEnabled && !IsVisible, "Quit removes owned UI and connection resources");
+                checks["quitReleasesOwnedResources"] = true;
+                ShowMain(); ToggleTrayPanel(); LifecycleRequire(trayPanelWindow == null, "late tray actions cannot reopen during Quit");
+                checks["lateTrayActionsIgnored"] = true; checks["productionHostExitBudgetMilliseconds"] = ExitCleanup.GraceMilliseconds + ExitCleanup.ForceMilliseconds + ExitCleanup.DisposeMilliseconds;
+            }
+            finally { releaseStop.Set(); }
             checks["hostStarted"] = false; checks["messagesSent"] = 0; checks["systemTrayCreated"] = false; checks["checksPassed"] = true; return checks;
         }
         public void EndLifecycleFixture()
         {
             if (!fixtureMode) throw new InvalidOperationException("Fixture cleanup cannot run in the installed application.");
-            quitting = true; CloseTrayPanel(); Close(); client.Dispose();
+            quitting = true; ExitAction(CloseTrayPanel); ExitAction(Close); ExitAction(client.Dispose);
         }
         void ReadNotifications()
         {
+            if (quitting) return;
             try
             {
                 string path = Path.Combine(preferences.DirectoryPath, "state", "native-notices.json");
@@ -1538,25 +1649,72 @@ namespace CodexMissionManager
             }
             catch (Exception) { }
         }
-        void ShowMain() { CloseTrayPanel(); Show(); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); }
+        void ShowMain() { if (quitting) return; CloseTrayPanel(); Show(); if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal; Activate(); }
         void OnClosing(object sender, CancelEventArgs e)
         {
             if (quitting || (fixtureMode && !lifecycleFixture)) return; e.Cancel = true; Hide();
         }
-        async void Quit()
+        static void ExitAction(Action action)
         {
-            if (quitting) return; quitting = true; CloseTrayPanel(); if (settingsWindow != null) settingsWindow.Close(); if (timer != null) timer.Stop();
-            SetThreadExecutionState(ExecutionContinuous);
-            if (tray != null) { tray.Visible = false; tray.Dispose(); tray = null; }
-            if (trayBrandIcon != null) { trayBrandIcon.Dispose(); trayBrandIcon = null; }
-            IsEnabled = false;
-            var owned = host;
-            if (owned != null)
+            try { action(); }
+            catch (Exception error) { Debug.WriteLine("Mission Manager exit cleanup: " + error.GetType().Name); }
+        }
+        void Quit() { BeginQuitAsync(); }
+        Task BeginQuitAsync()
+        {
+            if (quitTask != null) return quitTask;
+            // Publish the shared completion before cleanup can raise nested UI
+            // events. Repeated Quit actions cannot start another shutdown.
+            var completion = new TaskCompletionSource<bool>(); quitTask = completion.Task; quitting = true;
+            var owned = host; host = null; baseUri = null;
+            ExitAction(delegate { if (timer != null) timer.Stop(); });
+            ExitAction(delegate { IsEnabled = false; });
+            ExitAction(Hide);
+            ExitAction(CloseTrayPanel);
+            var settings = settingsWindow; settingsWindow = null; ExitAction(delegate { if (settings != null) settings.Close(); });
+            if (!fixtureMode) ExitAction(delegate { SetThreadExecutionState(ExecutionContinuous); });
+            var ownedTray = tray; tray = null;
+            var ownedIcon = trayBrandIcon; trayBrandIcon = null;
+            ExitWork work = fixtureMode ? fixtureExitWork : owned == null ? null : new ExitWork {
+                RequestStop = delegate {
+                    if (owned.HasExited) return;
+                    owned.StandardInput.WriteLine("stop"); owned.StandardInput.Flush(); owned.StandardInput.Close();
+                },
+                WaitForExit = delegate(int milliseconds) { return owned.HasExited || owned.WaitForExit(milliseconds); },
+                ForceStop = delegate { if (!owned.HasExited) owned.Kill(); },
+                Dispose = owned.Dispose
+            };
+            CompleteQuitAsync(work, completion, ownedTray, ownedIcon); return quitTask;
+        }
+        async Task CompleteQuitAsync(ExitWork work, TaskCompletionSource<bool> completion,
+                Forms.NotifyIcon ownedTray, System.Drawing.Icon ownedIcon)
+        {
+            try
             {
-                try { if (!owned.HasExited) { owned.StandardInput.WriteLine("stop"); owned.StandardInput.Flush(); owned.StandardInput.Close(); } } catch { }
-                await Task.Run(delegate { try { if (!owned.WaitForExit(45000) && !owned.HasExited) owned.Kill(); } catch { } });
+                // Cancel/dispose transport concurrently with host cleanup. A
+                // wedged HTTP callback cannot extend the process deadline.
+                Task transport = ExitCleanup.BoundedAsync(delegate {
+                    ExitAction(client.CancelPendingRequests); ExitAction(client.Dispose);
+                }, ExitCleanup.DisposeMilliseconds);
+                Task trayCleanup = ExitCleanup.BoundedAsync(delegate {
+                    // NotifyIcon is detached before this worker starts. Any
+                    // queued native callback sees quitting and cannot reuse it.
+                    ExitAction(delegate { if (ownedTray != null) ownedTray.Visible = false; });
+                    ExitAction(delegate { if (ownedTray != null) ownedTray.Dispose(); });
+                    ExitAction(delegate { if (ownedIcon != null) ownedIcon.Dispose(); });
+                }, ExitCleanup.DisposeMilliseconds);
+                Task<ExitResult> process = fixtureMode ? ExitCleanup.StopAsync(work, 60, 40, 30) : ExitCleanup.StopAsync(work);
+                await Task.WhenAll(transport, trayCleanup, process); lastExitResult = process.Result;
             }
-            client.Dispose(); Application.Current.Shutdown();
+            catch (Exception error) { Debug.WriteLine("Mission Manager bounded exit: " + error.GetType().Name); }
+            finally
+            {
+                shutdownRequests++;
+                // Fixture shutdown is recorded, never applied to the test
+                // Application until its receipt has been written.
+                if (!fixtureMode) ExitAction(delegate { if (Application.Current != null) Application.Current.Shutdown(); });
+                completion.TrySetResult(true);
+            }
         }
     }
 

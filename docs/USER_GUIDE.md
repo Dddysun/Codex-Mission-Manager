@@ -38,7 +38,7 @@
 
 设置和菜单面板可切换简体中文／English、跟随系统／浅色／深色，以及绿／蓝／紫／鹅蛋黄主题色。指令草稿在背景同步和外观切换时保留。
 
-关闭主窗口后仍在菜单栏或系统托盘运行。“退出”停止管家自己的后台与防睡眠请求，不主动中断 Codex 中的工作。
+关闭主窗口后仍在菜单栏或系统托盘运行。完整退出请点击菜单面板底部固定的“退出任务管家”（Windows 为“退出”），或在 Mac 应用菜单选择“退出任务管家”／按 ⌘Q。退出会停止管家自己的后台与防睡眠请求，不主动中断 Codex 中的工作；无需额外授予辅助功能、录屏或管理员权限。停止流程具有截止时间，重复点击退出不会启动多次清理。
 
 - **登录时启动：**可选，状态以系统登记结果为准。
 - **任务通知：**仅用于暂停、续接、发送失败和需处理异常；系统拒绝通知不影响任务执行。应用开关与系统权限分别管理。
@@ -91,7 +91,7 @@ Records distinguish a new quota window, early balance recovery, and restored ser
 
 Settings and the menu panel offer Chinese/English, system/light/dark appearance, and green/blue/purple/egg-yellow accents. Background refresh and appearance changes preserve instruction drafts.
 
-Closing the main window keeps the app in the menu bar or system tray. **Quit** stops its own background process and keep-awake request without intentionally interrupting work in Codex.
+Closing the main window keeps the app in the menu bar or system tray. Use the fixed **Quit Mission Manager** action at the bottom of the menu panel (**Quit** on Windows), or the Mac application menu / ⌘Q. Quitting stops app-owned background processes and keep-awake requests without intentionally interrupting Codex work; no additional Accessibility, screen-recording, or administrator permission is needed. Shutdown has a deadline, and repeated quit requests share the same cleanup operation.
 
 - **Start at sign-in:** optional, with status based on system registration.
 - **Task notifications:** pauses, resumptions, failed deliveries, and actionable errors only. Denying notifications does not prevent task execution. App preference and system permission are separate.

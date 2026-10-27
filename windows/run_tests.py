@@ -28,6 +28,8 @@ def main():
         selections = [('backend', root/'backend/tests',
                        'test_windows_platform.py' if args.scope == 'smoke' else 'test_*.py'),
                       ('host', root/'tests', 'test_*.py')]
+        if args.scope == 'smoke' and (root/'backend/tests/test_owned_process.py').is_file():
+            selections.append(('owned_process', root/'backend/tests', 'test_owned_process.py'))
         for name, directory, pattern in selections:
             stream = io.StringIO()
             suite = unittest.TestLoader().discover(str(directory), pattern=pattern)

@@ -4,6 +4,14 @@ import SwiftUI
 import ServiceManagement
 import UserNotifications
 import IOKit.pwr_mgt
+import Darwin
+
+// AppKit may enter a menu-tracking or modal run loop while a quit request is
+// pending. Completion must not depend on a default-mode Timer firing.
+func missionOnMainCommonModes(_ body: @escaping () -> Void) {
+    CFRunLoopPerformBlock(CFRunLoopGetMain(), RunLoop.Mode.common.rawValue as CFString, body)
+    CFRunLoopWakeUp(CFRunLoopGetMain())
+}
 
 final class MissionModel: ObservableObject {
     @Published var language = NativeLocalization.testLanguage ?? UserDefaults.standard.string(forKey: "language") ?? (Locale.preferredLanguages.first?.hasPrefix("zh") == true ? "zh" : "en") {
@@ -65,6 +73,10 @@ final class MissionModel: ObservableObject {
     let session = URLSession(configuration: .ephemeral)
     var notificationKeys = Set<String>()
     var firstNoticeRead = true
+    private(set) var stopping = false
+    private var stoppingHost: Process?
+    private var stopReceipt: MissionStopReceipt?
+    private var stopCallbacks: [(MissionStopReceipt) -> Void] = []
 
     var signed: Bool { MissionIdentity.releaseSigned }
     var service: SMAppService { SMAppService.daemon(plistName: MissionIdentity.helperPlist) }
@@ -91,6 +103,7 @@ final class MissionModel: ObservableObject {
     }
 
     func configureRefreshTimer(_ seconds: Double) {
+        guard !stopping else { return }
         let interval=min(30,max(2,seconds.isFinite ? seconds : 5))
         if let timer, abs(timer.timeInterval-interval)<0.001 { return }
         timer?.invalidate()
@@ -103,7 +116,7 @@ final class MissionModel: ObservableObject {
     }
 
     func startHost() {
-        guard host == nil, let resources = Bundle.main.resourceURL else { return }
+        guard !stopping, host == nil, let resources = Bundle.main.resourceURL else { return }
         let task = Process(), output = Pipe(), input = Pipe()
         task.executableURL = resources.appendingPathComponent("python/bin/python3")
         task.arguments = ["-I", resources.appendingPathComponent("backend/app_host.py").path]
@@ -121,10 +134,11 @@ final class MissionModel: ObservableObject {
                 if data.isEmpty { handle.readabilityHandler = nil; return }
                 DispatchQueue.main.async { self?.receiveHost(data) }
             }
-            task.terminationHandler = { [weak self] _ in DispatchQueue.main.async {
-                self?.backend = L("后台已退出；已有记录保留")
-                self?.host = nil
-                self?.connected = false
+            task.terminationHandler = { [weak self] stopped in DispatchQueue.main.async {
+                guard let self, self.host === stopped else { return }
+                self.backend = L("后台已退出；已有记录保留")
+                self.host = nil
+                self.connected = false
             } }
             try task.run()
             host = task
@@ -133,6 +147,7 @@ final class MissionModel: ObservableObject {
     }
 
     func receiveHost(_ data: Data) {
+        guard !stopping else { return }
         hostOutput.append(data)
         while let newline = hostOutput.firstIndex(of: 10) {
             let line = Data(hostOutput[..<newline])
@@ -150,7 +165,7 @@ final class MissionModel: ObservableObject {
     // A private ephemeral cookie session authenticates the local JSON API.
     // No HTML is rendered and no WebKit runtime is used by the application.
     @MainActor func refreshControl() async {
-        guard let url = baseURL, !refreshing else { return }
+        guard !stopping, let url = baseURL, !refreshing else { return }
         refreshing = true
         defer { refreshing = false }
         do {
@@ -161,6 +176,7 @@ final class MissionModel: ObservableObject {
             }
             let value = try JSONDecoder().decode(MissionSnapshot.self, from: data)
             await MainActor.run {
+                guard !self.stopping else { return }
                 self.snapshot = value; self.paused = value.control_paused; self.connected = true; self.connectionError = ""
                 self.configureRefreshTimer(value.rules?.values["ui_poll_seconds"].map(Double.init) ?? value.ui_poll_seconds ?? 5)
             }
@@ -168,7 +184,7 @@ final class MissionModel: ObservableObject {
     }
 
     func perform(_ payload: [String: Any]) {
-        guard !busy, connected, let url = baseURL else { return }
+        guard !stopping, !busy, connected, let url = baseURL else { return }
         busy = true
         notice = ""
         Task {
@@ -240,7 +256,7 @@ final class MissionModel: ObservableObject {
     }
     func discardRulesDraft() { rulesDraft=[:];rulesDraftRevision=nil;rulesStatus="" }
     @MainActor func saveRules() async {
-        guard !rulesSaving, !busy, connected, let state=snapshot?.rules, let url=baseURL else { return }
+        guard !stopping, !rulesSaving, !busy, connected, let state=snapshot?.rules, let url=baseURL else { return }
         let text=rulesDraftRevision == nil ? state.values.mapValues(String.init) : rulesDraft
         let validated=MissionRuleFields.validation(text,remoteBounds:state.bounds)
         guard let values=validated.values else {rulesStatus=validated.error ?? L("规则未通过校验。");return}
@@ -296,6 +312,7 @@ final class MissionModel: ObservableObject {
     }
 
     func refresh() {
+        guard !stopping else { return }
         loginEnabled = SMAppService.mainApp.status == .enabled
         helperEnabled = signed && service.status == .enabled
         login = registration(SMAppService.mainApp.status)
@@ -412,12 +429,68 @@ final class MissionModel: ObservableObject {
         }
         firstNoticeRead = false
     }
-    func stop() {
-        timer?.invalidate()
-        if powerConnection != nil { withHelper { $0.disable { _ in } } }
+    func stop(grace: TimeInterval = 6, finalWait: TimeInterval = 2, completion: @escaping (MissionStopReceipt) -> Void) {
+        if let stopReceipt { completion(stopReceipt); return }
+        stopCallbacks.append(completion)
+        guard !stopping else { return }
+        stopping = true
+        timer?.invalidate(); timer = nil
+        waitingForLock = false
+        for token in observerTokens { DistributedNotificationCenter.default().removeObserver(token) }
+        observerTokens.removeAll()
+        session.invalidateAndCancel()
+        // Only use an existing helper connection. Quitting must never register a
+        // service, request authorization, or wait indefinitely for an XPC reply.
+        if let connection = powerConnection {
+            powerConnection = nil
+            let proxy = connection.remoteObjectProxyWithErrorHandler { _ in connection.invalidate() } as? PowerHelperProtocol
+            proxy?.disable { _ in connection.invalidate() }
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 2) { connection.invalidate() }
+        }
         if assertion != 0 { IOPMAssertionRelease(assertion); assertion = 0 }
-        try? hostInput?.fileHandleForWriting.write(contentsOf: Data("stop\n".utf8))
-        try? hostInput?.fileHandleForWriting.close()
+        let ownedHost = host
+        stoppingHost = ownedHost
+        let input = hostInput
+        hostInput = nil
+        // Even a five-byte write can block if an unhealthy child stops reading.
+        // Keep it separate from both AppKit and the independent shutdown clock.
+        if let input {
+            DispatchQueue.global(qos: .utility).async {
+                try? input.fileHandleForWriting.write(contentsOf: Data("stop\n".utf8))
+                try? input.fileHandleForWriting.close()
+            }
+        }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            var terminated = false, killed = false
+            let end = ProcessInfo.processInfo.systemUptime + max(0, grace)
+            while ownedHost?.isRunning == true && ProcessInfo.processInfo.systemUptime < end { Thread.sleep(forTimeInterval: 0.025) }
+            if let ownedHost, ownedHost.isRunning {
+                terminated = true
+                ownedHost.terminate()
+                let finalEnd = ProcessInfo.processInfo.systemUptime + max(0, finalWait)
+                while ownedHost.isRunning && ProcessInfo.processInfo.systemUptime < finalEnd { Thread.sleep(forTimeInterval: 0.025) }
+                if ownedHost.isRunning {
+                    // This is the Process launched by this app, never a client
+                    // process selected by name, catalog id, or a saved PID.
+                    killed = Darwin.kill(ownedHost.processIdentifier, SIGKILL) == 0
+                }
+            }
+            let receipt = MissionStopReceipt(hostExited: ownedHost?.isRunning != true,
+                terminateRequested: terminated, forceKillRequested: killed, deadlineReached: terminated)
+            missionOnMainCommonModes {
+                guard let self, self.stopReceipt == nil else { return }
+                self.stopReceipt = receipt
+                let callbacks = self.stopCallbacks
+                self.stopCallbacks.removeAll()
+                callbacks.forEach { $0(receipt) }
+            }
+        }
+    }
+    func finalizeOwnedHostStop() {
+        // The final AppKit deadline may win a scheduling race with the worker.
+        // Reclaim only the same captured child before replying, without waiting.
+        guard stopping, let stoppingHost, stoppingHost.isRunning else { return }
+        _ = Darwin.kill(stoppingHost.processIdentifier, SIGKILL)
     }
     func openSettings(_ destination: String) {
         if destination == "login" { SMAppService.openSystemSettingsLoginItems(); return }
@@ -432,7 +505,11 @@ final class MissionApp: NSObject, NSApplicationDelegate {
     var settingsWindow: NSWindow?
     var statusItem: NSStatusItem!
     let popover = NSPopover()
-    var isQuitting = false
+    var termination = MissionTerminationState()
+    var terminationReply: (Bool) -> Void = { NSApp.reply(toApplicationShouldTerminate: $0) }
+    var shutdownGraceSeconds: TimeInterval = 6
+    var shutdownFinalWaitSeconds: TimeInterval = 2
+    var shutdownReplyDeadlineSeconds: TimeInterval = 8
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         rebuildMainMenu()
@@ -460,11 +537,13 @@ final class MissionApp: NSObject, NSApplicationDelegate {
         if !loginLaunch && !CommandLine.arguments.contains("--background") { showWindow() }
     }
     func rebuildMainMenu() {
-        let menu = NSMenu(), appItem = NSMenuItem(), appMenu = NSMenu()
+        let menu = NSMenu(), appItem = NSMenuItem(title:L("任务管家"),action:nil,keyEquivalent:""), appMenu = NSMenu(title:L("任务管家"))
         menu.addItem(appItem); appItem.submenu = appMenu
+        appMenu.addItem(withTitle:L("打开任务管家"),action:#selector(showWindow),keyEquivalent:"").target = self
         appMenu.addItem(withTitle:L("设置…"), action:#selector(showSettings), keyEquivalent:",").target = self
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle:L("退出任务管家"), action:#selector(quit), keyEquivalent:"q").target = self
+        let quitItem = appMenu.addItem(withTitle:L("退出任务管家"), action:#selector(quit), keyEquivalent:"q")
+        quitItem.target = self; quitItem.keyEquivalentModifierMask = [.command]
         let editItem = NSMenuItem(); menu.addItem(editItem)
         let edit = NSMenu(title:L("编辑")); editItem.submenu = edit
         for (title, selector, key) in [(L("撤销"), "undo:", "z"), (L("剪切"), "cut:", "x"), (L("复制"), "copy:", "c"), (L("粘贴"), "paste:", "v"), (L("全选"), "selectAll:", "a")] { edit.addItem(withTitle:title, action:Selector(selector), keyEquivalent:key) }
@@ -478,12 +557,14 @@ final class MissionApp: NSObject, NSApplicationDelegate {
         statusItem?.button?.toolTip = L("任务管家")
     }
     @objc func togglePanel() {
+        guard termination.phase == .running else { return }
         guard let button = statusItem.button else { return }
         if popover.isShown { popover.performClose(nil) }
         else { popover.show(relativeTo:button.bounds, of:button, preferredEdge:.minY); Task { await model.refreshControl() } }
     }
-    @objc func showWindow() { NSApp.setActivationPolicy(.regular); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true) }
+    @objc func showWindow() { guard termination.phase == .running else { return }; NSApp.setActivationPolicy(.regular); window.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true) }
     @objc func showSettings() {
+        guard termination.phase == .running else { return }
         if settingsWindow == nil {
             let host = NSHostingController(rootView: MissionSettings(model: model))
             let value = NSWindow(contentViewController: host)
@@ -498,19 +579,132 @@ final class MissionApp: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool { showWindow(); return true }
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
-        guard !isQuitting else { return .terminateNow }
-        isQuitting = true
-        model.stop()
-        let end = Date().addingTimeInterval(40)
-        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { timer in
-            if self.model.host?.isRunning != true || Date() > end { timer.invalidate(); NSApp.reply(toApplicationShouldTerminate: true) }
+        if termination.phase == .ready { return .terminateNow }
+        guard termination.request() else { return .terminateLater }
+        popover.performClose(nil)
+        model.stop(grace:shutdownGraceSeconds,finalWait:shutdownFinalWaitSeconds) { [weak self] _ in self?.finishTermination() }
+        // Independent fallback, including a blocked stop-pipe writer. Common
+        // run-loop modes also allow completion while a menu/modal loop is open.
+        DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + shutdownReplyDeadlineSeconds) { [weak self] in
+            missionOnMainCommonModes { self?.finishTermination() }
         }
         return .terminateLater
+    }
+    func finishTermination() {
+        guard termination.complete() else { return }
+        model.finalizeOwnedHostStop()
+        terminationReply(true)
+    }
+}
+
+enum MissionLifecycleChecks {
+    static func wait(until ready: () -> Bool, timeout: TimeInterval = 3, mode: RunLoop.Mode = .default) -> Bool {
+        let end = ProcessInfo.processInfo.systemUptime + timeout
+        while !ready() && ProcessInfo.processInfo.systemUptime < end {
+            _ = RunLoop.main.run(mode:mode,before:Date().addingTimeInterval(0.01))
+            Thread.sleep(forTimeInterval:0.001)
+        }
+        return ready()
+    }
+    static func fixture(_ script: String) throws -> (Process, Pipe) {
+        let process=Process(), input=Pipe(), ready=Pipe()
+        process.executableURL=URL(fileURLWithPath:"/bin/sh")
+        process.arguments=["-c",script]
+        process.standardInput=input;process.standardOutput=ready;process.standardError=FileHandle.nullDevice
+        try process.run()
+        guard ready.fileHandleForReading.readData(ofLength:6) == Data("ready\n".utf8) else {
+            process.terminate()
+            throw NSError(domain:"MissionLifecycleFixture",code:1)
+        }
+        return (process,input)
+    }
+    static func run() throws -> [String:Any] {
+        NativeLocalization.testLanguage="en"
+        let app=NSApplication.shared;app.setActivationPolicy(.prohibited)
+        let trackingMode=RunLoop.Mode.eventTracking
+        let delegate=MissionApp()
+        var replies=0
+        delegate.terminationReply={ allowed in if allowed { replies += 1 } }
+        delegate.rebuildMainMenu()
+        let appMenu=NSApp.mainMenu?.items.first?.submenu
+        let quitItem=appMenu?.items.first { $0.action == #selector(MissionApp.quit) }
+        let namedMenu=NSApp.mainMenu?.items.first?.title == L("任务管家") && appMenu?.title == L("任务管家")
+        let quitMenu=quitItem?.title == L("退出任务管家") && quitItem?.keyEquivalent == "q" && quitItem?.keyEquivalentModifierMask == [.command] && quitItem?.target === delegate
+        let window=NSWindow(contentRect:NSRect(x:0,y:0,width:200,height:100),styleMask:[.titled,.closable],backing:.buffered,defer:true)
+        window.isReleasedWhenClosed=false;window.close()
+        let closeKeepsRunning = !delegate.applicationShouldTerminateAfterLastWindowClosed(app) && delegate.termination.phase == .running && !delegate.model.stopping
+        let first=delegate.applicationShouldTerminate(app), repeated=delegate.applicationShouldTerminate(app)
+        let repeatedWaits=first == .terminateLater && repeated == .terminateLater
+        let completedInTrackingMode=wait(until:{replies == 1},mode:trackingMode)
+        delegate.finishTermination()
+        let replyOnce=replies == 1 && delegate.applicationShouldTerminate(app) == .terminateNow
+        let graceful=try fixture("printf 'ready\\n'; while IFS= read -r line; do if [ \"$line\" = stop ]; then exit 0; fi; done")
+        defer { if graceful.0.isRunning { _=Darwin.kill(graceful.0.processIdentifier,SIGKILL) } }
+        let gracefulModel=MissionModel();gracefulModel.host=graceful.0;gracefulModel.hostInput=graceful.1
+        var gracefulCallbacks=0;var gracefulReceipt:MissionStopReceipt?
+        gracefulModel.stop(grace:0.5,finalWait:0.1) { gracefulReceipt=$0;gracefulCallbacks += 1 }
+        gracefulModel.stop(grace:0.5,finalWait:0.1) { _ in gracefulCallbacks += 1 }
+        let gracefulDone=wait(until:{gracefulCallbacks == 2})
+        let gracefulStopped=gracefulDone && gracefulReceipt?.hostExited == true && gracefulReceipt?.terminateRequested == false
+        let stubborn=try fixture("trap '' TERM; printf 'ready\\n'; while :; do :; done")
+        defer { if stubborn.0.isRunning { _=Darwin.kill(stubborn.0.processIdentifier,SIGKILL) } }
+        let stubbornModel=MissionModel();stubbornModel.host=stubborn.0;stubbornModel.hostInput=stubborn.1
+        var stubbornReceipt:MissionStopReceipt?
+        let start=ProcessInfo.processInfo.systemUptime
+        stubbornModel.stop(grace:0.1,finalWait:0.1) { stubbornReceipt=$0 }
+        let stopReturnedImmediately=ProcessInfo.processInfo.systemUptime-start < 0.05
+        let stubbornDone=wait(until:{stubbornReceipt != nil})
+        let stubbornBounded=stubbornDone && ProcessInfo.processInfo.systemUptime-start < 1 && stubbornReceipt?.terminateRequested == true && stubbornReceipt?.forceKillRequested == true
+        let stubbornReaped=wait(until:{!stubborn.0.isRunning})
+        let fallbackHost=try fixture("trap '' TERM; printf 'ready\\n'; while :; do :; done")
+        defer { if fallbackHost.0.isRunning { _=Darwin.kill(fallbackHost.0.processIdentifier,SIGKILL) } }
+        let fallbackDelegate=MissionApp()
+        fallbackDelegate.model.host=fallbackHost.0;fallbackDelegate.model.hostInput=fallbackHost.1
+        fallbackDelegate.shutdownGraceSeconds=0.1;fallbackDelegate.shutdownFinalWaitSeconds=0.3
+        fallbackDelegate.shutdownReplyDeadlineSeconds=0.15
+        var fallbackReplies=0
+        fallbackDelegate.terminationReply={ if $0 {fallbackReplies += 1} }
+        _=fallbackDelegate.applicationShouldTerminate(app)
+        let fallbackCompleted=wait(until:{fallbackReplies == 1},mode:trackingMode)
+        let fallbackHostReaped=wait(until:{!fallbackHost.0.isRunning})
+        let fallbackReclaimsHost=fallbackCompleted && fallbackHostReaped
+        // Fill an artificial pipe without blocking this thread, then restore
+        // blocking mode. This reproduces the old synchronous write hazard.
+        let full=Pipe();let fd=full.fileHandleForWriting.fileDescriptor
+        let flags=fcntl(fd,F_GETFL);_ = fcntl(fd,F_SETFL,flags|O_NONBLOCK)
+        var chunk=[UInt8](repeating:65,count:4096)
+        while Darwin.write(fd,&chunk,chunk.count) > 0 {}
+        _ = fcntl(fd,F_SETFL,flags)
+        let fullModel=MissionModel();fullModel.hostInput=full
+        var fullReceipt:MissionStopReceipt?
+        let fullStart=ProcessInfo.processInfo.systemUptime
+        fullModel.stop(grace:0.1,finalWait:0.1) { fullReceipt=$0 }
+        let pipeWriteOffMain=ProcessInfo.processInfo.systemUptime-fullStart < 0.05 && wait(until:{fullReceipt != nil},mode:trackingMode)
+        // Drain enough for the background writer to finish, then close safely.
+        _ = full.fileHandleForReading.availableData
+        _ = full.fileHandleForReading.readDataToEndOfFile()
+        try? full.fileHandleForReading.close()
+        let passed=namedMenu && quitMenu && closeKeepsRunning && repeatedWaits && completedInTrackingMode && replyOnce && gracefulStopped && stopReturnedImmediately && stubbornBounded && stubbornReaped && fallbackReclaimsHost && pipeWriteOffMain
+        return ["native":true,"checksPassed":passed,"namedApplicationMenu":namedMenu,"quitMenuAndCommandQ":quitMenu,
+            "closeKeepsRunning":closeKeepsRunning,"repeatedQuitWaits":repeatedWaits,"terminationReplyOnce":replyOnce,
+            "completionInTrackingMode":completedInTrackingMode,"gracefulOwnedHostExit":gracefulStopped,
+            "stopReturnsWithoutBlocking":stopReturnedImmediately,"unresponsiveOwnedHostBounded":stubbornBounded,
+            "unresponsiveFixtureReaped":stubbornReaped,"fullPipeWriteOffMain":pipeWriteOffMain,
+            "fallbackReclaimsOwnedHost":fallbackReclaimsHost,
+            "noProductionHost":true,"fixtureProcessesStarted":3,"messagesSent":0,"privatePreferencesLoaded":false,"systemPowerChanged":false]
     }
 }
 
 @main enum MissionMain {
     static func main() {
+        if CommandLine.arguments.contains("--lifecycle-self-test") {
+            do {
+                let report=try MissionLifecycleChecks.run()
+                print(String(data:try JSONSerialization.data(withJSONObject:report,options:.sortedKeys),encoding:.utf8)!)
+                if report["checksPassed"] as? Bool != true { exit(1) }
+            } catch { fputs("Native lifecycle self-test failed: \(error)\n",stderr);exit(1) }
+            return
+        }
         if CommandLine.arguments.contains("--editor-self-test") {
             let app=NSApplication.shared;app.setActivationPolicy(.prohibited)
             let report=MissionPromptEditorChecks.run()

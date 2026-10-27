@@ -124,7 +124,7 @@ if (Test-Path -LiteralPath $portable) { Remove-Item -LiteralPath $portable -Forc
 [IO.Compression.ZipFile]::CreateFromDirectory($app,$portable,[IO.Compression.CompressionLevel]::Optimal,$false)
 $payloadSha = (Get-FileHash -LiteralPath $portable -Algorithm SHA256).Hash.ToLowerInvariant()
 $payloadBytes = (Get-Item -LiteralPath $portable).Length
-$installerSource = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Installer.cs') -Raw -Encoding UTF8).Replace('__PAYLOAD_SHA256__',$payloadSha).Replace('__PAYLOAD_BYTES__',$payloadBytes.ToString([Globalization.CultureInfo]::InvariantCulture)).Replace('__PRODUCT_VERSION__',$version)
+$installerSource = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Installer.cs') -Raw -Encoding UTF8).Replace('__PAYLOAD_SHA256__',$payloadSha).Replace('__PAYLOAD_BYTES__',$payloadBytes.ToString([Globalization.CultureInfo]::InvariantCulture)).Replace('__PRODUCT_VERSION__',$version).Replace('__PRODUCT_PREVIEW__',$preview)
 $installerCs = Join-Path $scratch 'Installer.cs'
 [IO.File]::WriteAllText($installerCs,$installerSource,(New-Object Text.UTF8Encoding($false)))
 $stub = Join-Path $scratch 'InstallerStub.exe'
@@ -147,7 +147,7 @@ $installerReceipt = Join-Path $scratch 'installer-self-test.json'
 $installerTest = Start-Process -FilePath $setup -ArgumentList @('--self-test',('"'+$installerReceipt+'"')) -Wait -PassThru
 if ($installerTest.ExitCode -ne 0 -or !(Test-Path -LiteralPath $installerReceipt)) { throw 'Appended installer integrity self-test failed.' }
 $installerResult = Get-Content -LiteralPath $installerReceipt -Raw -Encoding UTF8 | ConvertFrom-Json
-if (!$installerResult.payload_verified -or $installerResult.installed -or $installerResult.host_started) { throw 'Installer self-test attempted installation or failed payload validation.' }
+if ($installerResult.version -ne $version -or $installerResult.preview -ne $preview -or !$installerResult.payload_verified -or $installerResult.installed -or $installerResult.host_started) { throw 'Installer self-test attempted installation or failed payload validation.' }
 
 $sumLines = @($portable,$setup,$manifestPath) | ForEach-Object {
     (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant()+'  '+[IO.Path]::GetFileName($_)

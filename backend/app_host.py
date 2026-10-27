@@ -1,10 +1,11 @@
 """App-owned backend host. Resources are immutable; user data stays outside .app."""
 import argparse
-from contextlib import closing
+from contextlib import closing, contextmanager
 import json
 import os
 from pathlib import Path
 import socket
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -16,6 +17,7 @@ sys.path.insert(0, str(ROOT))  # Trusted bundled modules, also in isolated Pytho
 from platform_support import (check_writable_directory, lock_held, private_directory,
                               private_file_permissions, sqlite_ro_uri,
                               support_directory, python_command)
+from owned_process import OwnedProcess
 
 IS_WINDOWS = os.name == 'nt'
 
@@ -129,73 +131,142 @@ def run(directory, attach=True, home=None):
 
 def read_host_input(stream, stop, detail):
     """Only an explicit stop command or the owning parent's EOF ends a host."""
-    for line in stream:
-        if line.strip() == 'stop':
-            detail['reason'] = 'requested'
+    try:
+        for line in stream:
+            if line.strip() == 'stop':
+                detail['reason'] = 'requested'
+                stop.set()
+                return
+        detail['reason'] = 'parent_input_closed'
+    except OSError:
+        detail['reason'] = 'parent_input_error'
+    finally:
+        stop.set()
+
+
+@contextmanager
+def host_signals(stop, detail):
+    previous = {}
+    if threading.current_thread() is threading.main_thread():
+        def stopping(number, frame):
+            detail['reason'] = 'signal'
             stop.set()
-            return
-    detail['reason'] = 'parent_input_closed'
-    stop.set()
+        for number in (signal.SIGTERM, signal.SIGINT):
+            previous[number] = signal.signal(number, stopping)
+    try:
+        yield
+    finally:
+        for number, handler in previous.items():
+            signal.signal(number, handler)
+
+
+def request_owned_stop(directory, process, cancelled):
+    """A short SQLite transaction cannot outlive cancellation and stop a new owner."""
+    path = Path(directory) / 'state/guardian.sqlite3'
+    if cancelled.is_set() or not path.is_file():
+        return False
+    with closing(sqlite3.connect(str(path), timeout=.15)) as db:
+        with db:
+            db.execute('BEGIN IMMEDIATE')
+            # Check AFTER acquiring the writer lock. A timed-out worker must not
+            # later overwrite a replacement daemon's stop flag.
+            if cancelled.is_set() or process.poll() is not None:
+                return False
+            row = db.execute("SELECT value FROM kv WHERE key='last_report'").fetchone()
+            if not row or json.loads(row[0]).get('pid') != process.pid:
+                return False
+            db.execute('INSERT OR REPLACE INTO kv VALUES(?,?)', ('stop_requested', 'true'))
+    return True
+
+
+def close_http_server(server):
+    def closing_server():
+        try:
+            server.shutdown()
+        finally:
+            server.server_close()
+    thread = threading.Thread(target=closing_server, daemon=True)
+    thread.start()
+    return thread
+
+
+def shutdown_owned(owned, server, directory, *, budget=5, grace_seconds=3):
+    deadline = time.monotonic() + budget
+    cancelled, errors = threading.Event(), []
+    http = close_http_server(server) if server else None
+    def stop_ledger():
+        try:
+            request_owned_stop(directory, owned.process, cancelled)
+        except (OSError, sqlite3.Error, ValueError):
+            errors.append('stop_flag_unavailable')
+    ledger = threading.Thread(target=stop_ledger, daemon=True)
+    ledger.start()
+    try:
+        result = owned.stop(deadline=deadline, grace_seconds=grace_seconds)
+    finally:
+        cancelled.set()
+        # These helpers must never hold process-family cleanup hostage.
+        ledger.join(timeout=max(0, min(.05, deadline - time.monotonic())))
+        if http:
+            http.join(timeout=max(0, min(.1, deadline - time.monotonic())))
+            if http.is_alive():
+                errors.append('http_shutdown_timeout')
+                try:
+                    server.socket.close()
+                except OSError:
+                    pass
+    result['errors'].extend(errors)
+    return result
 
 
 def run_owned(directory, attach=True, home=None):
-    if attach and os.name != 'nt':
-        existing = legacy_service(Path(home or Path.home()))
-        if existing:
-            print(json.dumps(existing), flush=True)
-            # Explicit app quit stops its attached supervisor, not client turns.
-            for line in sys.stdin:
-                if line.strip() == "stop":
-                    subprocess.run([sys.executable, str(Path(existing["config"]).parent / "guardian.py"),
-                                    "--config", existing["config"], "stop"], timeout=8, capture_output=True)
-                    subprocess.run([sys.executable, str(Path(existing["config"]).parent / "ui.py"),
-                                    "stop", "--config", existing["config"]], timeout=8, capture_output=True)
-                    deadline = time.monotonic() + 35
-                    while locked(Path(existing["state_dir"]) / "daemon.lock") and time.monotonic() < deadline:
-                        time.sleep(.5)
-                    break
+    stop, stop_detail = threading.Event(), {}
+    with host_signals(stop, stop_detail):
+        if attach and not IS_WINDOWS:
+            existing = legacy_service(Path(home or Path.home()))
+            if existing:
+                print(json.dumps(existing), flush=True)
+                threading.Thread(target=read_host_input, args=(sys.stdin, stop, stop_detail), daemon=True).start()
+                stop.wait()
+                # This host only attached to a shared service. Detach on quit.
+                return
+        with socket.socket() as check:
+            check.bind(("127.0.0.1", 0))
+            port = check.getsockname()[1]
+        config_path = make_config(directory, home, port, os.getpid())
+        if stop.is_set():
             return
-    with socket.socket() as check:
-        check.bind(("127.0.0.1", 0))
-        port = check.getsockname()[1]
-    config_path = make_config(directory, home, port, os.getpid())
-    from ui import make_server
-    from guardian import Store
-    server = make_server(config_path, port)
-    server_thread = threading.Thread(target=server.serve_forever, daemon=True)
-    server_thread.start()
-    stop = threading.Event()
-    stop_detail = {}
-    threading.Thread(target=read_host_input, args=(sys.stdin, stop, stop_detail), daemon=True).start()
-    with (Path(directory) / "backend.log").open("ab") as log:
-        daemon = subprocess.Popen(python_command(ROOT / "guardian.py", "--config", config_path, "run", isolated=True),
-            stdout=log, stderr=log, stdin=subprocess.DEVNULL,
-            **({'creationflags':subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
-        print(json.dumps({"url": "http://127.0.0.1:%s" % port, "external": False, "owned": True,
-            "state_dir": str(Path(directory) / "state"), "config": str(config_path)}), flush=True)
+        from ui import make_server
+        server, owned, log = None, None, None
         try:
-            while not stop.wait(.5):
-                if daemon.poll() is not None:
-                    # Do not silently reissue stop requests; a user can reopen.
+            server = make_server(config_path, port)
+            server.daemon_threads = True
+            server.block_on_close = False
+            threading.Thread(target=lambda: server.serve_forever(poll_interval=.1), daemon=True).start()
+            threading.Thread(target=read_host_input, args=(sys.stdin, stop, stop_detail), daemon=True).start()
+            if stop.is_set():
+                return
+            log = (Path(directory) / 'backend.log').open('ab')
+            owned = OwnedProcess(ROOT / 'guardian.py', ('--config', config_path, 'run'), stdout=log, stderr=log)
+            print(json.dumps({"url": "http://127.0.0.1:%s" % port, "external": False, "owned": True,
+                "state_dir": str(Path(directory) / "state"), "config": str(config_path)}), flush=True)
+            while not stop.wait(.1):
+                if owned.process.poll() is not None:
                     break
         finally:
-            exit_reason = stop_detail.get('reason', 'daemon_exited')
-            ledger = Store(Path(directory) / "state")
-            ledger.put("stop_requested", True)
-            ledger.close()
-            server.shutdown()
-            server.server_close()
-            try:
-                daemon.wait(timeout=35)
-            except subprocess.TimeoutExpired:
-                daemon.terminate()
-                try:
-                    daemon.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    daemon.kill()
-                    daemon.wait(timeout=5)
-            print(json.dumps({'host_exit': {'reason':exit_reason,
-                                           'daemon_exit_code':daemon.poll()}}), file=sys.stderr, flush=True)
+            if owned:
+                result = shutdown_owned(owned, server, directory)
+            else:
+                result = {'daemon_exit_code': None, 'errors': []}
+                if server:
+                    closing = close_http_server(server)
+                    closing.join(timeout=.2)
+                    if closing.is_alive():
+                        server.socket.close()
+            if log:
+                log.close()
+            result['reason'] = stop_detail.get('reason', 'daemon_exited')
+            print(json.dumps({'host_exit': result}), file=sys.stderr, flush=True)
 
 
 def self_test():

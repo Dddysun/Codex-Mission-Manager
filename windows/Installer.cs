@@ -21,6 +21,7 @@ namespace CodexMissionManagerSetup
     static class Installer
     {
         const string ProductVersion = "__PRODUCT_VERSION__";
+        const string ProductPreview = "__PRODUCT_PREVIEW__";
         const string ExpectedSha256 = "__PAYLOAD_SHA256__";
         const string ExpectedBytes = "__PAYLOAD_BYTES__";
         const string FooterMagic = "CMM-PAYLOAD-0001";
@@ -221,7 +222,7 @@ namespace CodexMissionManagerSetup
             using (RegistryKey key = Registry.CurrentUser.CreateSubKey(UninstallRegistryKey))
             {
                 key.SetValue("DisplayName", "任务管家 · Codex Mission Manager");
-                key.SetValue("DisplayVersion", ProductVersion + " Windows preview 1");
+                key.SetValue("DisplayVersion", ProductVersion + "-" + ProductPreview);
                 key.SetValue("Publisher", "Codex Mission Manager contributors");
                 key.SetValue("InstallLocation", target);
                 key.SetValue("DisplayIcon", Path.Combine(target, "CodexMissionManager.exe") + ",0");
@@ -353,7 +354,7 @@ namespace CodexMissionManagerSetup
                     Shortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "任务管家.lnk"), executable);
                     Shortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Codex Mission Manager", "任务管家.lnk"), executable);
                     var result = new Dictionary<string, object> {
-                        { "version", ProductVersion }, { "preview", "windows.1" }, { "installed", true },
+                        { "version", ProductVersion }, { "preview", ProductPreview }, { "installed", true },
                         { "product_marker", ProductMarker }, { "installation_id", Guid.NewGuid().ToString("N") },
                         { "install_path", target }, { "file_count", fileCount }, { "payload_sha256", ExpectedSha256 },
                         { "previous_application_retained", movedPrevious }, { "private_data_directory_modified", false },
@@ -434,7 +435,7 @@ namespace CodexMissionManagerSetup
                 if (selfTest)
                 {
                     int count = ValidateArchive(payload, Path.Combine(Path.GetTempPath(), "MissionManagerValidation-" + Guid.NewGuid().ToString("N")), false);
-                    Report(args, new Dictionary<string, object> { { "version", ProductVersion }, { "native_installer", true }, { "payload_verified", true }, { "payload_sha256", ExpectedSha256 }, { "payload_bytes", payload.Length }, { "files", count }, { "installed", false }, { "host_started", false }, { "private_data_loaded", false }, { "per_user_uninstaller_available", true } });
+                    Report(args, new Dictionary<string, object> { { "version", ProductVersion }, { "preview", ProductPreview }, { "native_installer", true }, { "payload_verified", true }, { "payload_sha256", ExpectedSha256 }, { "payload_bytes", payload.Length }, { "files", count }, { "installed", false }, { "host_started", false }, { "private_data_loaded", false }, { "per_user_uninstaller_available", true } });
                     return 0;
                 }
                 if (!quiet) return ShowInstaller(payload, args);

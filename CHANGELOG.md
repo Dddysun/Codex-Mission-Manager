@@ -1,5 +1,14 @@
 # Changelog / 版本记录
 
+## 0.3.1 — Reliable quit / 退出修复
+
+- Made Quit visible in a fixed menu-panel footer and retained the application-menu keyboard shortcut. / 菜单面板固定显示退出入口，保留应用菜单快捷键。
+- Bounded shutdown work and made repeated quit requests idempotent on Mac and Windows. / Mac 与 Windows 使用有时限的停止流程，重复退出请求复用同一次操作。
+- Isolated cleanup to application-owned background processes; existing client tasks are not interrupted on quit. / 清理仅针对应用自身的后台进程，退出不主动中断原客户端任务。
+- Retained close-to-background behavior and all V0.3.0 features. / 保留关闭窗口驻后台行为及 V0.3.0 的全部功能。
+
+See [0.3.1 release notes](docs/releases/0.3.1.md). / 详见 [0.3.1 发行说明](docs/releases/0.3.1.md)。
+
 ## 0.3.0 — Public preview / 公开预览
 
 - Reworked native task cards into two columns, moved status beside the task title, and placed automatic control in the instruction header. / 任务卡片改为两列，状态移至标题旁，自动控制移至指令区顶部。
