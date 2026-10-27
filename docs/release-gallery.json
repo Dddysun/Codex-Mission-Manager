@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "versions": {
+    "0.3.1": {
+      "images": [
+        {
+          "id": "quit-menu", "platform": "macos", "kind": "menu", "view": "menu",
+          "file": "menu-en-dark.png", "receipt": "menu-en-dark.json",
+          "dimensions": [[400, 570], [800, 1140]], "accent": "green", "theme": "dark", "language": "en",
+          "highlight": true, "caption": {"en": "Fixed Quit action in the menu panel", "zh": "菜单面板固定退出入口"}
+        },
+        {
+          "id": "quit-tray", "platform": "windows", "kind": "menu", "view": "tray",
+          "file": "tray-en-dark-native-state-yellow.png", "receipt": "tray-en-dark-native-state-yellow.png.json",
+          "dimensions": [[800, 1140]], "accent": "yellow", "theme": "dark", "language": "en",
+          "highlight": true, "caption": {"en": "Explicit Quit action in the tray panel", "zh": "托盘面板明确退出入口"}
+        },
+        {
+          "id": "main", "platform": "macos", "kind": "home", "view": "home",
+          "file": "green-light.png", "receipt": "green-light.json",
+          "dimensions": [[1380, 900], [2760, 1800]], "accent": "green", "theme": "light", "language": "zh",
+          "highlight": false, "caption": {"en": "Local Codex chats and task controls", "zh": "本机 Codex 聊天与任务控制"}
+        },
+        {
+          "id": "main", "platform": "windows", "kind": "home", "view": "home",
+          "file": "home-zh-light-native-state-green.png", "receipt": "home-zh-light-native-state-green.png.json",
+          "dimensions": [[2760, 1800]], "accent": "green", "theme": "light", "language": "zh",
+          "highlight": false, "caption": {"en": "Local Codex chats and task controls", "zh": "本机 Codex 聊天与任务控制"}
+        },
+        {
+          "id": "rules", "platform": "macos", "kind": "rules", "view": "rules",
+          "file": "rules-zh-light.png", "receipt": "rules-zh-light.json",
+          "dimensions": [[1380, 900], [2760, 1800]], "accent": "green", "theme": "light", "language": "zh",
+          "highlight": false, "caption": {"en": "Editable thresholds and collection intervals", "zh": "可编辑阈值与采集间隔"}
+        },
+        {
+          "id": "settings", "platform": "windows", "kind": "settings", "view": "settings",
+          "file": "settings-zh-light-native-state-blue.png", "receipt": "settings-zh-light-native-state-blue.png.json",
+          "dimensions": [[1600, 2200]], "accent": "blue", "theme": "light", "language": "zh",
+          "highlight": false, "caption": {"en": "Appearance, background operation and permissions", "zh": "外观、后台运行与权限设置"}
+        }
+      ]
+    }
+  }
+}

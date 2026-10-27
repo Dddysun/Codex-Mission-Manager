@@ -13,6 +13,7 @@ on:
       - 'tests/**'
       - 'third-party/**'
       - 'docs/USER_GUIDE.md'
+      - 'docs/release-gallery.json'
       - 'docs/releases/**'
       - '.github/workflows/release.yml'
   workflow_dispatch:
@@ -29,6 +30,7 @@ env:
 
 jobs:
   prepare:
+    if: ${{ github.event_name == 'workflow_dispatch' || !contains(github.event.head_commit.message, '[release-gallery-only]') }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -40,12 +42,15 @@ jobs:
           persist-credentials: false
       - name: Check distributable source and private-data exclusions
         run: python3 scripts/check_source.py
+      - name: Verify release gallery contracts
+        run: python3 -m unittest discover -s tests -p test_release_gallery.py -v
       - name: Validate release identity and documentation
         id: identity
         shell: bash
         run: |
           python3 - <<'PY'
           import os
+          import json
           from pathlib import Path
           import re
           version = Path('VERSION').read_text(encoding='utf-8').strip()
@@ -57,6 +62,10 @@ jobs:
           for document in (Path('docs/releases') / (version + '.md'), Path('docs/USER_GUIDE.md')):
               if not document.is_file() or not document.read_text(encoding='utf-8').strip():
                   raise SystemExit('Missing release documentation: ' + str(document))
+          gallery = json.loads(Path('docs/release-gallery.json').read_text(encoding='utf-8'))
+          selection = gallery.get('versions', {}).get(version)
+          if not isinstance(selection, dict) or not any(image.get('highlight') is True for image in selection.get('images', [])):
+              raise SystemExit('This VERSION needs an explicit gallery selection and release highlight')
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
               output.write('version=' + version + '\n')
               output.write('tag=v' + version + '-preview.' + run + '\n')
@@ -195,6 +204,20 @@ jobs:
           shutil.copyfile(build / 'build-manifest.json', destination / 'build-manifest-macos-arm64.json')
           for name in ('verification-macos-arm64.json', 'native-editor-macos-arm64.json', 'native-lifecycle-macos-arm64.json', 'native-ui-macos-arm64.json'):
               shutil.copyfile(root / name, destination / name)
+          selection = json.loads(Path('docs/release-gallery.json').read_text(encoding='utf-8'))['versions'][manifest['version']]
+          screenshots = destination / 'macos-ui'
+          screenshots.mkdir()
+          for image in selection['images']:
+              if image['platform'] != 'macos':
+                  continue
+              for key in ('file', 'receipt'):
+                  name = image[key]
+                  if Path(name).name != name or '\\' in name or ':' in name:
+                      raise SystemExit('Gallery inputs must be plain filenames')
+                  source = root / 'macos-ui' / name
+                  if not source.is_file() or source.is_symlink():
+                      raise SystemExit('Required macOS gallery input is missing: ' + name)
+                  shutil.copyfile(source, screenshots / name)
           PY
       - uses: actions/upload-artifact@v4
         with:
@@ -299,6 +322,20 @@ jobs:
           foreach ($name in @('native-self-test-windows-x64.json', 'native-editor-windows-x64.json', 'native-lifecycle-windows-x64.json', 'native-ui-windows-x64.json')) {
             Copy-Item -LiteralPath (Join-Path $env:RUNNER_TEMP $name) -Destination $destination
           }
+          $galleryConfig = Get-Content -LiteralPath '.\docs\release-gallery.json' -Raw -Encoding UTF8 | ConvertFrom-Json
+          $selection = $galleryConfig.versions.PSObject.Properties[$manifest.version].Value
+          if (!$selection) { throw 'This VERSION has no explicit gallery selection.' }
+          $screenshots = Join-Path $destination 'windows-ui'
+          New-Item -ItemType Directory -Path $screenshots -Force | Out-Null
+          foreach ($image in @($selection.images | Where-Object { $_.platform -eq 'windows' })) {
+            foreach ($field in @('file', 'receipt')) {
+              $name = [string]$image.$field
+              if ([IO.Path]::GetFileName($name) -ne $name -or $name.Contains('/') -or $name.Contains('\') -or $name.Contains(':')) { throw 'Gallery inputs must be plain filenames.' }
+              $source = Join-Path "$env:RUNNER_TEMP\windows-ui" $name
+              if (!(Test-Path -LiteralPath $source -PathType Leaf)) { throw ('Required Windows gallery input is missing: '+$name) }
+              Copy-Item -LiteralPath $source -Destination (Join-Path $screenshots $name)
+            }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: release-windows-assets
@@ -335,9 +372,9 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           pattern: release-*-assets
-          path: release-assets
+          path: release-artifacts
           merge-multiple: true
-      - name: Verify both platforms and create unified checksums
+      - name: Verify both platforms and stage install assets
         shell: bash
         run: |
           python3 - <<'PY'
@@ -346,7 +383,12 @@ jobs:
           import os
           from pathlib import Path
           import shutil
+          inputs = Path('release-artifacts')
           root = Path('release-assets')
+          root.mkdir()
+          for source in inputs.iterdir():
+              if source.is_file() and not source.is_symlink():
+                  shutil.copyfile(source, root / source.name)
           version = os.environ['RELEASE_VERSION']
           expected = [
               'Codex-Mission-Manager-' + version + '-arm64-preview.dmg',
@@ -362,6 +404,34 @@ jobs:
               assert manifest['version'] == version and manifest['source_commit'] == os.environ['GITHUB_SHA']
               assert not manifest['private_runtime_data_included']
           shutil.copyfile('docs/USER_GUIDE.md', root / 'USER_GUIDE.md')
+          PY
+      - name: Generate validated release preview gallery
+        shell: bash
+        run: |
+          python3 scripts/release_gallery.py \
+            --version "$RELEASE_VERSION" --tag "$RELEASE_TAG" --source-sha "$GITHUB_SHA" \
+            --repository "$GITHUB_REPOSITORY" --run-id "$GITHUB_RUN_ID" \
+            --macos-dir release-artifacts/macos-ui --windows-dir release-artifacts/windows-ui \
+            --macos-manifest release-assets/build-manifest-macos-arm64.json \
+            --windows-manifest release-assets/build-manifest-windows-x64.json \
+            --macos-artifact release-macos-assets --windows-artifact release-windows-assets \
+            --output-dir release-gallery-output --notes "docs/releases/${RELEASE_VERSION}.md"
+      - name: Create unified release checksums including preview images
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+          import shutil
+          root = Path('release-assets')
+          gallery = Path('release-gallery-output')
+          manifest = json.loads((gallery / 'release-gallery.json').read_text(encoding='utf-8'))
+          names = [image['file'] for image in manifest['images']] + ['release-gallery.json', 'GALLERY_SHA256SUMS']
+          for name in names:
+              if Path(name).name != name:
+                  raise SystemExit('Gallery output must use plain filenames')
+              shutil.copyfile(gallery / name, root / name)
           assets = sorted(path for path in root.iterdir() if path.is_file() and path.name != 'SHA256SUMS')
           lines = [hashlib.sha256(path.read_bytes()).hexdigest() + '  ' + path.name for path in assets]
           (root / 'SHA256SUMS').write_text('\n'.join(lines) + '\n', encoding='utf-8')
@@ -376,6 +446,47 @@ jobs:
           gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
             -f "ref=refs/tags/${RELEASE_TAG}" -f "sha=${GITHUB_SHA}" > /dev/null
           gh release create "$RELEASE_TAG" release-assets/* \
-            --verify-tag --target "$GITHUB_SHA" --prerelease \
+            --verify-tag --target "$GITHUB_SHA" --prerelease --draft \
             --title "V${RELEASE_VERSION} preview ${GITHUB_RUN_NUMBER} · macOS and Windows" \
-            --notes-file "docs/releases/${RELEASE_VERSION}.md"
+            --notes-file release-gallery-output/release-body.md
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          repository, tag = os.environ['GITHUB_REPOSITORY'], os.environ['RELEASE_TAG']
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', 'repos/' + repository + '/' + path], text=True))
+          # The tag lookup endpoint guarantees published releases. Authenticated
+          # release listing also includes drafts for this write-authorized job.
+          candidates, page = [], 1
+          while True:
+              values = api('releases?per_page=100&page=' + str(page))
+              candidates.extend(value for value in values if value.get('tag_name') == tag and value.get('draft') is True)
+              if len(values) < 100:
+                  break
+              page += 1
+          if len(candidates) != 1:
+              raise SystemExit('Exactly one new draft release must match this tag')
+          release = candidates[0]
+          assets, page = [], 1
+          while True:
+              values = api('releases/%s/assets?per_page=100&page=%s' % (release['id'], page))
+              assets.extend(values)
+              if len(values) < 100:
+                  break
+              page += 1
+          by_name = {asset['name']: asset for asset in assets}
+          expected = {path.name: path for path in Path('release-assets').iterdir() if path.is_file()}
+          if len(by_name) != len(assets) or set(by_name) != set(expected):
+              raise SystemExit('Draft release assets do not match the verified release directory')
+          for name, path in expected.items():
+              asset = by_name[name]
+              if asset.get('state') != 'uploaded' or asset.get('size') != path.stat().st_size:
+                  raise SystemExit('Draft release asset upload is incomplete: ' + name)
+              digest = asset.get('digest')
+              if digest and digest != 'sha256:' + hashlib.sha256(path.read_bytes()).hexdigest():
+                  raise SystemExit('Draft release asset digest mismatch: ' + name)
+          PY
+          gh release edit "$RELEASE_TAG" --draft=false --prerelease

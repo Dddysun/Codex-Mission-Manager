@@ -1,0 +1,273 @@
+name: Add preview gallery to an existing release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-gallery-backfill.yml'
+      - '.github/workflows/release.yml'
+      - 'docs/release-gallery.json'
+      - 'docs/RELEASE_PROCESS.md'
+      - 'scripts/release_gallery.py'
+      - 'tests/test_release_gallery.py'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing preview release (V0.3.1 or later)'
+        required: true
+        default: 'v0.3.1-preview.2'
+      run_id:
+        description: 'Original successful native-preview workflow run ID'
+        required: true
+        default: '40467782526'
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: release-gallery-${{ github.repository }}-${{ inputs.tag || 'v0.3.1-preview.2' }}
+  cancel-in-progress: false
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  backfill:
+    if: ${{ github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[release-gallery-only]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REQUESTED_TAG: ${{ inputs.tag || 'v0.3.1-preview.2' }}
+      REQUESTED_RUN_ID: ${{ inputs.run_id || '40467782526' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify gallery contracts
+        run: python3 -m unittest discover -s tests -p test_release_gallery.py -v
+      - name: Verify existing release and original build provenance
+        id: identity
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          from urllib.parse import quote
+          repository = os.environ['GITHUB_REPOSITORY']
+          tag, run_id = os.environ['REQUESTED_TAG'], os.environ['REQUESTED_RUN_ID']
+          match = re.fullmatch(r'v((?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))-preview\.([1-9]\d*)', tag)
+          if not match or tuple(map(int, match[1].split('.'))) < (0, 3, 1) or not re.fullmatch(r'[1-9]\d*', run_id):
+              raise SystemExit('Only existing V0.3.1-or-later preview tags and numeric run IDs are supported')
+          version, preview = match.groups()
+          configuration = json.loads(Path('docs/release-gallery.json').read_text(encoding='utf-8'))
+          if version not in configuration.get('versions', {}):
+              raise SystemExit('This version has no explicit gallery configuration')
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', 'repos/' + repository + '/' + path], text=True))
+          def tag_commit():
+              value = api('git/ref/tags/' + quote(tag, safe=''))['object']
+              for _ in range(5):
+                  if value['type'] == 'commit':
+                      return value['sha']
+                  if value['type'] != 'tag':
+                      break
+                  value = api('git/tags/' + value['sha'])['object']
+              raise SystemExit('Tag does not resolve to a commit')
+          source = tag_commit()
+          if not re.fullmatch(r'[0-9a-f]{40}', source):
+              raise SystemExit('Invalid tag source commit')
+          run = api('actions/runs/' + run_id)
+          if (run.get('status') != 'completed' or run.get('conclusion') != 'success'
+                  or run.get('head_sha') != source or str(run.get('run_number')) != preview
+                  or run.get('head_repository', {}).get('full_name') != repository
+                  or run.get('path', '').split('@', 1)[0] != '.github/workflows/release.yml'):
+              raise SystemExit('The original successful native-preview run must match the release tag and source')
+          release = api('releases/tags/' + quote(tag, safe=''))
+          if release.get('tag_name') != tag or release.get('draft') is not False or not isinstance(release.get('id'), int):
+              raise SystemExit('An existing published release is required')
+          root = Path(os.environ['RUNNER_TEMP']) / 'gallery-backfill'
+          original = root / 'original-release'
+          original.mkdir(parents=True)
+          (root / 'release-before.json').write_text(json.dumps(release, ensure_ascii=False), encoding='utf-8')
+          (root / 'release-notes.md').write_text(release.get('body') or '', encoding='utf-8')
+          for name in ('build-manifest-macos-arm64.json', 'build-manifest-windows-x64.json'):
+              subprocess.run(['gh', 'release', 'download', tag, '--repo', repository,
+                              '--pattern', name, '--dir', str(original)], check=True)
+              manifest = json.loads((original / name).read_text(encoding='utf-8-sig'))
+              if (manifest.get('version') != version or manifest.get('source_commit') != source
+                      or manifest.get('preview') != 'preview.' + preview
+                      or str(manifest.get('build_number')) != preview):
+                  raise SystemExit('Original build manifests must match both platforms, tag, version and source')
+          identity = {'repository': repository, 'tag': tag, 'version': version, 'run_id': run_id,
+                      'source_sha': source, 'release_id': release['id']}
+          (root / 'identity.json').write_text(json.dumps(identity, indent=2) + '\n', encoding='utf-8')
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              for key, value in identity.items():
+                  output.write(key + '=' + str(value) + '\n')
+          PY
+      - name: Download original macOS native-render evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-offline-validation
+          path: ${{ runner.temp }}/gallery-backfill/evidence/macos
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.identity.outputs.run_id }}
+      - name: Download original Windows native-render evidence
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-offline-validation
+          path: ${{ runner.temp }}/gallery-backfill/evidence/windows
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ steps.identity.outputs.run_id }}
+      - name: Select only configured demo images and receipts
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.identity.outputs.version }}
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import shutil
+          root = Path(os.environ['RUNNER_TEMP']) / 'gallery-backfill'
+          selection = json.loads(Path('docs/release-gallery.json').read_text(encoding='utf-8'))['versions'][os.environ['RELEASE_VERSION']]
+          for platform in ('macos', 'windows'):
+              source = (root / 'evidence' / platform).resolve()
+              target = root / (platform + '-ui')
+              target.mkdir()
+              for image in selection['images']:
+                  if image['platform'] != platform:
+                      continue
+                  for key in ('file', 'receipt'):
+                      name = image[key]
+                      if not re.fullmatch(r'[A-Za-z0-9._-]+', name):
+                          raise SystemExit('Gallery inputs must be plain filenames')
+                      matches = list(source.rglob(name))
+                      if (len(matches) != 1 or matches[0].is_symlink() or not matches[0].is_file()
+                              or not matches[0].resolve().is_relative_to(source)):
+                          raise SystemExit('Missing, duplicate or unsafe original gallery input: ' + name)
+                      shutil.copyfile(matches[0], target / name)
+          PY
+      - name: Generate gallery from the original preview images
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ steps.identity.outputs.version }}
+          RELEASE_TAG: ${{ steps.identity.outputs.tag }}
+          SOURCE_SHA: ${{ steps.identity.outputs.source_sha }}
+          ORIGINAL_RUN_ID: ${{ steps.identity.outputs.run_id }}
+        run: |
+          gallery_root="$RUNNER_TEMP/gallery-backfill"
+          python3 scripts/release_gallery.py \
+            --version "$RELEASE_VERSION" --tag "$RELEASE_TAG" --source-sha "$SOURCE_SHA" \
+            --repository "$GITHUB_REPOSITORY" --run-id "$ORIGINAL_RUN_ID" \
+            --macos-dir "$gallery_root/macos-ui" --windows-dir "$gallery_root/windows-ui" \
+            --macos-manifest "$gallery_root/original-release/build-manifest-macos-arm64.json" \
+            --windows-manifest "$gallery_root/original-release/build-manifest-windows-x64.json" \
+            --macos-artifact macos-offline-validation --windows-artifact windows-offline-validation \
+            --output-dir "$gallery_root/generated" --notes "$gallery_root/release-notes.md"
+          cd "$gallery_root/generated"
+          sha256sum --check GALLERY_SHA256SUMS
+      - name: Add immutable gallery assets, then update only the gallery section
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          from urllib.parse import quote
+          sys.path.insert(0, 'scripts')
+          from release_gallery import update_body
+          root = Path(os.environ['RUNNER_TEMP']) / 'gallery-backfill'
+          generated = root / 'generated'
+          identity = json.loads((root / 'identity.json').read_text(encoding='utf-8'))
+          before = json.loads((root / 'release-before.json').read_text(encoding='utf-8'))
+          repository, tag, release_id = identity['repository'], identity['tag'], identity['release_id']
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', 'repos/' + repository + '/' + path], text=True))
+          def assets():
+              found = []
+              page = 1
+              while True:
+                  values = api('releases/%s/assets?per_page=100&page=%s' % (release_id, page))
+                  found.extend(values)
+                  if len(values) < 100:
+                      break
+                  page += 1
+              return found
+          def digest(path):
+              return hashlib.sha256(path.read_bytes()).hexdigest()
+          manifest = json.loads((generated / 'release-gallery.json').read_text(encoding='utf-8'))
+          names = [image['file'] for image in manifest['images']] + ['release-gallery.json', 'GALLERY_SHA256SUMS']
+          if len(names) != len(set(names)) or any(Path(name).name != name for name in names):
+              raise SystemExit('Invalid gallery asset selection')
+          original_assets = assets()
+          current = {asset['name']: asset for asset in original_assets}
+          if len(current) != len(original_assets):
+              raise SystemExit('The existing release contains duplicate asset names')
+          existing = root / 'existing-assets'
+          existing.mkdir()
+          missing = []
+          # Validate every collision before adding anything. Never --clobber.
+          for name in names:
+              if name not in current:
+                  missing.append(name)
+                  continue
+              subprocess.run(['gh', 'release', 'download', tag, '--repo', repository,
+                              '--pattern', name, '--dir', str(existing)], check=True)
+              if digest(existing / name) != digest(generated / name):
+                  raise SystemExit('Refusing to replace a different existing gallery asset: ' + name)
+          for name in missing:
+              subprocess.run(['gh', 'release', 'upload', tag, str(generated / name), '--repo', repository], check=True)
+          verified = root / 'verified-assets'
+          verified.mkdir()
+          for name in names:
+              subprocess.run(['gh', 'release', 'download', tag, '--repo', repository,
+                              '--pattern', name, '--dir', str(verified)], check=True)
+              if digest(verified / name) != digest(generated / name):
+                  raise SystemExit('Uploaded gallery asset failed hash verification: ' + name)
+          # The original packages, checksums and other assets retain their IDs
+          # and sizes. This job never uploads a package or modifies a tag.
+          after_assets = {asset['id']: asset for asset in assets()}
+          for asset in original_assets:
+              after = after_assets.get(asset['id'])
+              if not after or after['name'] != asset['name'] or after['size'] != asset['size']:
+                  raise SystemExit('An original release asset changed during gallery backfill')
+          reference = api('git/ref/tags/' + quote(tag, safe=''))['object']
+          for _ in range(5):
+              if reference['type'] == 'commit':
+                  break
+              if reference['type'] != 'tag':
+                  raise SystemExit('Release tag no longer resolves to a commit')
+              reference = api('git/tags/' + reference['sha'])['object']
+          if reference['type'] != 'commit' or reference['sha'] != identity['source_sha']:
+              raise SystemExit('Release tag changed during gallery backfill')
+          latest = api('releases/' + str(release_id))
+          if latest.get('tag_name') != tag or (latest.get('body') or '') != (before.get('body') or ''):
+              raise SystemExit('Release notes changed during backfill; rerun to preserve the latest text')
+          body = (generated / 'release-body.md').read_bytes().decode('utf-8')
+          expected = update_body(before.get('body') or '', (generated / 'release-gallery.md').read_bytes().decode('utf-8'))
+          if body != expected:
+              raise SystemExit('Generated notes changed text outside the managed gallery section')
+          payload = root / 'release-update.json'
+          payload.write_text(json.dumps({'body': body}, ensure_ascii=False), encoding='utf-8')
+          if body != (before.get('body') or ''):
+              subprocess.run(['gh', 'api', '--method', 'PATCH', 'repos/%s/releases/%s' % (repository, release_id),
+                              '--input', str(payload), '--silent'], check=True)
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as summary:
+              summary.write('## Preview gallery added / 预览图已补充\n\n')
+              summary.write('%s: %s verified gallery assets; original packages, SHA256SUMS and tag unchanged.\n' % (tag, len(names)))
+          PY
