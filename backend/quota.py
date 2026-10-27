@@ -8,6 +8,37 @@ import math
 from collections import Counter
 
 
+def reset_credits(payload):
+    """Public, bounded metadata only. This function never redeems a credit."""
+    raw = payload.get('rateLimitResetCredits') if isinstance(payload, dict) else None
+    result = {'supported': isinstance(raw, dict), 'available_count': None, 'credits': []}
+    if not isinstance(raw, dict):
+        return result
+    count = raw.get('availableCount')
+    if type(count) is int and 0 <= count <= 1000000:
+        result['available_count'] = count
+    credits = raw.get('credits')
+    for item in credits[:32] if isinstance(credits, list) else []:
+        if not isinstance(item, dict):
+            continue
+        credit = {}
+        for key, limit in (('id', 160), ('resetType', 80), ('status', 80), ('title', 240), ('description', 1000)):
+            value = item.get(key)
+            if isinstance(value, str):
+                credit[key] = ''.join(c for c in value if c >= ' ' or c in '\n\t')[:limit]
+            elif value is None and key in ('title', 'description'):
+                credit[key] = None
+        for key in ('grantedAt', 'expiresAt'):
+            value = item.get(key)
+            if type(value) in (int, float) and math.isfinite(value) and value >= 0:
+                credit[key] = value
+            elif value is None and key == 'expiresAt':
+                credit[key] = None
+        if credit:
+            result['credits'].append(credit)
+    return result
+
+
 def parse_bucket(payload, limit_id, now, stale_grace=90):
     if not isinstance(payload, dict):
         raise ValueError("requested quota bucket missing")
@@ -46,6 +77,7 @@ def parse_bucket(payload, limit_id, now, stale_grace=90):
     quota_state = "metered" if windows else "service_only" if explicit_no_windows and service_allowed else "unknown"
     return {"limit_id": limit_id, "observed_at": now, "windows": windows,
             "quota_state": quota_state, "service_allowed": service_allowed,
+            "reset_credits": reset_credits(payload),
             "blocked": bool(reached_type) or bucket.get("spendControlReached") is True
                 or payload.get("ordinaryUsageAllowed") is False}
 
@@ -101,24 +133,50 @@ def quota_usable(sample, config):
         else w["remaining"] >= config["resume_remaining"] for w in windows.values())
 
 
-def recovered(current, previous, config, now):
+def restoration_reason(current, previous, config, now):
     if now - current.get("observed_at", 0) > config["max_sample_age_seconds"] or not quota_usable(current, config):
-        return False
+        return None
+    if current.get('limit_id', config.get('limit_id')) != previous.get('limit_id', config.get('limit_id')):
+        return None
+    if current.get('scope') and previous.get('scope') and current['scope'] != previous['scope']:
+        return None
     old_windows, new_windows = window_map(previous), window_map(current)
+    early = False
     for key, old in old_windows.items():
         new = new_windows.get(key)
         if new is None or new["minutes"] != old["minutes"]:
-            return False  # An omitted old allowance is not proof of recovery.
+            return None  # An omitted old allowance is not proof of recovery.
         if _limiting(old, config) and new["reset"] <= old["reset"]:
-            return False
+            if new['remaining'] - old['remaining'] < max(5, config['resume_remaining'] - config['pause_remaining']):
+                return None
+            early = True
     if previous.get("blocked"):
         if not old_windows:
             # A windowless service has no reset timestamp. A fresh, explicit
             # permission transition is the only available recovery evidence.
-            return current.get("service_allowed") is True
+            return 'service_permission_restored' if current.get("service_allowed") is True else None
         if not any(new_windows[k]["reset"] > old["reset"] for k, old in old_windows.items()):
-            return False
-    return True
+            if not any(new_windows[k]['remaining'] - old['remaining'] >= 20 for k, old in old_windows.items()):
+                return None
+            early = True
+    if not old_windows:
+        return None
+    advanced = any(new_windows[k]['reset'] > old['reset'] for k, old in old_windows.items())
+    return 'balance_restored' if early else 'window_advanced' if advanced else None
+
+
+def recovered(current, previous, config, now):
+    return restoration_reason(current, previous, config, now) is not None
+
+
+def restoration_details(current, previous_windows, reason):
+    windows = window_map(current)
+    return {'kind': reason, 'source': 'account/rateLimits/read', 'official_reason': None,
+            'observed_at': current.get('observed_at'), 'windows': [
+                {'minutes': old['minutes'], 'previous_remaining': old['remaining'],
+                 'remaining': windows[key]['remaining'], 'previous_reset': old['reset'],
+                 'reset': windows[key]['reset']}
+                for key, old in previous_windows.items() if key in windows]}
 
 
 def plan_window(sample):

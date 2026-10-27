@@ -80,6 +80,7 @@ namespace CodexMissionManager
     {
         public string Language = CultureInfo.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase) ? "zh" : "en";
         public string Theme = "system";
+        public string Accent = "green";
         public bool Notifications;
         public bool KeepAwake;
         public readonly string DirectoryPath;
@@ -90,7 +91,7 @@ namespace CodexMissionManager
             try
             {
                 var data = Json.Parse(File.ReadAllText(Path.Combine(DirectoryPath, "native-preferences.json")));
-                Language = Json.Text(data, "language", Language); Theme = Json.Text(data, "theme", "system");
+                Language = Json.Text(data, "language", Language); Theme = Json.Text(data, "theme", "system"); Accent = ThemePalette.Normalize(Json.Text(data, "accent", "green"));
                 Notifications = Json.Bool(data, "notifications");
                 KeepAwake = Json.Bool(data, "keep_awake");
             }
@@ -105,7 +106,7 @@ namespace CodexMissionManager
             {
                 Directory.CreateDirectory(DirectoryPath);
                 string file = Path.Combine(DirectoryPath, "native-preferences.json");
-                File.WriteAllText(file + ".tmp", Json.Stringify(Json.Values("language", Language, "theme", Theme, "notifications", Notifications, "keep_awake", KeepAwake)), new UTF8Encoding(false));
+                File.WriteAllText(file + ".tmp", Json.Stringify(Json.Values("language", Language, "theme", Theme, "accent", Accent, "notifications", Notifications, "keep_awake", KeepAwake)), new UTF8Encoding(false));
                 if (File.Exists(file)) File.Replace(file + ".tmp", file, null);
                 else File.Move(file + ".tmp", file);
                 return true;
@@ -113,6 +114,64 @@ namespace CodexMissionManager
             catch (Exception ex) { failure = ex; return false; }
         }
 
+    }
+
+    static class ThemePalette
+    {
+        public static readonly string[] Keys = { "green", "blue", "purple", "yellow" };
+        public static string Normalize(string value) { return Keys.Contains(value) ? value : "green"; }
+        public static string[] Colors(string value, bool dark)
+        {
+            switch (Normalize(value))
+            {
+                case "blue": return dark ? new[] { "#85B4F0", "#10223B", "#0E1724", "#223149" } : new[] { "#326CB5", "#FFFFFF", "#162638", "#2D435F" };
+                case "purple": return dark ? new[] { "#B39ADE", "#21182F", "#171222", "#30243F" } : new[] { "#7856B1", "#FFFFFF", "#241E34", "#423553" };
+                case "yellow": return dark ? new[] { "#E5CA80", "#2D2411", "#1E1A11", "#3C331E" } : new[] { "#D9B95F", "#302717", "#302A1B", "#514832" };
+                default: return dark ? new[] { "#7FB795", "#102117", "#0D1712", "#2A332F" } : new[] { "#3F765F", "#FFFFFF", "#192822", "#35423D" };
+            }
+        }
+        public static bool SelfTest()
+        {
+            if (Normalize("unknown") != "green") return false;
+            foreach (string key in Keys) foreach (bool dark in new[] { false, true })
+            {
+                var c = Colors(key, dark); if (c.Length != 4 || c.Any(x => x.Length != 7 || !x.StartsWith("#", StringComparison.Ordinal))) return false;
+                if (c[0] == c[1] || c[2] == c[3]) return false;
+            }
+            return Colors("yellow", false)[1] == "#302717";
+        }
+    }
+
+    static class RulesPolicy
+    {
+        public static readonly string[] Fields = { "pause_remaining", "resume_remaining", "poll_seconds", "near_limit_poll_seconds", "recovery_confirm_seconds", "ui_poll_seconds" };
+        public static readonly int[] Defaults = { 10, 20, 30, 10, 5, 5 };
+        public static readonly int[] Minimums = { 1, 5, 10, 5, 3, 2 };
+        public static readonly int[] Maximums = { 50, 95, 300, 60, 60, 30 };
+        public static Dictionary<string, object> DefaultsObject()
+        { var value = new Dictionary<string, object>(); for (int index = 0; index < Fields.Length; index++) value[Fields[index]] = Defaults[index]; return value; }
+        public static bool Parse(IDictionary<string, string> draft, out Dictionary<string, object> value, out string error)
+        {
+            value = new Dictionary<string, object>(); error = "";
+            for (int index = 0; index < Fields.Length; index++)
+            {
+                string text; int number; if (!draft.TryGetValue(Fields[index], out text) || !Int32.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out number)
+                    || number < Minimums[index] || number > Maximums[index]) { error = Fields[index]; return false; }
+                value[Fields[index]] = number;
+            }
+            if (Json.Integer(value, "resume_remaining") < Json.Integer(value, "pause_remaining") + 5) { error = "resume_margin"; return false; }
+            if (Json.Integer(value, "near_limit_poll_seconds") > Json.Integer(value, "poll_seconds")) { error = "near_interval"; return false; }
+            return true;
+        }
+        public static bool SelfTest()
+        {
+            var draft = new Dictionary<string, string>(); for (int i = 0; i < Fields.Length; i++) draft[Fields[i]] = Defaults[i].ToString(CultureInfo.InvariantCulture);
+            Dictionary<string, object> parsed; string error; if (!Parse(draft, out parsed, out error)) return false;
+            draft["resume_remaining"] = "14"; if (Parse(draft, out parsed, out error) || error != "resume_margin") return false;
+            draft["resume_remaining"] = "20"; draft["near_limit_poll_seconds"] = "31"; if (Parse(draft, out parsed, out error) || error != "near_interval") return false;
+            draft["near_limit_poll_seconds"] = "10"; draft["pause_remaining"] = "1.5"; if (Parse(draft, out parsed, out error)) return false;
+            draft["pause_remaining"] = "10"; draft["ui_poll_seconds"] = "1"; return !Parse(draft, out parsed, out error);
+        }
     }
 
     // Startup diagnostics must survive a non-writable application data folder.
@@ -215,12 +274,12 @@ namespace CodexMissionManager
         System.Drawing.Icon trayBrandIcon;
         DispatcherTimer timer;
         bool refreshing, busy, quitting, firstNotices = true, lifecycleFixture;
-        string notice = "", connectionError = "", currentView = "tasks", source = "all", search = "";
+        string notice = "", connectionError = "", currentView = "tasks", search = "";
         string connectionErrorDetail = "", connectionExitCode = "";
         StartupDiagnostic startupDiagnostic;
         bool preferenceSaveFailed, preferenceSaveAccessFailure;
         string statusFilter = "all";
-        Brush background, surface, foreground, secondary, border, accent, accentText, sideBackground, groupSurface;
+        Brush background, surface, foreground, secondary, border, accent, accentText, accentInk, sideBackground, sideSelected, groupSurface;
         Grid root;
         StackPanel sidebar, quotaPanel, content;
         StackPanel accountPanel;
@@ -237,6 +296,13 @@ namespace CodexMissionManager
         TextBox searchBox;
         ComboBox filterBox;
         Window settingsWindow, trayPanelWindow;
+        readonly Dictionary<string, string> rulesDraft = new Dictionary<string, string>();
+        readonly Dictionary<string, TextBox> ruleInputs = new Dictionary<string, TextBox>();
+        int rulesDraftRevision;
+        bool rulesDraftInitialized, rulesDirty, rulesSaving, rulesUpdating;
+        string rulesError = "";
+        TextBlock rulesStatus, ruleQuotaSummary;
+        Button rulesSave, rulesReload;
 
         sealed class Draft { public string Text; public int Revision; }
 
@@ -245,7 +311,7 @@ namespace CodexMissionManager
         const uint ExecutionContinuous = 0x80000000;
         const uint ExecutionSystemRequired = 0x00000001;
 
-        public MissionWindow(bool fixture, Dictionary<string, object> initial, string fixtureLanguage = "zh", string fixtureTheme = "system")
+        public MissionWindow(bool fixture, Dictionary<string, object> initial, string fixtureLanguage = "zh", string fixtureTheme = "system", string fixtureAccent = "green")
         {
             fixtureMode = fixture;
             preferences = new Preferences(!fixture);
@@ -254,7 +320,7 @@ namespace CodexMissionManager
                 if (fixtureLanguage != "zh" && fixtureLanguage != "en") throw new ArgumentException("Fixture language must be zh or en.");
                 if (fixtureTheme != "system" && fixtureTheme != "light" && fixtureTheme != "dark") throw new ArgumentException("Fixture theme must be system, light or dark.");
                 // Preview choices never load or save the real user's settings.
-                preferences.Language = fixtureLanguage; preferences.Theme = fixtureTheme;
+                preferences.Language = fixtureLanguage; preferences.Theme = fixtureTheme; preferences.Accent = ThemePalette.Normalize(fixtureAccent);
             }
             if (initial != null) snapshot = initial;
             var handler = new HttpClientHandler { CookieContainer = cookies, UseCookies = true, UseProxy = false };
@@ -269,7 +335,7 @@ namespace CodexMissionManager
             {
                 if (preferences.KeepAwake) SetAwake(true);
                 BuildTray();
-                timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(5) };
+                timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(UiPollSeconds()) };
                 timer.Tick += async delegate { await RefreshAsync(); ReadNotifications(); CheckSystemTheme(); };
                 timer.Start();
                 Loaded += delegate { StartHost(); };
@@ -280,7 +346,7 @@ namespace CodexMissionManager
         public Brush SecondaryBrush { get { return secondary; } }
         public Brush SurfaceBrush { get { return surface; } }
         public Brush CardBorderBrush { get { return border; } }
-        public Brush AccentBrush { get { return accent; } }
+        public Brush AccentBrush { get { return accentInk; } }
         public Brush StageBrush { get { return Tint(accent, 0.05); } }
         public bool IsDark { get { return dark; } }
         public bool IsBusy { get { return busy; } }
@@ -301,9 +367,9 @@ namespace CodexMissionManager
             background = ColorBrush(dark ? "#323232" : "#ECECEC"); surface = ColorBrush(dark ? "#1E1E1E" : "#FFFFFF");
             groupSurface = ColorBrush(dark ? "#252525" : "#F7F7F7");
             foreground = ColorBrush(dark ? "#DCDCDC" : "#262626"); secondary = ColorBrush(dark ? "#9E9E9E" : "#808080");
-            border = ColorBrush(dark ? "#3D3D3D" : "#DFDFDF"); accent = ColorBrush(dark ? "#7ABA91" : "#427A5C");
-            sideBackground = ColorBrush(dark ? "#0D1712" : "#192822");
-            accentText = ColorBrush(dark ? "#102819" : "#FFFFFF"); Background = background; Foreground = foreground;
+            border = ColorBrush(dark ? "#3D3D3D" : "#DFDFDF"); var palette = ThemePalette.Colors(preferences.Accent, dark);
+            accent = ColorBrush(palette[0]); accentText = ColorBrush(palette[1]); sideBackground = ColorBrush(palette[2]); sideSelected = ColorBrush(palette[3]);
+            accentInk = ColorBrush(preferences.Accent == "yellow" && !dark ? "#82631A" : palette[0]); Background = background; Foreground = foreground;
         }
         static Brush ColorBrush(string value) { return new SolidColorBrush((Color)ColorConverter.ConvertFromString(value)); }
         public static Brush Tint(Brush source, double opacity)
@@ -465,8 +531,8 @@ namespace CodexMissionManager
         }
         void UpdateNavigation()
         {
-            foreach (var pair in navButtons) pair.Value.Background = pair.Key == currentView ? ColorBrush(dark ? "#2A332F" : "#35423D") : Brushes.Transparent;
-            if (navCount != null) navCount.Text = Json.Rows(snapshot, "tasks").Count.ToString(CultureInfo.InvariantCulture);
+            foreach (var pair in navButtons) pair.Value.Background = pair.Key == currentView ? sideSelected : Brushes.Transparent;
+            if (navCount != null) navCount.Text = CodexChats().Count.ToString(CultureInfo.InvariantCulture);
             if (breadcrumb != null) breadcrumb.Text = currentView == "events" ? T("操作记录", "Activity") : currentView == "rules" ? T("运行规则", "Rules") : T("任务控制", "Task control");
         }
         void BuildShell()
@@ -568,27 +634,23 @@ namespace CodexMissionManager
                 statValues[index] = Text("0", 26, true); statValues[index].FontWeight = FontWeights.SemiBold; statValues[index].Margin = new Thickness(0); cell.Children.Add(statValues[index]); Grid.SetColumn(cell, index); statistics.Children.Add(cell);
             }
             var statsFrame = new Border { CornerRadius = new CornerRadius(10), Background = surface, Margin = new Thickness(0, 18, 0, 0), Child = statistics }; Grid.SetRow(statsFrame, 1); pageRoot.Children.Add(statsFrame);
-            var filters = new Grid { Margin = new Thickness(0, 18, 0, 0) }; filters.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) }); filters.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(198) }); filters.ColumnDefinitions.Add(new ColumnDefinition());
-            var sourceLine = new DockPanel(); var sourceLabel = Text(T("来源", "Source"), 13); sourceLabel.Margin = new Thickness(0, 0, 8, 0); sourceLabel.VerticalAlignment = VerticalAlignment.Center; DockPanel.SetDock(sourceLabel, Dock.Left); sourceLine.Children.Add(sourceLabel);
-            sourceLine.Children.Add(Segments(new[] { T("全部", "All"), "Codex", "ChatGPT" }, new[] { "all", "codex", "chatgpt" }, source, delegate(string value) { source = value; BuildSourceSelection(); RenderChats(); })); filters.Children.Add(sourceLine);
-            var filterLine = new DockPanel { Margin = new Thickness(8, 0, 0, 0) }; Grid.SetColumn(filterLine, 1); var filterLabel = Text(T("筛选", "Filter"), 13); filterLabel.Margin = new Thickness(0, 0, 8, 0); filterLabel.VerticalAlignment = VerticalAlignment.Center; DockPanel.SetDock(filterLabel, Dock.Left); filterLine.Children.Add(filterLabel);
+            var filters = new Grid { Margin = new Thickness(0, 18, 0, 0) }; filters.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(245) }); filters.ColumnDefinitions.Add(new ColumnDefinition());
+            var filterLine = new DockPanel(); var filterLabel = Text(T("筛选", "Filter"), 13); filterLabel.Margin = new Thickness(0, 0, 8, 0); filterLabel.VerticalAlignment = VerticalAlignment.Center; DockPanel.SetDock(filterLabel, Dock.Left); filterLine.Children.Add(filterLabel);
             filterBox = Choice(new[] { T("全部状态", "All statuses"), T("等待恢复", "Waiting for recovery"), T("已预约", "Scheduled"), T("需留意", "Needs attention") });
             filterBox.SelectedIndex = statusFilter == "waiting" ? 1 : statusFilter == "scheduled" ? 2 : statusFilter == "attention" ? 3 : 0;
             filterBox.SelectionChanged += delegate { statusFilter = filterBox.SelectedIndex == 1 ? "waiting" : filterBox.SelectedIndex == 2 ? "scheduled" : filterBox.SelectedIndex == 3 ? "attention" : "all"; RenderChats(); }; filterLine.Children.Add(filterBox); filters.Children.Add(filterLine);
-            var searchFrame = new Grid { Width = 240, HorizontalAlignment = HorizontalAlignment.Right }; Grid.SetColumn(searchFrame, 2);
+            var searchFrame = new Grid { Width = 280, HorizontalAlignment = HorizontalAlignment.Right }; Grid.SetColumn(searchFrame, 1);
             searchBox = new TextBox { Text = search, Height = 22, Padding = new Thickness(7, 2, 7, 2), FontSize = 12 }; StyleTextBox(searchBox); searchFrame.Children.Add(searchBox);
             var placeholder = Text(T("搜索聊天名称或 ID", "Search chats or IDs"), 12); placeholder.Foreground = secondary; placeholder.Margin = new Thickness(7, 0, 0, 0); placeholder.VerticalAlignment = VerticalAlignment.Center; placeholder.IsHitTestVisible = false; placeholder.Visibility = String.IsNullOrEmpty(search) ? Visibility.Visible : Visibility.Collapsed; searchFrame.Children.Add(placeholder);
             searchBox.TextChanged += delegate { search = searchBox.Text; placeholder.Visibility = String.IsNullOrEmpty(search) ? Visibility.Visible : Visibility.Collapsed; RenderChats(); }; filters.Children.Add(searchFrame); Grid.SetRow(filters, 2); pageRoot.Children.Add(filters);
-            var columns = new Grid { Margin = new Thickness(16, 18, 16, 0) }; columns.ColumnDefinitions.Add(new ColumnDefinition()); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) }); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) }); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(310) });
-            var first = Text(T("聊天 / 当前执行阶段", "Chat / Execution stage"), 10); first.Foreground = secondary; first.Margin = new Thickness(0); columns.Children.Add(first);
-            var second = Text(T("当前状态 / 自动控制", "Status / Automatic control"), 10); second.Foreground = secondary; second.Margin = new Thickness(0); Grid.SetColumn(second, 1); columns.Children.Add(second);
-            var third = Text(T("额度恢复后执行 · 一次性", "Run once after quota recovery"), 10); third.Foreground = secondary; third.Margin = new Thickness(0); Grid.SetColumn(third, 3); columns.Children.Add(third); Grid.SetRow(columns, 3); pageRoot.Children.Add(columns);
+            var columns = new Grid { Margin = new Thickness(18, 18, 18, 0) }; columns.ColumnDefinitions.Add(new ColumnDefinition()); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) }); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(360) });
+            var first = Text(T("任务 / 当前执行阶段", "Task / Execution stage"), 10); first.Foreground = secondary; first.Margin = new Thickness(0); columns.Children.Add(first);
+            var third = Text(T("额度恢复后执行 · 一次性", "Run once after quota recovery"), 10); third.Foreground = secondary; third.Margin = new Thickness(0); Grid.SetColumn(third, 2); columns.Children.Add(third); Grid.SetRow(columns, 3); pageRoot.Children.Add(columns);
             rowsPanel = new StackPanel { Margin = new Thickness(0, 0, 4, 0) }; var list = Scroller(rowsPanel, new Thickness(0, 18, 0, 0)); Grid.SetRow(list, 4); pageRoot.Children.Add(list);
             var footer = new DockPanel { Margin = new Thickness(0, 18, 0, 0) }; syncBlock = Text("", 10); syncBlock.Foreground = secondary; syncBlock.Margin = new Thickness(0); footer.Children.Add(syncBlock);
-            var directoryNote = Text(T("ChatGPT 仅目录，不自动执行", "ChatGPT directory only · Execution unavailable"), 10); directoryNote.Foreground = secondary; directoryNote.Margin = new Thickness(0); directoryNote.HorizontalAlignment = HorizontalAlignment.Right; footer.Children.Add(directoryNote); Grid.SetRow(footer, 5); pageRoot.Children.Add(footer);
+            Grid.SetRow(footer, 5); pageRoot.Children.Add(footer);
             RenderHeader(); RenderChats(); return pageRoot;
         }
-        readonly Dictionary<string, Button> sourceTabs = new Dictionary<string, Button>();
         FrameworkElement Segments(string[] labels, string[] values, string selected, Action<string> changed)
         {
             var grid = new Grid(); for (int index = 0; index < labels.Length; index++)
@@ -596,13 +658,10 @@ namespace CodexMissionManager
                 grid.ColumnDefinitions.Add(new ColumnDefinition()); string value = values[index];
                 var button = MakeButton(labels[index], delegate { changed(value); }); button.Padding = new Thickness(6, 3, 6, 3); button.FontSize = 12; button.Height = 22; button.MinHeight = 22;
                 button.Background = value == selected ? ColorBrush(dark ? "#555555" : "#CCCCCC") : Brushes.Transparent;
-                if (values.Length == 3 && values[0] == "all") sourceTabs[value] = button;
                 Grid.SetColumn(button, index); grid.Children.Add(button);
             }
             return new Border { Background = ColorBrush(dark ? "#333333" : "#EBEBEB"), CornerRadius = new CornerRadius(6), Padding = new Thickness(1), Child = grid };
         }
-        void BuildSourceSelection()
-        { foreach (var pair in sourceTabs) pair.Value.Background = pair.Key == source ? ColorBrush(dark ? "#555555" : "#CCCCCC") : Brushes.Transparent; }
         ComboBox Choice(string[] labels)
         {
             var combo = new ComboBox { FontSize = 12, MinHeight = 22, Height = 22, Foreground = foreground, Background = ColorBrush(dark ? "#333333" : "#EEEEEE") };
@@ -621,13 +680,35 @@ namespace CodexMissionManager
             string template = @"<ControlTemplate xmlns='http://schemas.microsoft.com/winfx/2006/xaml/presentation' xmlns:x='http://schemas.microsoft.com/winfx/2006/xaml' TargetType='ScrollViewer'><Grid Background='{TemplateBinding Background}'><ScrollContentPresenter x:Name='PART_ScrollContentPresenter' Content='{TemplateBinding Content}' ContentTemplate='{TemplateBinding ContentTemplate}' CanContentScroll='{TemplateBinding CanContentScroll}' Margin='{TemplateBinding Padding}'/><ScrollBar x:Name='PART_VerticalScrollBar' Orientation='Vertical' Width='8' HorizontalAlignment='Right' VerticalAlignment='Stretch' Minimum='0' Maximum='{TemplateBinding ScrollableHeight}' ViewportSize='{TemplateBinding ViewportHeight}' Value='{Binding VerticalOffset, RelativeSource={RelativeSource TemplatedParent}, Mode=OneWay}' Visibility='{TemplateBinding ComputedVerticalScrollBarVisibility}'><ScrollBar.Template><ControlTemplate TargetType='ScrollBar'><Grid Background='Transparent' Width='8'><Track x:Name='PART_Track' Orientation='Vertical' Minimum='{TemplateBinding Minimum}' Maximum='{TemplateBinding Maximum}' ViewportSize='{TemplateBinding ViewportSize}' Value='{Binding Value, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}' IsDirectionReversed='True'><Track.DecreaseRepeatButton><RepeatButton Focusable='False' Command='ScrollBar.PageUpCommand' Opacity='0'/></Track.DecreaseRepeatButton><Track.Thumb><Thumb MinHeight='24'><Thumb.Template><ControlTemplate TargetType='Thumb'><Border CornerRadius='3' Background='"+thumb+@"' Margin='1.5,2'/></ControlTemplate></Thumb.Template></Thumb></Track.Thumb><Track.IncreaseRepeatButton><RepeatButton Focusable='False' Command='ScrollBar.PageDownCommand' Opacity='0'/></Track.IncreaseRepeatButton></Track></Grid></ControlTemplate></ScrollBar.Template></ScrollBar></Grid></ControlTemplate>";
             scroll.Template = (ControlTemplate)System.Windows.Markup.XamlReader.Parse(template); return scroll;
         }
+        List<Dictionary<string, object>> CodexChats()
+        { return Json.Rows(snapshot, "tasks").Where(x => Json.Text(x, "category", "codex") == "codex" && Json.Text(x, "kind", "codex") == "codex" && Json.Text(x, "host_id", "local") == "local").ToList(); }
+        int UiPollSeconds()
+        { return Math.Max(2, Math.Min(30, Json.Integer(Json.Child(Json.Child(snapshot, "rules"), "values"), "ui_poll_seconds", 5))); }
+        void ApplyUiPollInterval() { if (timer != null) timer.Interval = TimeSpan.FromSeconds(UiPollSeconds()); }
+        string ResetCreditSummary(Dictionary<string, object> usage)
+        {
+            var credits = Json.Child(usage, "reset_credits"); if (!Json.Bool(credits, "supported")) return "";
+            object raw = Json.Get(credits, "available_count");
+            return raw == null ? T("额度重置权益：数量未提供", "Rate-limit resets: count not provided")
+                : T("可用额度重置权益：", "Available rate-limit resets: ") + Json.Integer(credits, "available_count").ToString(CultureInfo.InvariantCulture);
+        }
+        string ResetCreditDetails(Dictionary<string, object> usage)
+        {
+            var lines = new List<string>(); foreach (var item in Json.Rows(Json.Child(usage, "reset_credits"), "credits").Take(20))
+            {
+                string name = Json.Text(item, "title", T("额度重置权益", "Rate-limit reset")); string status = Json.Text(item, "status");
+                double expiry = Json.Number(item, "expires_at", Json.Number(item, "expiresAt"));
+                lines.Add(name + (status.Length > 0 ? " · " + status : "") + (expiry > 0 ? " · " + T("有效期至 ", "Expires ") + FormatTime(expiry) : ""));
+            }
+            return String.Join("\n", lines);
+        }
         void RenderSnapshot()
         {
-            RenderQuota(); UpdateNavigation(); UpdateNotices();
+            ApplyUiPollInterval(); RenderQuota(); UpdateNavigation(); UpdateNotices();
             if (lastSync != null) lastSync.Text = T("最近同步 ", "Last updated ") + FormatTime(Json.Number(snapshot, "observed_at"));
             if (currentView == "tasks") { RenderHeader(); RenderChats(); }
             else if (currentView == "events" && !busy) BuildContent();
-            else if (currentView == "rules") BuildContent();
+            else if (currentView == "rules") RefreshRulesPresentation();
             RefreshSettingsWindow(); BuildTrayMenu();
         }
         static bool Attention(Dictionary<string, object> chat)
@@ -647,7 +728,7 @@ namespace CodexMissionManager
             globalButton.Content = !Json.Bool(snapshot, "running") ? T("启动后台服务", "Start background service") : Json.Bool(snapshot, "control_paused", true) ? T("启用自动控制", "Enable automation") : T("暂停自动控制", "Pause automation");
             globalButton.IsEnabled = !busy && (fixtureMode || host == null || (baseUri != null && Json.Bool(snapshot, "running")
                 && (!Json.Bool(snapshot, "control_paused", true) || (ControlAvailable && Healthy))));
-            var chats = Json.Rows(snapshot, "tasks");
+            var chats = CodexChats();
             int[] counts = { chats.Count, chats.Count(x => !Attention(x) && !Waiting(x) && Json.Text(Json.Child(x, "runtime"), "type") == "active"),
                 chats.Count(x => Waiting(x) || Scheduled(Json.Child(x, "plan"))), chats.Count(Attention) };
             for (int index = 0; index < statValues.Length; index++) if (statValues[index] != null) statValues[index].Text = counts[index].ToString(CultureInfo.InvariantCulture);
@@ -663,9 +744,8 @@ namespace CodexMissionManager
         void RenderChats()
         {
             if (rowsPanel == null || currentView != "tasks") return;
-            var all = Json.Rows(snapshot, "tasks");
-            var filtered = all.Where(x => (source == "all" || Json.Text(x, "category", "codex") == source)
-                && (String.IsNullOrWhiteSpace(search) || (Json.Text(x, "name") + " " + Json.Text(x, "id")).IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0)
+            var all = CodexChats();
+            var filtered = all.Where(x => (String.IsNullOrWhiteSpace(search) || (Json.Text(x, "name") + " " + Json.Text(x, "id")).IndexOf(search, StringComparison.OrdinalIgnoreCase) >= 0)
                 && (statusFilter == "all" || statusFilter == "waiting" && (Waiting(x) || Scheduled(Json.Child(x, "plan")))
                     || statusFilter == "scheduled" && Scheduled(Json.Child(x, "plan")) || statusFilter == "attention" && Attention(x))).ToList();
             var wanted = new List<UIElement>();
@@ -680,14 +760,14 @@ namespace CodexMissionManager
                 var empty = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(30) };
                 empty.Children.Add(Glyph("chat", secondary, 38));
                 var title = Text(snapshot.Count == 0 ? T("正在读取聊天目录", "Reading the chat directory") : T("没有匹配的聊天", "No matching chats"), 17, true); title.TextAlignment = TextAlignment.Center; title.Margin = new Thickness(0, 14, 0, 8); empty.Children.Add(title);
-                var note = Text(T("Codex 目录随后台更新；ChatGPT 仅显示已知目录。", "The Codex directory follows background updates. ChatGPT shows known entries only."), 12); note.Foreground = secondary; note.TextAlignment = TextAlignment.Center; empty.Children.Add(note);
+                var note = Text(T("Codex 任务目录随后台更新。", "The Codex task directory follows background updates."), 12); note.Foreground = secondary; note.TextAlignment = TextAlignment.Center; empty.Children.Add(note);
                 wanted.Add(new Border { MinHeight = 220, Child = empty });
             }
             bool same = rowsPanel.Children.Count == wanted.Count;
             if (same) for (int index = 0; index < wanted.Count; index++) if (rowsPanel.Children[index] != wanted[index]) same = false;
             if (!same && !rowsPanel.IsKeyboardFocusWithin) { rowsPanel.Children.Clear(); foreach (var element in wanted) rowsPanel.Children.Add(element); }
-            if (syncBlock != null) syncBlock.Text = preferences.Language == "en" ? filtered.Count + " of " + all.Count + " chats · Updates every 5 seconds"
-                : "显示 " + filtered.Count + " / " + all.Count + " 个聊天 · 每 5 秒同步";
+            if (syncBlock != null) syncBlock.Text = preferences.Language == "en" ? filtered.Count + " of " + all.Count + " tasks · Updates every " + UiPollSeconds() + " seconds"
+                : "显示 " + filtered.Count + " / " + all.Count + " 个任务 · 每 " + UiPollSeconds() + " 秒同步";
         }
         void RenderQuota()
         {
@@ -707,7 +787,7 @@ namespace CodexMissionManager
                     var track = new Grid { Height = 8, Margin = new Thickness(0, 7, 0, 7) };
                     track.Children.Add(new Border { Background = Tint(Brushes.White, 0.05), CornerRadius = new CornerRadius(4) });
                     var fill = new Grid(); fill.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(0.0001, remaining), GridUnitType.Star) }); fill.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(Math.Max(0.0001, 100 - remaining), GridUnitType.Star) });
-                    fill.Children.Add(new Border { Background = remaining <= 10 ? Brushes.Orange : ColorBrush("#B0B0B0"), CornerRadius = new CornerRadius(4) }); track.Children.Add(fill); group.Children.Add(track);
+                    fill.Children.Add(new Border { Background = remaining <= Json.Number(Json.Child(snapshot, "policy"), "pause", 10) ? Brushes.Orange : ColorBrush("#B0B0B0"), CornerRadius = new CornerRadius(4) }); track.Children.Add(fill); group.Children.Add(track);
                 }
                 var reset = SideText(T("下次刷新 ", "Next reset ") + FormatTime(Json.Number(window, "reset")), 10); reset.Foreground = Tint(Brushes.White, 0.58); group.Children.Add(reset); quotaPanel.Children.Add(group);
             }
@@ -716,6 +796,7 @@ namespace CodexMissionManager
             else if (quotaState == "service_only" && Json.Bool(usage, "service_allowed")) note = T("服务已允许使用，未提供固定额度窗口", "Usage is permitted; no fixed quota window was provided.");
             else if (VisibleWindows(usage).Count == 0) note = T("额度信息尚未核实", "Allowance has not been verified");
             if (note.Length > 0) { var message = SideText(note, 10); message.Margin = new Thickness(0, 16, 0, 0); quotaPanel.Children.Add(message); }
+            string resetCredits = ResetCreditSummary(usage); if (resetCredits.Length > 0) { var earned = SideText(resetCredits, 10); earned.Margin = new Thickness(0, 14, 0, 0); earned.ToolTip = ResetCreditDetails(usage); quotaPanel.Children.Add(earned); }
             bool stale = UsageStale(usage); var freshness = SideText(stale ? T("额度待同步 · 上次记录", "Quota awaiting update · Saved reading") : T("服务实际限额 · 本机时区", "Service-reported limits · Local time"), 10);
             freshness.Foreground = stale ? Brushes.DarkOrange : Tint(Brushes.White, 0.5); freshness.Margin = new Thickness(0, 16, 0, 0); quotaPanel.Children.Add(freshness);
             if (accountPanel == null) return; accountPanel.Children.Clear();
@@ -770,7 +851,7 @@ namespace CodexMissionManager
             var title = Text(Json.Text(chat, "name"), 17, true); title.Margin = new Thickness(0, 0, 16, 0); heading.Children.Add(title); body.Children.Add(heading);
             var stage = Text(Json.Text(Json.Child(chat, "execution_stage"), "text", T("暂未读取到公开执行进展", "No public execution progress is available")), 13); stage.Margin = new Thickness(0, 18, 0, 18); body.Children.Add(stage);
             body.Children.Add(DividerLine(border, new Thickness(0, 0, 0, 18)));
-            body.Children.Add(Text(T("来源：", "Source: ") + Json.Text(chat, "source_label"), 13));
+            body.Children.Add(Text(T("来源：", "Source: ") + T("Codex · 本机", "Codex · Local"), 13));
             body.Children.Add(Text(T("上次暂停：", "Last paused: ") + FormatTime(Json.Number(chat, "paused_at")), 13));
             body.Children.Add(Text(T("上次续做：", "Last resumed: ") + FormatTime(Json.Number(chat, "resumed_at")), 13));
             var identifier = new TextBox { Text = T("聊天 ID：", "Chat ID: ") + Json.Text(chat, "id"), IsReadOnly = true, TextWrapping = TextWrapping.Wrap, BorderThickness = new Thickness(0), Background = Brushes.Transparent, Foreground = foreground, FontFamily = new FontFamily("Consolas"), FontSize = 11, Margin = new Thickness(0, 6, 0, 14) }; body.Children.Add(identifier);
@@ -830,10 +911,23 @@ namespace CodexMissionManager
                 var stamp = Text(FormatTime(Json.Number(item, "created")), 10); stamp.Foreground = secondary; stamp.Margin = new Thickness(18, 1, 0, 0); DockPanel.SetDock(stamp, Dock.Right); row.Children.Add(stamp);
                 var labels = new StackPanel(); var heading = Text(EventLabel(Json.Text(item, "state")), 13, true); heading.Margin = new Thickness(0, 0, 0, 5); labels.Children.Add(heading);
                 var name = Text(Json.Text(item, "name", T("全局控制", "Global control")), 13); name.Margin = new Thickness(0); labels.Children.Add(name);
-                string reason = Json.Text(Json.Child(item, "detail"), "reason"); if (reason.Length > 0) { var detail = Text(reason, 12); detail.Foreground = secondary; detail.Margin = new Thickness(0, 5, 0, 0); labels.Children.Add(detail); }
+                var eventDetail = Json.Child(item, "detail"); string reason = Json.Text(eventDetail, "reason"); string recovery = RecoveryLabel(Json.Text(eventDetail, "recovery_reason"));
+                if (recovery.Length > 0) { var evidence = Text(recovery, 12); evidence.Foreground = secondary; evidence.Margin = new Thickness(0, 5, 0, 0); labels.Children.Add(evidence); }
+                if (reason.Length > 0 && reason != recovery) { var detail = Text(reason, 12); detail.Foreground = secondary; detail.Margin = new Thickness(0, 5, 0, 0); labels.Children.Add(detail); }
                 row.Children.Add(labels); content.Children.Add(row); content.Children.Add(DividerLine(Tint(secondary, 0.15), new Thickness(46, 0, 12, 0)));
             }
             if (events.Count == 0) { var empty = Text(T("暂无控制操作记录", "No control activity has been recorded"), 13); empty.Foreground = secondary; content.Children.Add(empty); }
+        }
+        string RecoveryLabel(string value)
+        {
+            switch (value)
+            {
+                case "window_advanced": return T("已观察到新额度窗口", "New quota window observed");
+                case "balance_restored": return T("可用余额恢复，重置原因未知", "Usable balance restored; reset cause unknown");
+                case "quota_available": return T("额度已重新核验可用", "Quota availability verified");
+                case "service_permission_restored": return T("服务许可恢复", "Service permission restored");
+                default: return "";
+            }
         }
         string EventLabel(string value)
         {
@@ -845,23 +939,113 @@ namespace CodexMissionManager
                 {"plan_armed",new[]{"已预约下一窗口","Scheduled for next window"}}, {"plan_sending",new[]{"提交预约指令","Scheduled instruction submitted"}},
                 {"plan_sent",new[]{"预约指令已确认发送","Scheduled delivery confirmed"}}, {"plan_cancelled",new[]{"已取消预约","Schedule cancelled"}},
                 {"immediate_pending",new[]{"提交立刻执行","Immediate execution requested"}}, {"immediate_sent",new[]{"立刻执行已确认发送","Immediate delivery confirmed"}},
-                {"immediate_failed",new[]{"立刻执行未发送","Immediate delivery failed"}} };
+                {"immediate_failed",new[]{"立刻执行未发送","Immediate delivery failed"}}, {"rules_updated",new[]{"运行规则已更新","Operating rules updated"}} };
             string[] label; return labels.TryGetValue(value, out label) ? T(label[0],label[1]) : value;
+        }
+        string[] RuleLabels()
+        { return new[] { T("暂停阈值", "Pause threshold"), T("恢复阈值", "Resume threshold"), T("正常采集间隔", "Normal collection interval"), T("临近阈值采集间隔", "Near-limit collection interval"), T("恢复复核时长", "Recovery confirmation"), T("界面刷新间隔", "Interface refresh interval") }; }
+        void LoadRulesDraft()
+        {
+            var rules = Json.Child(snapshot, "rules"); var values = Json.Child(rules, "values"); rulesDraft.Clear();
+            for (int i = 0; i < RulesPolicy.Fields.Length; i++) rulesDraft[RulesPolicy.Fields[i]] = Json.Integer(values, RulesPolicy.Fields[i], RulesPolicy.Defaults[i]).ToString(CultureInfo.InvariantCulture);
+            rulesDraftRevision = Json.Integer(rules, "revision"); rulesDraftInitialized = true; rulesDirty = false; rulesError = "";
         }
         void BuildRules()
         {
-            content.Margin = new Thickness(30); content.MaxWidth = 850; content.HorizontalAlignment = HorizontalAlignment.Left;
-            var title = Text(T("运行规则", "Rules"), 26, true); title.Margin = new Thickness(0, 0, 0, 22); content.Children.Add(title);
-            var policy = Json.Child(snapshot, "policy");
-            Rule(T("自动暂停与续接", "Automatic pause and recovery"), preferences.Language == "en"
-                ? "Control tasks using actual service-reported quota windows. Pause when five-hour or other non-weekly allowance is at or below " + Json.Number(policy, "pause", 10) + "%, then recheck at " + Json.Number(policy, "resume", 20) + "% or above. Exhausted weekly allowance and service restrictions also block sending. Confirm recovery for at least " + Json.Number(policy, "confirm_seconds", 5) + " seconds and verify the account, original chat and usage permission."
-                : "按服务返回的实际额度窗口控制任务。五小时及其他非周窗口剩余 ≤" + Json.Number(policy, "pause", 10) + "% 时暂停，恢复至 ≥" + Json.Number(policy, "resume", 20) + "% 后复核；周窗口用尽或服务禁止使用时也暂停。连续复核至少 " + Json.Number(policy, "confirm_seconds", 5) + " 秒，并核对账号、原聊天与使用许可。");
-            Rule(T("下个窗口执行一次", "Run once in the next window"), T("预约开关独立于单聊自动控制，按服务提供的实际刷新窗口执行一次。没有固定窗口时可使用立刻执行。保存指令不会立刻发送；关闭全局自动控制会阻止预约发送。", "The one-time schedule is independent of a chat's automatic-control switch and uses the actual service reset window. Run now is available when no fixed window is provided. Saving a scheduled instruction does not send it immediately. Pausing global automation blocks scheduled delivery."));
-            Rule(T("订阅与额度", "Subscription and quota"), T("订阅名称只用于显示。缺失额度不会视为无限；未提供固定窗口时，只有服务明确允许使用才能发送。额度信息不完整时暂停自动发送。", "Subscription names are display metadata. Missing quota is never treated as unlimited. Without a fixed window, sending requires explicit service permission. Incomplete quota information blocks automatic sending."));
+            content.Margin = new Thickness(30); content.MaxWidth = 880; content.HorizontalAlignment = HorizontalAlignment.Left;
+            var title = Text(T("运行规则", "Rules"), 26, true); title.Margin = new Thickness(0, 0, 0, 10); content.Children.Add(title);
+            var introduction = Text(T("调整暂停与恢复条件、后台采集和界面刷新频率。服务返回的实际余额及刷新时间保持只读。", "Configure pause and recovery thresholds, background collection and interface refresh. Service-reported balances and reset times remain read-only."), 13); introduction.Foreground = secondary; introduction.Margin = new Thickness(0, 0, 0, 24); content.Children.Add(introduction);
+            if (!rulesDraftInitialized || (!rulesDirty && !rulesSaving)) LoadRulesDraft(); ruleInputs.Clear();
+            var editor = new StackPanel(); var heading = Text(T("控制参数", "Control parameters"), 15, true); heading.Margin = new Thickness(0, 0, 0, 18); editor.Children.Add(heading);
+            string[] labels = RuleLabels(); var bounds = Json.Child(Json.Child(snapshot, "rules"), "bounds");
+            for (int i = 0; i < RulesPolicy.Fields.Length; i++)
+            {
+                string field = RulesPolicy.Fields[i]; var fieldBounds = Json.Child(bounds, field); int lower = Json.Integer(fieldBounds, "min", RulesPolicy.Minimums[i]), upper = Json.Integer(fieldBounds, "max", RulesPolicy.Maximums[i]);
+                var row = new Grid { Margin = new Thickness(0, 0, 0, 14) }; row.ColumnDefinitions.Add(new ColumnDefinition()); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(100) }); row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(148) });
+                var label = Text(labels[i], 13); label.Margin = new Thickness(0, 0, 12, 0); label.VerticalAlignment = VerticalAlignment.Center; row.Children.Add(label);
+                var input = new TextBox { Text = rulesDraft[field], FontSize = 13, Height = 30, Padding = new Thickness(8, 4, 8, 4), MaxLength = 4, VerticalContentAlignment = VerticalAlignment.Center }; StyleTextBox(input); Grid.SetColumn(input, 1); row.Children.Add(input); ruleInputs[field] = input;
+                input.TextChanged += delegate { if (!rulesUpdating) { rulesDraft[field] = input.Text; rulesDirty = true; rulesError = ""; RefreshRulesPresentation(); } };
+                var range = Text((i < 2 ? "%  ·  " : T("秒  ·  ", "sec  ·  ")) + lower + "–" + upper, 11); range.Foreground = secondary; range.Margin = new Thickness(12, 0, 0, 0); range.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(range, 2); row.Children.Add(range); editor.Children.Add(row);
+            }
+            var constraints = Text(T("恢复阈值至少高于暂停阈值 5 个百分点；临近阈值时的采集间隔不得长于正常间隔。", "The resume threshold must exceed the pause threshold by at least 5 percentage points. Near-limit collection cannot be slower than normal collection."), 11); constraints.Foreground = secondary; constraints.Margin = new Thickness(0, 0, 0, 16); editor.Children.Add(constraints);
+            var actions = new WrapPanel(); rulesSave = MakeButton(T("保存规则", "Save rules"), async delegate { await SaveRulesAsync(); }, true); rulesSave.Margin = new Thickness(0, 0, 10, 0); actions.Children.Add(rulesSave);
+            rulesReload = MakeButton(T("重新载入已保存值", "Reload saved values"), delegate { LoadRulesDraft(); RefreshRulesPresentation(); }); rulesReload.ToolTip = T("放弃当前未保存的修改，读取后台最新规则。", "Discard unsaved changes and load the latest saved rules."); actions.Children.Add(rulesReload); editor.Children.Add(actions);
+            rulesStatus = Text("", 11); rulesStatus.Margin = new Thickness(0, 12, 0, 0); editor.Children.Add(rulesStatus); content.Children.Add(Card(editor, new Thickness(0, 0, 0, 22)));
+            var liveQuota = new StackPanel(); var liveHeading = Text(T("服务额度 · 只读", "Service quota · Read-only"), 13, true); liveQuota.Children.Add(liveHeading); ruleQuotaSummary = Text("", 12); ruleQuotaSummary.Foreground = secondary; ruleQuotaSummary.Margin = new Thickness(0); liveQuota.Children.Add(ruleQuotaSummary); content.Children.Add(Card(liveQuota, new Thickness(0, 0, 0, 22)));
+            Rule(T("自动暂停与续接", "Automatic pause and recovery"), T("额度低于暂停阈值、周额度耗尽或服务限制使用时，暂停受管任务。额度窗口正常刷新或检测到余额提前恢复后，连续复核余额与账号，再按已有许可续接。余额变化本身不证明官方主动重置，恢复依据及发送结果分别记录。", "Managed chats pause when allowance reaches the pause threshold, weekly allowance is exhausted, or service access is restricted. A normal window reset or verified early balance recovery triggers consecutive quota and account checks, then resumption under existing permissions. A balance increase alone does not prove an official reset; recovery evidence and delivery outcomes are recorded separately."));
+            Rule(T("额度恢复后执行一次", "Run once after quota recovery"), T("一次性预约独立于单聊自动控制，可在正常窗口刷新或核验余额提前恢复后执行一次。保存指令不会立刻发送；关闭全局自动控制会阻止预约发送。", "A one-time schedule is independent of a chat's automatic-control switch. It can run after a normal window reset or verified early quota recovery. Saving does not send immediately. Pausing global automation blocks scheduled delivery."));
+            Rule(T("订阅与额度", "Subscription and quota"), T("订阅名称仅用于显示。缺失额度不会视为无限；未提供固定窗口时，只有服务明确允许使用才能发送。重置权益仅展示，不会自动兑换或消耗。", "Subscription names are display metadata. Missing quota is never treated as unlimited. Without a fixed window, sending requires explicit service permission. Reset credits are read-only and are never redeemed automatically."));
             Rule(T("立刻执行", "Run now"), T("发送当前指令框内容，不等待刷新。发送后等待真实回执，不把提交成功当作已执行。执行中、等待审批、额度或账号异常时，后台会拒绝发送。结果不明确时不会自动重复发送。", "Send the current instruction without waiting for a reset, then wait for a real delivery receipt. Submission is not proof of execution. Busy chats, pending approvals, or quota and account issues can block delivery. An uncertain result is not retried automatically."));
-            Rule(T("手动操作优先", "Manual actions take priority"), T("人工新指令、审批与 Goal 约束优先。聊天完成后等待下一条指令，不会无限续做。ChatGPT 普通聊天仅显示目录。", "New user instructions, approvals and Goal constraints take priority. Completed chats wait for a new instruction and are not continued indefinitely. Ordinary ChatGPT chats are directory-only."));
+            Rule(T("手动操作优先", "Manual actions take priority"), T("人工新指令、审批与任务约束优先。聊天完成后等待下一条指令，不会无限续做。", "New user instructions, approvals and task constraints take priority. Completed chats wait for a new instruction and are not continued indefinitely."));
             Rule(T("后台运行", "Background operation"), T("关闭主窗口后继续运行。退出应用停止管家和自身电源保护，不中断原客户端正在执行的聊天。锁屏、熄屏与合盖是不同的运行条件。", "Closing the window keeps the app running. Exiting stops Mission Manager and its own keep-awake request, without interrupting client chats. Locking, display-off and lid closure are different operating conditions."));
-            var settings = MakeButton(T("后台运行与系统权限…", "Background operation and permissions…"), ShowSettingsWindow); settings.HorizontalAlignment = HorizontalAlignment.Left; content.Children.Add(settings);
+            var settings = MakeButton(T("后台运行与系统权限…", "Background operation and permissions…"), ShowSettingsWindow); settings.HorizontalAlignment = HorizontalAlignment.Left; content.Children.Add(settings); RefreshRulesPresentation();
+        }
+        void RefreshRulesPresentation()
+        {
+            if (rulesStatus == null || currentView != "rules") return;
+            var rules = Json.Child(snapshot, "rules"); bool available = rules.Count > 0 && !quitting && (fixtureMode || baseUri != null);
+            // Polling never assigns to a focused or dirty editor. Rebuilds use the
+            // separate draft dictionary, so theme/language changes retain edits.
+            if (!rulesDirty && !rulesSaving && !ruleInputs.Values.Any(x => x.IsKeyboardFocusWithin))
+            {
+                LoadRulesDraft(); rulesUpdating = true;
+                try { foreach (var pair in ruleInputs) if (pair.Value.Text != rulesDraft[pair.Key]) pair.Value.Text = rulesDraft[pair.Key]; }
+                finally { rulesUpdating = false; }
+            }
+            bool conflict = rulesDirty && Json.Integer(rules, "revision") != rulesDraftRevision;
+            rulesStatus.Text = rulesError.Length > 0 ? rulesError : rulesSaving ? T("正在保存规则…", "Saving rules…")
+                : !available ? T("连接后台后可保存规则；当前修改会保留。", "Rules can be saved when the background service connects. Current edits are retained.")
+                : conflict ? T("后台规则已更新。当前草稿已保留，请重新载入后再修改并保存。", "Saved rules changed. Your draft is retained; reload the saved values before editing and saving again.")
+                : rulesDirty ? T("有未保存的修改。", "There are unsaved changes.") : T("规则已保存。参数变更不会自动启用控制。", "Rules are saved. Changing parameters does not enable automation.");
+            rulesStatus.Foreground = rulesError.Length > 0 || conflict ? Brushes.DarkOrange : secondary;
+            rulesSave.IsEnabled = available && !fixtureMode && !rulesSaving && rulesDirty && !conflict; rulesReload.IsEnabled = !rulesSaving; foreach (var input in ruleInputs.Values) input.IsEnabled = !rulesSaving;
+            var usage = Json.Child(snapshot, "usage"); var lines = new List<string>();
+            foreach (var window in VisibleWindows(usage))
+            {
+                double remaining = Json.Number(window, "remaining", Double.NaN); string balance = Double.IsNaN(remaining) ? T("未提供", "Not provided") : Math.Round(remaining).ToString(CultureInfo.InvariantCulture) + "%";
+                lines.Add(WindowTitle(Json.Number(window, "minutes")) + T("：剩余 ", ": Remaining ") + balance + T(" · 刷新 ", " · Resets ") + FormatTime(Json.Number(window, "reset")));
+            }
+            if (lines.Count == 0) lines.Add(T("服务尚未提供可显示的额度窗口。", "The service has not provided a visible quota window."));
+            string credits = ResetCreditSummary(usage); if (credits.Length > 0) lines.Add(credits); ruleQuotaSummary.Text = String.Join("\n", lines); ruleQuotaSummary.ToolTip = ResetCreditDetails(usage);
+        }
+        async Task SaveRulesAsync()
+        {
+            if (fixtureMode || quitting || rulesSaving || baseUri == null || !rulesDirty) return;
+            Dictionary<string, object> values; string error; string[] labels = RuleLabels();
+            if (!RulesPolicy.Parse(rulesDraft, out values, out error))
+            {
+                int fieldIndex = Array.IndexOf(RulesPolicy.Fields, error);
+                rulesError = error == "resume_margin" ? T("恢复阈值至少高于暂停阈值 5 个百分点。", "The resume threshold must be at least 5 percentage points above the pause threshold.")
+                    : error == "near_interval" ? T("临近阈值采集间隔不得长于正常采集间隔。", "Near-limit collection cannot be slower than normal collection.")
+                    : fieldIndex >= 0 ? labels[fieldIndex] + T("必须是范围内的整数。", " must be a whole number within the allowed range.") : T("请检查规则参数。", "Check the rule values."); RefreshRulesPresentation(); return;
+            }
+            int submittedRevision = rulesDraftRevision; Uri requestedBase = baseUri; rulesSaving = true; rulesError = ""; RefreshRulesPresentation();
+            try
+            {
+                using (var request = new HttpRequestMessage(HttpMethod.Post, new Uri(requestedBase, "/api/action")))
+                {
+                    request.Headers.Add("X-Guardian-UI", "1"); request.Headers.Add("Origin", requestedBase.GetLeftPart(UriPartial.Authority));
+                    request.Content = new StringContent(Json.Stringify(Json.Values("action", "set_rules", "rules_revision", submittedRevision, "rules", values)), Encoding.UTF8, "application/json");
+                    using (var response = await client.SendAsync(request))
+                    {
+                        var body = Json.Parse(await response.Content.ReadAsStringAsync());
+                        if (!response.IsSuccessStatusCode)
+                        {
+                            rulesError = (int)response.StatusCode == 409 ? T("规则已在其他窗口更新，草稿已保留。请重新载入已保存值后再修改。", "Rules changed in another window. Your draft is retained; reload the saved values before editing again.")
+                                : preferences.Language == "en" ? Json.Text(body, "message_en", T("规则未保存，草稿已保留。", "Rules could not be saved. Your draft is retained.")) : Json.Text(body, "message", T("规则未保存，草稿已保留。", "Rules could not be saved. Your draft is retained."));
+                        }
+                        else
+                        {
+                            var returnedRules = Json.Child(body, "rules"); var returnedValues = Json.Child(returnedRules, "values");
+                            bool confirmed = returnedRules.Count > 0 && Json.Integer(returnedRules, "revision") > submittedRevision && RulesPolicy.Fields.All(field => Json.Integer(returnedValues, field, -1) == Json.Integer(values, field));
+                            if (confirmed && Object.Equals(baseUri, requestedBase)) { snapshot["rules"] = returnedRules; LoadRulesDraft(); }
+                            else rulesError = T("保存回执待核对，草稿已保留。请重新载入确认。", "The save receipt needs verification. Your draft is retained; reload to confirm.");
+                        }
+                    }
+                }
+            }
+            catch (Exception) { rulesError = T("未能连接后台，规则草稿已保留。", "Could not reach the background service. Your rule draft is retained."); }
+            rulesSaving = false; await RefreshAsync(); RefreshRulesPresentation();
         }
         void Rule(string title, string description)
         {
@@ -904,6 +1088,9 @@ namespace CodexMissionManager
             string label = state == "supported" ? T("已适配", "Compatible") : state == "update_required" ? T("需要更新任务管家", "Mission Manager update required") : T("正在检查客户端兼容性", "Checking client compatibility");
             return version.Length > 0 ? version + " · " + label : label;
         }
+        string[] AccentLabels() { return new[] { T("森林绿", "Forest"), T("蓝色", "Blue"), T("紫色", "Purple"), T("鹅蛋黄", "Egg yellow") }; }
+        FrameworkElement AccentChoice()
+        { return Segments(AccentLabels(), ThemePalette.Keys, preferences.Accent, delegate(string value) { preferences.Accent = value; SavePreferences(); RebuildPresentation(); }); }
         FrameworkElement BuildSettingsSurface()
         {
             var body = new StackPanel { Margin = new Thickness(28) };
@@ -913,7 +1100,8 @@ namespace CodexMissionManager
             appearance.Children.Add(SettingsChoiceRow(T("语言", "Language"), Segments(new[] { "简体中文", "English" }, new[] { "zh", "en" }, preferences.Language,
                 delegate(string value) { preferences.Language = value; SavePreferences(); RebuildPresentation(); }), 180));
             appearance.Children.Add(SettingsChoiceRow(T("外观", "Appearance"), Segments(new[] { T("跟随系统", "System"), T("浅色", "Light"), T("深色", "Dark") }, new[] { "system", "light", "dark" }, preferences.Theme,
-                delegate(string value) { preferences.Theme = value; SavePreferences(); RebuildPresentation(); }), 270)); body.Children.Add(SettingsGroup(appearance));
+                delegate(string value) { preferences.Theme = value; SavePreferences(); RebuildPresentation(); }), 270));
+            appearance.Children.Add(SettingsChoiceRow(T("主题色", "Accent color"), AccentChoice(), 315)); body.Children.Add(SettingsGroup(appearance));
             var connection = new StackPanel(); connection.Children.Add(GroupHeading("network", T("客户端连接", "Client connection")));
             var version = Text(CompatibilityLabel(), 13); version.Foreground = secondary; version.Margin = new Thickness(0, 0, 0, 12); connection.Children.Add(version);
             var statusLine = new DockPanel(); var checks = new StackPanel { Orientation = Orientation.Horizontal };
@@ -1103,6 +1291,11 @@ namespace CodexMissionManager
                 {
                     response.EnsureSuccessStatusCode(); var observed = Json.Parse(await response.Content.ReadAsStringAsync());
                     if (!Object.Equals(baseUri, requestedBase) || !Object.ReferenceEquals(startupDiagnostic, requestedAttempt) || quitting) return;
+                    // A GET started before a successful rule save can finish
+                    // afterwards. Keep that older response from undoing the
+                    // confirmed revision in the editor for this same host.
+                    var previousRules = Json.Child(snapshot, "rules"); var observedRules = Json.Child(observed, "rules");
+                    if (previousRules.Count > 0 && Json.Integer(observedRules, "revision", -1) < Json.Integer(previousRules, "revision")) observed["rules"] = previousRules;
                     snapshot = observed;
                 }
                 connectionError = ""; RenderSnapshot();
@@ -1207,7 +1400,7 @@ namespace CodexMissionManager
                 if (!Double.IsNaN(remaining))
                 {
                     var track = new Grid { Height = 5, Margin = new Thickness(0, 6, 0, 6) }; track.Children.Add(new Border { Background = Tint(secondary, 0.2), CornerRadius = new CornerRadius(3) });
-                    var fill = new Border { Background = remaining <= 10 ? Brushes.DarkOrange : accent, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left };
+                    var fill = new Border { Background = remaining <= Json.Number(Json.Child(snapshot, "policy"), "pause", 10) ? Brushes.DarkOrange : accent, CornerRadius = new CornerRadius(3), HorizontalAlignment = HorizontalAlignment.Left };
                     track.Children.Add(fill); track.SizeChanged += delegate { fill.Width = track.ActualWidth * Math.Max(0, Math.Min(100, remaining)) / 100; }; meter.Children.Add(track);
                 }
                 var reset = Text(Json.Number(window, "reset") > 0 ? T("下次刷新 ", "Next reset ") + FormatTime(Json.Number(window, "reset")) : T("刷新时间未提供", "Reset time not provided"), 10); reset.Foreground = secondary; reset.Margin = new Thickness(0); meter.Children.Add(reset); body.Children.Add(meter);
@@ -1217,6 +1410,7 @@ namespace CodexMissionManager
             else if (Json.Text(usage, "quota_state") == "service_only" && Json.Bool(usage, "service_allowed")) availability = T("服务已允许使用，未提供固定额度窗口", "Usage is permitted; no fixed quota window was provided.");
             else if (windows.Count == 0) availability = T("额度信息尚未核实", "Allowance has not been verified");
             if (availability.Length > 0) { var note = Text(availability, 10); note.Foreground = secondary; note.Margin = new Thickness(0, 14, 0, 0); body.Children.Add(note); }
+            string resetCredits = ResetCreditSummary(usage); if (resetCredits.Length > 0) { var earned = Text(resetCredits, 11); earned.Foreground = secondary; earned.Margin = new Thickness(0, 14, 0, 0); earned.ToolTip = ResetCreditDetails(usage); body.Children.Add(earned); }
             if (UsageStale(usage)) { var stale = Text(T("◷  额度待同步", "◷  Quota awaiting update"), 10); stale.Foreground = Brushes.DarkOrange; stale.Margin = new Thickness(0, 14, 0, 0); body.Children.Add(stale); }
             var controls = new Grid { Margin = new Thickness(0, 16, 0, 0) }; controls.ColumnDefinitions.Add(new ColumnDefinition()); controls.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) }); controls.ColumnDefinitions.Add(new ColumnDefinition());
             string bulkState = Json.Text(Json.Child(snapshot, "bulk_pause"), "state"); bool bulkBusy = bulkState == "pending" || bulkState == "processing";
@@ -1237,6 +1431,7 @@ namespace CodexMissionManager
             language.SelectionChanged += delegate { preferences.Language = language.SelectedIndex == 1 ? "en" : "zh"; SavePreferences(); RebuildPresentation(); }; body.Children.Add(SettingsChoiceRow(T("语言", "Language"), language, 180));
             var theme = Choice(new[] { T("跟随系统", "System"), T("浅色", "Light"), T("深色", "Dark") }); theme.SelectedIndex = preferences.Theme == "light" ? 1 : preferences.Theme == "dark" ? 2 : 0;
             theme.SelectionChanged += delegate { preferences.Theme = theme.SelectedIndex == 1 ? "light" : theme.SelectedIndex == 2 ? "dark" : "system"; SavePreferences(); RebuildPresentation(); }; body.Children.Add(SettingsChoiceRow(T("外观", "Appearance"), theme, 180));
+            var colors = Choice(AccentLabels()); colors.SelectedIndex = Array.IndexOf(ThemePalette.Keys, preferences.Accent); colors.SelectionChanged += delegate { if (colors.SelectedIndex >= 0) { preferences.Accent = ThemePalette.Keys[colors.SelectedIndex]; SavePreferences(); RebuildPresentation(); } }; body.Children.Add(SettingsChoiceRow(T("主题色", "Accent color"), colors, 180));
             body.Children.Add(DividerLine(border, new Thickness(0, 4, 0, 16)));
             var footer = new DockPanel(); var exit = MakePlainButton(T("退出", "Quit"), Quit); exit.FontSize = 10; DockPanel.SetDock(exit, Dock.Right); footer.Children.Add(exit);
             var connected = Text(fixtureMode || (baseUri != null && String.IsNullOrEmpty(connectionError)) ? T("●  后台已连接", "●  Backend connected") : T("●  后台未连接", "●  Backend disconnected"), 10); connected.Foreground = secondary; connected.Margin = new Thickness(0); footer.Children.Add(connected); body.Children.Add(footer);
@@ -1262,6 +1457,24 @@ namespace CodexMissionManager
             if (view == "tray") return BuildTraySurface();
             currentView = view == "activity" ? "events" : view == "rules" ? "rules" : "tasks"; BuildContent(); RenderSnapshot();
             var surface = Content as FrameworkElement; Content = null; return surface;
+        }
+        public Dictionary<string, object> RunRulesEditorSelfTest()
+        {
+            if (!fixtureMode) throw new InvalidOperationException("Editor checks require isolated fixture mode.");
+            currentView = "rules"; BuildContent(); RenderSnapshot(); int originalRevision = rulesDraftRevision;
+            ruleInputs["resume_remaining"].Text = "27";
+            bool editingCaptured = rulesDirty && rulesDraft["resume_remaining"] == "27";
+            var nextValues = RulesPolicy.DefaultsObject(); nextValues["resume_remaining"] = 25;
+            snapshot["rules"] = Json.Values("revision", originalRevision + 1, "values", nextValues);
+            RenderSnapshot();
+            bool pollingPreserved = ruleInputs["resume_remaining"].Text == "27" && rulesDraftRevision == originalRevision && !rulesSave.IsEnabled;
+            preferences.Accent = "blue"; RebuildPresentation();
+            bool appearancePreserved = ruleInputs["resume_remaining"].Text == "27" && rulesDraftRevision == originalRevision && rulesDirty;
+            LoadRulesDraft(); RefreshRulesPresentation();
+            bool reloadApplied = ruleInputs["resume_remaining"].Text == "25" && rulesDraftRevision == originalRevision + 1 && !rulesDirty;
+            bool passed = editingCaptured && pollingPreserved && appearancePreserved && reloadApplied;
+            return Json.Values("native", true, "ui", "WPF", "hostStarted", false, "messagesSent", 0, "privatePreferencesLoaded", false,
+                "draftCaptured", editingCaptured, "draftSurvivedPollingConflict", pollingPreserved, "draftSurvivedAppearanceChange", appearancePreserved, "explicitReloadApplied", reloadApplied, "checksPassed", passed);
         }
         static Button FindTaggedButton(DependencyObject parent, string tag)
         {
@@ -1386,7 +1599,7 @@ namespace CodexMissionManager
             if (CanToggleAutomatic(local, false, false, false, true) || CanToggleSchedule(local, false, false, false, true, false)) return false;
             local["auto_resume"] = true; local["plan"] = Json.Values("state", "sending");
             if (CanToggleSchedule(local, true, true, false, true, true)) return false;
-            local["key"] = "chatgpt:cloud:offline-fixture"; local["kind"] = "chatgpt"; local["host_id"] = "cloud"; local["plan"] = Json.Values("state", "armed");
+            local["key"] = "unsupported:remote:offline-fixture"; local["kind"] = "unsupported"; local["host_id"] = "cloud"; local["plan"] = Json.Values("state", "armed");
             if (CanToggleAutomatic(local, false, false, false, true) || CanToggleSchedule(local, false, false, false, true, false)) return false;
             local["key"] = "codex:local:offline-fixture"; local["kind"] = "codex"; local["host_id"] = "local";
             local["auto_resume"] = false; local["can_control"] = true; local["plan"] = Json.Values("state", "off");
@@ -1412,35 +1625,37 @@ namespace CodexMissionManager
         {
             owner = window; Background = owner.SurfaceBrush; BorderThickness = new Thickness(0); CornerRadius = new CornerRadius(10);
             Padding = new Thickness(16); Margin = new Thickness(0, 0, 0, 12);
-            var columns = new Grid(); columns.ColumnDefinitions.Add(new ColumnDefinition()); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) });
-            columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) }); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) }); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(310) }); Child = columns;
+            var columns = new Grid(); columns.ColumnDefinitions.Add(new ColumnDefinition()); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) }); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(360) }); Child = columns;
             var info = new StackPanel(); columns.Children.Add(info);
-            var rowHeading = new DockPanel(); typeIconHost = new ContentControl { Width = 18, Height = 15, Margin = new Thickness(0, 2, 8, 0), VerticalAlignment = VerticalAlignment.Top }; DockPanel.SetDock(typeIconHost, Dock.Left); rowHeading.Children.Add(typeIconHost);
-            var identity = new StackPanel(); title = Label("", 13, true); title.Margin = new Thickness(0); open = owner.MakePlainButton(title, delegate { owner.ShowChatDetails(chat); }); open.HorizontalContentAlignment = HorizontalAlignment.Left; identity.Children.Add(open);
-            detail = Label("", 10); detail.FontFamily = new FontFamily("Consolas"); detail.Foreground = owner.SecondaryBrush; detail.Margin = new Thickness(0, 5, 0, 0); identity.Children.Add(detail); rowHeading.Children.Add(identity); info.Children.Add(rowHeading);
-            var stageBody = new StackPanel(); var stageHeading = Label(owner.T("当前执行阶段", "Execution stage"), 10, true); stageHeading.Foreground = owner.AccentBrush; stageHeading.Margin = new Thickness(0, 0, 0, 7); stageBody.Children.Add(stageHeading);
-            stageStamp = Label("", 10); stageStamp.Foreground = owner.SecondaryBrush; stageStamp.Margin = new Thickness(0, 0, 0, 7); stageBody.Children.Add(stageStamp);
-            stage = Label("", 12); stage.Foreground = owner.SecondaryBrush; stage.LineHeight = 16; stage.MaxHeight = 80; stage.TextTrimming = TextTrimming.CharacterEllipsis; stage.Margin = new Thickness(0); stageBody.Children.Add(stage);
-            info.Children.Add(new Border { Background = owner.StageBrush, CornerRadius = new CornerRadius(8), Padding = new Thickness(12), Margin = new Thickness(0, 10, 0, 0), Child = stageBody });
-            var middle = new StackPanel(); Grid.SetColumn(middle, 2); columns.Children.Add(middle);
+            var rowHeading = new Grid(); rowHeading.ColumnDefinitions.Add(new ColumnDefinition()); rowHeading.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var identityLine = new DockPanel { Margin = new Thickness(0, 0, 14, 0) }; typeIconHost = new ContentControl { Width = 18, Height = 15, Margin = new Thickness(0, 2, 8, 0), VerticalAlignment = VerticalAlignment.Top }; DockPanel.SetDock(typeIconHost, Dock.Left); identityLine.Children.Add(typeIconHost);
+            var identity = new StackPanel(); title = Label("", 14, true); title.Margin = new Thickness(0); open = owner.MakePlainButton(title, delegate { owner.ShowChatDetails(chat); }); open.HorizontalContentAlignment = HorizontalAlignment.Left; identity.Children.Add(open);
+            detail = Label("", 10); detail.FontFamily = new FontFamily("Consolas"); detail.Foreground = owner.SecondaryBrush; detail.Margin = new Thickness(0, 6, 0, 0); identity.Children.Add(detail); identityLine.Children.Add(identity); rowHeading.Children.Add(identityLine);
             var badgeLine = new StackPanel { Orientation = Orientation.Horizontal }; statusDot = new System.Windows.Shapes.Ellipse { Width = 6, Height = 6, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(0, 0, 7, 0) }; badgeLine.Children.Add(statusDot);
-            status = Label("", 10, true); status.Margin = new Thickness(0); badgeLine.Children.Add(status);
-            statusBadge = new Border { CornerRadius = new CornerRadius(7), Padding = new Thickness(8), HorizontalAlignment = HorizontalAlignment.Left, Child = badgeLine }; middle.Children.Add(statusBadge);
-            autoHeading = Label(owner.T("自动控制", "Automatic control"), 10); autoHeading.Foreground = owner.SecondaryBrush; autoHeading.Margin = new Thickness(0, 20, 0, 7); middle.Children.Add(autoHeading);
-            auto = new CheckBox { Foreground = owner.ForegroundBrush, HorizontalAlignment = HorizontalAlignment.Stretch };
-            owner.StyleSwitch(auto); auto.Click += async delegate { if (!updating) await owner.PerformAsync(Json.Values("action", "set_auto", "key", Json.Text(chat, "key"), "enabled", auto.IsChecked == true, "revision", Json.Integer(chat, "revision"))); }; middle.Children.Add(auto);
-            retry = owner.MakeButton(owner.T("重试连接", "Retry connection"), async delegate { await owner.PerformAsync(Json.Values("action", "set_auto", "key", Json.Text(chat, "key"), "enabled", true, "revision", Json.Integer(chat, "revision"))); }); retry.FontSize = 10; retry.Margin = new Thickness(0, 7, 0, 0); retry.HorizontalAlignment = HorizontalAlignment.Left; middle.Children.Add(retry);
-            autoError = Label("", 10); autoError.Foreground = Brushes.DarkOrange; autoError.MaxHeight = 46; autoError.Margin = new Thickness(0, 7, 0, 0); middle.Children.Add(autoError);
-            var right = new StackPanel(); Grid.SetColumn(right, 4); columns.Children.Add(right);
+            status = Label("", 10, true); status.MaxWidth = 122; status.Margin = new Thickness(0); badgeLine.Children.Add(status);
+            statusBadge = new Border { CornerRadius = new CornerRadius(7), Padding = new Thickness(9, 7, 9, 7), HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Top, Child = badgeLine }; Grid.SetColumn(statusBadge, 1); rowHeading.Children.Add(statusBadge); info.Children.Add(rowHeading);
+            var stageBody = new StackPanel(); var stageHeading = Label(owner.T("当前执行阶段", "Execution stage"), 10, true); stageHeading.Foreground = owner.AccentBrush; stageHeading.Margin = new Thickness(0, 0, 0, 8); stageBody.Children.Add(stageHeading);
+            stageStamp = Label("", 10); stageStamp.Foreground = owner.SecondaryBrush; stageStamp.Margin = new Thickness(0, 0, 0, 8); stageBody.Children.Add(stageStamp);
+            stage = Label("", 12); stage.Foreground = owner.SecondaryBrush; stage.LineHeight = 17; stage.MaxHeight = 119; stage.TextTrimming = TextTrimming.CharacterEllipsis; stage.Margin = new Thickness(0); stageBody.Children.Add(stage);
+            info.Children.Add(new Border { Background = owner.StageBrush, CornerRadius = new CornerRadius(8), Padding = new Thickness(14), Margin = new Thickness(0, 14, 0, 0), Child = stageBody });
+            var right = new StackPanel(); Grid.SetColumn(right, 2); columns.Children.Add(right);
+            var controlHeader = new Grid { Margin = new Thickness(0, 0, 0, 14) }; controlHeader.ColumnDefinitions.Add(new ColumnDefinition()); controlHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var bookingHeading = Label(owner.T("额度恢复后执行", "After quota recovery"), 11, true); bookingHeading.Foreground = owner.SecondaryBrush; bookingHeading.VerticalAlignment = VerticalAlignment.Center; bookingHeading.Margin = new Thickness(0, 0, 12, 0); controlHeader.Children.Add(bookingHeading);
+            var autoBlock = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
+            autoHeading = Label(owner.T("自动控制", "Automatic control"), 10); autoHeading.Foreground = owner.SecondaryBrush; autoHeading.VerticalAlignment = VerticalAlignment.Center; autoHeading.Margin = new Thickness(0, 0, 9, 0); autoBlock.Children.Add(autoHeading);
+            auto = new CheckBox { Foreground = owner.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center }; owner.StyleSwitch(auto);
+            auto.Click += async delegate { if (!updating) await owner.PerformAsync(Json.Values("action", "set_auto", "key", Json.Text(chat, "key"), "enabled", auto.IsChecked == true, "revision", Json.Integer(chat, "revision"))); }; autoBlock.Children.Add(auto); Grid.SetColumn(autoBlock, 1); controlHeader.Children.Add(autoBlock); right.Children.Add(controlHeader);
+            retry = owner.MakeButton(owner.T("重试连接", "Retry connection"), async delegate { await owner.PerformAsync(Json.Values("action", "set_auto", "key", Json.Text(chat, "key"), "enabled", true, "revision", Json.Integer(chat, "revision"))); }); retry.FontSize = 10; retry.Margin = new Thickness(0, 0, 0, 7); retry.HorizontalAlignment = HorizontalAlignment.Right; right.Children.Add(retry);
+            autoError = Label("", 10); autoError.Foreground = Brushes.DarkOrange; autoError.MaxHeight = 46; autoError.Margin = new Thickness(0, 0, 0, 10); right.Children.Add(autoError);
             directoryPanel = new StackPanel(); var directoryHeading = new StackPanel { Orientation = Orientation.Horizontal };
-            var eye = owner.Glyph("eye", owner.SecondaryBrush, 16); eye.Margin = new Thickness(0, 0, 8, 0); directoryHeading.Children.Add(eye); var label = Label(owner.T("仅显示目录", "Directory only"), 12); label.Foreground = owner.SecondaryBrush; label.Margin = new Thickness(0); directoryHeading.Children.Add(label); directoryPanel.Children.Add(directoryHeading);
+            var eye = owner.Glyph("eye", owner.SecondaryBrush, 16); eye.Margin = new Thickness(0, 0, 8, 0); directoryHeading.Children.Add(eye); var label = Label(owner.T("目录暂不可操作", "Controls unavailable"), 12); label.Foreground = owner.SecondaryBrush; label.Margin = new Thickness(0); directoryHeading.Children.Add(label); directoryPanel.Children.Add(directoryHeading);
             directoryText = Label("", 10); directoryText.Foreground = owner.SecondaryBrush; directoryText.Margin = new Thickness(0, 10, 0, 0); directoryPanel.Children.Add(directoryText); right.Children.Add(directoryPanel);
             editorPanel = new StackPanel(); right.Children.Add(editorPanel);
             schedule = new CheckBox { Foreground = owner.ForegroundBrush, Margin = new Thickness(0, 0, 0, 10) }; owner.StyleSwitch(schedule);
             schedule.Click += async delegate { if (!updating) await SavePlan(schedule.IsChecked == true); }; editorPanel.Children.Add(schedule);
             planLabel = Label("", 10); planLabel.Foreground = owner.SecondaryBrush; planLabel.Margin = new Thickness(0, 0, 0, 10); editorPanel.Children.Add(planLabel);
-            prompt = new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 78, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
-                Padding = new Thickness(6), FontSize = 13, MaxLength = 8000, Margin = new Thickness(0, 0, 0, 10) }; owner.StyleTextBox(prompt);
+            prompt = new TextBox { AcceptsReturn = true, TextWrapping = TextWrapping.Wrap, Height = 104, VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                Padding = new Thickness(9), FontSize = 13, MaxLength = 8000, Margin = new Thickness(0, 0, 0, 12) }; owner.StyleTextBox(prompt);
             prompt.TextChanged += delegate { if (!updating) { if (!dirty) draftRevision = Json.Integer(Json.Child(chat, "plan"), "revision"); dirty = true; owner.RememberDraft(Json.Text(chat, "key"), prompt.Text, draftRevision); } }; editorPanel.Children.Add(prompt);
             var buttons = new WrapPanel(); save = owner.MakeButton(owner.T("保存并预约", "Save & schedule"), async delegate { await SavePlan(true); }); save.Margin = new Thickness(0, 0, 8, 0); buttons.Children.Add(save);
             now = owner.MakeButton(owner.T("立刻执行", "Run now"), async delegate { await owner.PerformAsync(Json.Values("action", "execute_now", "key", Json.Text(chat, "key"), "prompt", prompt.Text, "revision", Json.Integer(chat, "revision"), "request_id", Guid.NewGuid().ToString("D"))); }, true); buttons.Children.Add(now); editorPanel.Children.Add(buttons);
@@ -1448,18 +1663,17 @@ namespace CodexMissionManager
             cancel = owner.MakePlainButton(owner.T("取消此预约", "Cancel this schedule"), async delegate { await SavePlan(false); }); cancel.FontSize = 10; cancel.Foreground = owner.SecondaryBrush; cancel.Margin = new Thickness(0, 8, 0, 0); cancel.HorizontalAlignment = HorizontalAlignment.Left; editorPanel.Children.Add(cancel);
             bool layoutInitialized = false, narrowLayout = false;
             SizeChanged += delegate {
-                bool narrow = ActualWidth - Padding.Left - Padding.Right < 850; if (layoutInitialized && narrow == narrowLayout) return; layoutInitialized = true; narrowLayout = narrow;
-                columns.ColumnDefinitions.Clear(); columns.RowDefinitions.Clear(); Grid.SetRow(info, 0); Grid.SetColumn(info, 0);
+                bool narrow = ActualWidth - Padding.Left - Padding.Right < 740; if (layoutInitialized && narrow == narrowLayout) return; layoutInitialized = true; narrowLayout = narrow;
+                columns.ColumnDefinitions.Clear(); columns.RowDefinitions.Clear(); Grid.SetRow(info, 0); Grid.SetColumn(info, 0); Grid.SetColumnSpan(info, 1);
                 if (narrow)
                 {
-                    columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(156) }); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) }); columns.ColumnDefinitions.Add(new ColumnDefinition());
-                    columns.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); columns.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-                    Grid.SetColumnSpan(info, 3); info.Margin = new Thickness(0, 0, 0, 18); Grid.SetRow(middle, 1); Grid.SetColumn(middle, 0); Grid.SetRow(right, 1); Grid.SetColumn(right, 2);
+                    columns.ColumnDefinitions.Add(new ColumnDefinition()); columns.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); columns.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+                    info.Margin = new Thickness(0, 0, 0, 22); Grid.SetRow(right, 1); Grid.SetColumn(right, 0);
                 }
                 else
                 {
-                    columns.ColumnDefinitions.Add(new ColumnDefinition()); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) }); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(138) }); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(18) }); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(310) });
-                    Grid.SetColumnSpan(info, 1); info.Margin = new Thickness(0); Grid.SetRow(middle, 0); Grid.SetColumn(middle, 2); Grid.SetRow(right, 0); Grid.SetColumn(right, 4);
+                    columns.ColumnDefinitions.Add(new ColumnDefinition()); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(24) }); columns.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(360) });
+                    info.Margin = new Thickness(0); Grid.SetRow(right, 0); Grid.SetColumn(right, 2);
                 }
             };
         }
@@ -1479,9 +1693,8 @@ namespace CodexMissionManager
         public void Update(Dictionary<string, object> value)
         {
             chat = value; updating = true; title.Text = Json.Text(chat, "name");
-            string iconName = Json.Text(chat, "category") == "chatgpt" ? "chat" : "terminal"; if (!Object.Equals(typeIconHost.Tag, iconName)) { typeIconHost.Tag = iconName; typeIconHost.Content = owner.Glyph(iconName, owner.AccentBrush, 15); }
-            string source = Json.Text(chat, "category") == "codex" ? owner.T("Codex · 本机", "Codex · Local")
-                : Json.Text(chat, "source_label").IndexOf("Work", StringComparison.OrdinalIgnoreCase) >= 0 ? owner.T("ChatGPT Work · 云端", "ChatGPT Work · Cloud") : owner.T("ChatGPT · 目录快照", "ChatGPT · Directory snapshot");
+            string iconName = "terminal"; if (!Object.Equals(typeIconHost.Tag, iconName)) { typeIconHost.Tag = iconName; typeIconHost.Content = owner.Glyph(iconName, owner.AccentBrush, 15); }
+            string source = owner.T("Codex · 本机", "Codex · Local");
             string id = Json.Text(chat, "id"); detail.Text = source + " / " + id.Substring(0, Math.Min(id.Length, 8));
             var execution = Json.Child(chat, "execution_stage"); stage.Text = Json.Text(execution, "text", Json.Bool(chat, "can_control") ? owner.T("暂未读取到执行进展", "Execution progress is not available yet") : owner.T("当前仅显示目录，执行阶段暂不可读", "Directory only; execution progress is not available")); stage.ToolTip = stage.Text;
             double stamp = Json.Number(execution, "updated_at"); stageStamp.Text = MissionWindow.FormatTime(stamp); stageStamp.Visibility = stamp > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -1508,8 +1721,8 @@ namespace CodexMissionManager
             }
             planLabel.Text = minutes > 0 && reset > 0 && canSchedule ? owner.T("预约窗口：", "Schedule window: ") + owner.WindowTitle(minutes) + "\n" + owner.T("刷新时间 ", "Reset ") + MissionWindow.FormatTime(reset) : "";
             planLabel.Visibility = planLabel.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
-            string draftText; int revision; if (owner.ReadDraft(Json.Text(chat, "key"), out draftText, out revision)) { dirty = true; draftRevision = revision; prompt.Text = draftText; }
-            else if (!dirty) { prompt.Text = Json.Text(plan, "prompt", "继续任务"); draftRevision = Json.Integer(plan, "revision"); }
+            string draftText; int revision; if (owner.ReadDraft(Json.Text(chat, "key"), out draftText, out revision)) { dirty = true; draftRevision = revision; if (!prompt.IsKeyboardFocusWithin && prompt.Text != draftText) prompt.Text = draftText; }
+            else if (!dirty && !prompt.IsKeyboardFocusWithin) { string storedPrompt = Json.Text(plan, "prompt", "继续任务"); if (prompt.Text != storedPrompt) prompt.Text = storedPrompt; draftRevision = Json.Integer(plan, "revision"); }
             prompt.IsReadOnly = !controllable || planState == "sending";
             save.Content = scheduled ? owner.T("保存指令", "Save instruction") : owner.T("保存并预约", "Save & schedule"); save.IsEnabled = controllable && available && canSchedule && planState != "sending";
             var immediate = Json.Child(chat, "immediate"); string receipt = Json.Text(immediate, "state");
@@ -1520,7 +1733,7 @@ namespace CodexMissionManager
             cancel.Visibility = planState == "needs_review" ? Visibility.Visible : Visibility.Collapsed; cancel.IsEnabled = !owner.IsBusy && owner.CanSubmitLocalChange && ChatControlPolicy.IsLocal(chat);
             bool editorVisible = Json.Bool(chat, "can_control") || (ChatControlPolicy.IsLocal(chat) && (planState == "armed" || planState == "needs_review"));
             editorPanel.Visibility = editorVisible ? Visibility.Visible : Visibility.Collapsed; directoryPanel.Visibility = editorVisible ? Visibility.Collapsed : Visibility.Visible;
-            directoryText.Text = Json.Text(chat, "category") == "chatgpt" ? owner.T("此聊天没有后台自动执行通道", "Automatic execution is unavailable for this chat") : owner.T("客户端控制尚待核验，当前只读显示。", "Client control awaits verification. This chat is read-only.");
+            directoryText.Text = owner.T("Codex 客户端控制尚待核验，当前只读显示。", "Codex client control awaits verification. This task is read-only.");
             updating = false;
         }
         bool PermitsImmediate(Dictionary<string, object> usage)
@@ -1575,16 +1788,35 @@ namespace CodexMissionManager
 
     static class Program
     {
+        static string AppVersion()
+        {
+            var assembly = System.Reflection.Assembly.GetExecutingAssembly();
+            var attribute = assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false).FirstOrDefault() as System.Reflection.AssemblyInformationalVersionAttribute;
+            return attribute != null ? attribute.InformationalVersion : assembly.GetName().Version.ToString();
+        }
         [STAThread]
         public static int Main(string[] args)
         {
             if (args.Length > 0 && args[0] == "--self-test")
             {
-                bool revocationChecks = ChatControlPolicy.SelfTest(); bool startupChecks = StartupDiagnostic.SelfTest();
-                string result = Json.Stringify(Json.Values("version", "0.2.1", "platform", "windows", "native", true, "ui", "WPF", "webView", false,
-                    "hostStarted", false, "messagesSent", 0, "cacheRefreshSeconds", 5, "localRevocationChecks", revocationChecks, "startupDiagnosticFallbackChecks", startupChecks));
+                bool revocationChecks = ChatControlPolicy.SelfTest(); bool startupChecks = StartupDiagnostic.SelfTest(); bool paletteChecks = ThemePalette.SelfTest(); bool rulesChecks = RulesPolicy.SelfTest();
+                string result = Json.Stringify(Json.Values("version", AppVersion(), "platform", "windows", "native", true, "ui", "WPF", "webView", false,
+                    "hostStarted", false, "messagesSent", 0, "cacheRefreshSeconds", 5, "localRevocationChecks", revocationChecks, "startupDiagnosticFallbackChecks", startupChecks, "themePaletteChecks", paletteChecks, "rulesValidationChecks", rulesChecks));
                 if (args.Length > 1) File.WriteAllText(args[1], result, new UTF8Encoding(false));
-                Console.WriteLine(result); return revocationChecks && startupChecks ? 0 : 1;
+                Console.WriteLine(result); return revocationChecks && startupChecks && paletteChecks && rulesChecks ? 0 : 1;
+            }
+            if (args.Length > 0 && args[0] == "--editor-self-test")
+            {
+                if (args.Length != 2) return 1;
+                try
+                {
+                    var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+                    var fixture = Json.Values("healthy", true, "stale", false, "running", true, "tasks", new object[0], "rules", Json.Values("revision", 4, "values", RulesPolicy.DefaultsObject()));
+                    var window = new MissionWindow(true, fixture, "en", "light"); var result = window.RunRulesEditorSelfTest();
+                    File.WriteAllText(Path.GetFullPath(args[1]), Json.Stringify(result), new UTF8Encoding(false));
+                    app.Shutdown(); return Json.Bool(result, "checksPassed") ? 0 : 1;
+                }
+                catch (Exception ex) { Console.Error.WriteLine(ex.ToString()); return 1; }
             }
             if (args.Length > 0 && args[0] == "--lifecycle-self-test")
             {
@@ -1609,12 +1841,13 @@ namespace CodexMissionManager
             {
                 try
                 {
-                    if (args.Length < 3) throw new ArgumentException("Usage: --ui-self-test fixture.json preview.png [--language zh|en] [--theme system|light|dark] [--view home|settings|activity|rules|tray] [--scale 1|2]");
-                    string language = "zh", theme = "system", previewView = "home"; double scale = 2; int positional = 0;
+                    if (args.Length < 3) throw new ArgumentException("Usage: --ui-self-test fixture.json preview.png [--language zh|en] [--theme system|light|dark] [--view home|settings|activity|rules|tray] [--accent green|blue|purple|yellow] [--scale 1|2]");
+                    string language = "zh", theme = "system", previewView = "home", accent = "green"; double scale = 2; int positional = 0;
                     for (int index = 3; index < args.Length; index++)
                     {
                         if (args[index] == "--language" && index + 1 < args.Length) language = args[++index];
                         else if (args[index] == "--theme" && index + 1 < args.Length) theme = args[++index];
+                        else if (args[index] == "--accent" && index + 1 < args.Length) accent = args[++index];
                         else if (args[index] == "--view" && index + 1 < args.Length) previewView = args[++index];
                         else if (args[index] == "--scale" && index + 1 < args.Length) scale = Double.Parse(args[++index], CultureInfo.InvariantCulture);
                         else if (args[index].StartsWith("--", StringComparison.Ordinal)) throw new ArgumentException("Unknown or incomplete fixture option.");
@@ -1624,8 +1857,9 @@ namespace CodexMissionManager
                     }
                     if (!new[] { "home", "settings", "activity", "rules", "tray" }.Contains(previewView)) throw new ArgumentException("Unknown fixture view.");
                     if (scale != 1 && scale != 2) throw new ArgumentException("Fixture scale must be 1 or 2.");
+                    if (!ThemePalette.Keys.Contains(accent)) throw new ArgumentException("Unknown fixture accent.");
                     var fixture = Json.Parse(File.ReadAllText(args[1])); var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
-                    var window = new MissionWindow(true, fixture, language, theme);
+                    var window = new MissionWindow(true, fixture, language, theme, accent);
                     int renderExit = 0;
                     app.Startup += delegate { window.Dispatcher.BeginInvoke(DispatcherPriority.ApplicationIdle, new Action(delegate {
                         try
@@ -1647,7 +1881,7 @@ namespace CodexMissionManager
                         var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(image)); using (var file = File.Create(args[2])) encoder.Save(file);
                         File.WriteAllText(args[2] + ".json", Json.Stringify(Json.Values("native", true, "ui", "WPF", "webView", false, "hostStarted", false, "messagesSent", 0,
                             "fixtureChats", Json.Rows(fixture, "tasks").Count, "renderedRoot", "content", "view", previewView, "width", pixelWidth, "height", pixelHeight, "logicalWidth", width, "logicalHeight", height, "scale", scale,
-                            "desktopResolutionIndependent", true, "privatePreferencesLoaded", false, "language", language, "theme", theme)), new UTF8Encoding(false));
+                            "desktopResolutionIndependent", true, "privatePreferencesLoaded", false, "language", language, "theme", theme, "accent", accent)), new UTF8Encoding(false));
                         }
                         catch (Exception ex) { renderExit = 1; Console.Error.WriteLine(ex.ToString()); }
                         finally { app.Shutdown(renderExit); }

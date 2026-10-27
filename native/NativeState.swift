@@ -18,6 +18,9 @@ struct MissionSnapshot: Decodable {
     var compatibility: MissionCompatibility?
     var bulk_pause: MissionBulkPause?
     var poll_seconds: Double
+    var ui_poll_seconds: Double?
+    var rules: MissionRules?
+    var codexTasks: [MissionChat] { tasks.filter { $0.isCodex } }
 }
 struct MissionCatalog: Decodable {
     var observed_at: Double?
@@ -37,6 +40,7 @@ struct MissionUsage: Decodable {
     var scheduling_available: Bool?
     var scheduling_window: MissionQuotaWindow?
     var limit_name: String?
+    var reset_credits: MissionResetCredits?
     var visibleWindows: [MissionQuotaWindow] {
         if let quota_windows { return quota_windows }
         // A V0.2 snapshot has only the two legacy display slots.
@@ -153,6 +157,16 @@ struct MissionChat: Decodable, Identifiable {
     var execution_stage: MissionStage?; var plan: MissionPlan?; var immediate: MissionReceipt?
     var reason: String?; var connection_error: String?; var recovery_first_seen: Double?
     var paused_at: Double?; var resumed_at: Double?; var goal: Bool?
+    var host_id: String?
+    var isLocal: Bool {
+        if let host_id, host_id != "local" { return false }
+        // Older snapshots omit host_id. Their namespaced key still identifies
+        // the host; a bare legacy key with a Codex category keeps its fallback.
+        if key.hasPrefix("codex:") { return key.hasPrefix("codex:local:") }
+        return host_id == "local" || (host_id == nil && category == "codex")
+    }
+    var isCodex: Bool { isLocal && (category == "codex" || (category == nil && key.hasPrefix("codex:"))) }
+    var sourceTitle: String { isLocal ? L("Codex · 本机") : L("Codex · 远程") }
     var controllable: Bool { can_control == true }
     var automatic: Bool { auto_resume && !manual_hold && state != "disabled" }
     var waiting: Bool { ["paused", "pause_intent", "resume_intent"].contains(state) }
@@ -184,11 +198,22 @@ struct MissionEvent: Decodable, Identifiable {
     var detail: MissionEventDetail?
     var label: String {
         if let allowed = detail?.automatic_control_allowed { return allowed ? L("允许自动控制") : L("保持任务") }
-        return ["watching":L("纳入监测"), "pause_intent":L("开始暂停"), "paused":L("已确认暂停"), "resume_intent":L("提交续做"), "running":L("已续做"), "needs_review":L("需要核对"), "disabled":L("已撤销控制"), "held":L("保持任务"), "supervisor_paused":L("暂停自动控制"), "supervisor_enabled":L("启用自动控制"), "plan_armed":L("预约下一窗口执行"), "plan_sending":L("提交预约指令"), "plan_sent":L("预约指令已发送"), "plan_cancelled":L("取消预约"), "plan_needs_review":L("预约需要确认"), "immediate_pending":L("提交立刻执行"), "immediate_sent":L("立刻执行已确认发送"), "immediate_failed":L("立刻执行未发送"), "immediate_unknown":L("立刻执行结果待核对")][state] ?? state
+        return ["rules_updated":L("运行规则已更新"),"watching":L("纳入监测"), "pause_intent":L("开始暂停"), "paused":L("已确认暂停"), "resume_intent":L("提交续做"), "running":L("已续做"), "needs_review":L("需要核对"), "disabled":L("已撤销控制"), "held":L("保持任务"), "supervisor_paused":L("暂停自动控制"), "supervisor_enabled":L("启用自动控制"), "plan_armed":L("预约下一窗口执行"), "plan_sending":L("提交预约指令"), "plan_sent":L("预约指令已发送"), "plan_cancelled":L("取消预约"), "plan_needs_review":L("预约需要确认"), "immediate_pending":L("提交立刻执行"), "immediate_sent":L("立刻执行已确认发送"), "immediate_failed":L("立刻执行未发送"), "immediate_unknown":L("立刻执行结果待核对")][state] ?? state
     }
 }
 struct MissionEventDetail: Decodable {
     var reason: String?; var source: String?; var automatic_control_allowed: Bool?
+    var recovery_reason: String?
+    var recoveryNote: String? {
+        guard let recovery_reason else {return nil}
+        switch recovery_reason {
+        case "window_advanced":return L("观察到新额度窗口")
+        case "balance_restored":return L("可用余额恢复；重置原因未知")
+        case "quota_available":return L("额度已重新核验可用")
+        case "service_permission_restored":return L("服务许可已恢复")
+        default:return L("恢复原因待核实")
+        }
+    }
 }
 struct MissionDraft { var text: String; var revision: Int }
 
@@ -204,6 +229,9 @@ func missionTime(_ stamp: Double?) -> String {
 // One source of truth for native control requests; the backend still rechecks
 // account, quota, current turn and durable idempotency before dispatching.
 enum MissionCommands {
+    static func rules(_ values: [String:Int], revision: Int) -> [String:Any] {
+        ["action":"set_rules", "rules_revision":revision, "rules":values]
+    }
     static func automatic(_ chat: MissionChat, enabled: Bool) -> [String: Any] {
         ["action":"set_auto", "key":chat.key, "enabled":enabled, "revision":chat.revision]
     }
@@ -214,6 +242,100 @@ enum MissionCommands {
     }
     static func immediate(_ chat: MissionChat, draft: MissionDraft?, requestID: String = UUID().uuidString.lowercased()) -> [String: Any] {
         ["action":"execute_now", "key":chat.key, "prompt":draft?.text ?? chat.plan?.prompt ?? L("继续任务"), "revision":chat.revision, "request_id":requestID]
+    }
+}
+
+enum MissionAccent: String, CaseIterable {
+    case green, blue, purple, yellow
+    var title: String {
+        switch self { case .green:return L("绿色");case .blue:return L("蓝色");case .purple:return L("紫色");case .yellow:return L("鹅蛋黄") }
+    }
+    var lightHex: String {
+        switch self {case .green:return "3F765F";case .blue:return "326CB5";case .purple:return "7856B1";case .yellow:return "D9B95F"}
+    }
+    var darkHex: String {
+        switch self {case .green:return "7FB795";case .blue:return "85B4F0";case .purple:return "B39ADE";case .yellow:return "E5CA80"}
+    }
+    var lightTextHex: String { self == .yellow ? "302717" : "FFFFFF" }
+    var darkTextHex: String {
+        switch self {case .green:return "102117";case .blue:return "10223B";case .purple:return "21182F";case .yellow:return "2D2411"}
+    }
+    var lightSelectedHex: String {
+        switch self {case .green:return "35423D";case .blue:return "2D435F";case .purple:return "423553";case .yellow:return "514832"}
+    }
+    var darkSelectedHex: String {
+        switch self {case .green:return "2A332F";case .blue:return "223149";case .purple:return "30243F";case .yellow:return "3C331E"}
+    }
+    var lightInkHex: String {
+        switch self {case .green:return "192822";case .blue:return "162638";case .purple:return "241E34";case .yellow:return "302A1B"}
+    }
+    var darkInkHex: String {
+        switch self {case .green:return "0D1712";case .blue:return "0E1724";case .purple:return "171222";case .yellow:return "1E1A11"}
+    }
+}
+
+struct MissionRuleBound: Decodable { var min: Int; var max: Int }
+struct MissionRules: Decodable {
+    var revision: Int
+    var values: [String:Int]
+    var bounds: [String:MissionRuleBound]?
+    func confirms(_ submitted:[String:Int], after revision:Int) -> Bool {
+        self.revision > revision && values == submitted
+    }
+}
+enum MissionRuleFields {
+    static let keys = ["pause_remaining","resume_remaining","poll_seconds","near_limit_poll_seconds","recovery_confirm_seconds","ui_poll_seconds"]
+    static let defaults = ["pause_remaining":10,"resume_remaining":20,"poll_seconds":30,"near_limit_poll_seconds":10,"recovery_confirm_seconds":5,"ui_poll_seconds":5]
+    static let bounds = ["pause_remaining":1...50,"resume_remaining":5...95,"poll_seconds":10...300,"near_limit_poll_seconds":5...60,"recovery_confirm_seconds":3...60,"ui_poll_seconds":2...30]
+    static func title(_ key:String) -> String {
+        L(["pause_remaining":"暂停阈值（剩余 %）","resume_remaining":"恢复阈值（剩余 %）","poll_seconds":"正常采集间隔（秒）","near_limit_poll_seconds":"临近阈值采集间隔（秒）","recovery_confirm_seconds":"恢复复核时间（秒）","ui_poll_seconds":"界面刷新间隔（秒）"][key] ?? key)
+    }
+    static func validation(_ text:[String:String], remoteBounds:[String:MissionRuleBound]? = nil) -> (values:[String:Int]?,error:String?) {
+        var values=[String:Int]()
+        for key in keys {
+            guard let raw=text[key], let value=Int(raw.trimmingCharacters(in:.whitespacesAndNewlines)) else { return (nil,L("请为每项规则输入整数。")) }
+            let local=bounds[key]!
+            let minimum=max(local.lowerBound,remoteBounds?[key]?.min ?? local.lowerBound)
+            let maximum=min(local.upperBound,remoteBounds?[key]?.max ?? local.upperBound)
+            guard value>=minimum && value<=maximum else { return (nil,L("%@的范围为 %@–%@。",title(key),String(minimum),String(maximum))) }
+            values[key]=value
+        }
+        guard values["resume_remaining"]! >= values["pause_remaining"]!+5 else { return (nil,L("恢复阈值必须至少比暂停阈值高 5%。")) }
+        guard values["near_limit_poll_seconds"]! <= values["poll_seconds"]! else { return (nil,L("临近阈值采集间隔不能大于正常采集间隔。")) }
+        return (values,nil)
+    }
+}
+
+// Polling must never replace an active IME composition, caret or local draft.
+// This policy is shared by the real NSTextView adapter and contract tests.
+enum MissionPromptSynchronization {
+    static func shouldApply(current:String,incoming:String,editing:Bool,marked:Bool,hasDraft:Bool) -> Bool {
+        current != incoming && !editing && !marked && !hasDraft
+    }
+    static func selection(_ selected:NSRange, utf16Length:Int) -> NSRange {
+        let start=min(max(0,selected.location),utf16Length)
+        return NSRange(location:start,length:min(max(0,selected.length),utf16Length-start))
+    }
+}
+
+struct MissionResetCredit: Decodable {
+    var id: String?
+    var resetType: String?
+    var status: String?
+    var grantedAt: Double?
+    var expiresAt: Double?
+    var title: String?
+    var description: String?
+    var displayTitle: String { title ?? L("额度重置权益") }
+}
+
+struct MissionResetCredits: Decodable {
+    var available_count: Double?
+    var credits: [MissionResetCredit]?
+    var supported: Bool?
+    var displayCount: String {
+        guard supported == true, let count=available_count, count.isFinite, count>=0 else {return L("未提供")}
+        return String(format:"%g",count)
     }
 }
 

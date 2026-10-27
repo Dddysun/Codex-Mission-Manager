@@ -156,6 +156,8 @@ class ImmediateRunner:
                     raise ValueError("发送前聊天状态已变化，未发送指令")
                 if self.store.get("stop_requested", False):
                     raise ValueError("后台正在停止，未发送指令")
+                if not self.controller.rules_current():
+                    raise ValueError('运行规则已变化，未按旧规则发送；请刷新后重新确认')
                 if self.controller.clock() - value["requested_at"] > 90:
                     raise ValueError("即时检查耗时过长，未延后发送；请重新点击")
                 with self.store.db:

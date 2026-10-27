@@ -15,6 +15,7 @@ struct MissionSettings: View {
                         Label(L("外观与语言"), systemImage: "paintpalette").font(.headline)
                         HStack { Text(L("语言")); Spacer(); languagePicker.frame(width: 180) }
                         HStack { Text(L("外观")); Spacer(); themePicker.frame(width: 270) }
+                        HStack { Text(L("主题色")); Spacer(); accentPicker.frame(width:360) }
                     }.padding(14)
                 }
                 GroupBox {
@@ -55,13 +56,20 @@ struct MissionSettings: View {
                 HStack { Image(systemName:"bolt"); Text(L(model.power)).font(.caption); Spacer(); Text(L("最近检查：%@",model.checked)).font(.caption) }.foregroundStyle(.secondary)
                 if !model.error.isEmpty { Label(L(model.error),systemImage:"exclamationmark.triangle").foregroundStyle(.orange).textSelection(.enabled) }
             }.padding(28)
-        }.frame(minWidth:740,minHeight:620).background(Color(nsColor:.windowBackgroundColor)).preferredColorScheme(model.colorScheme)
+        }.frame(minWidth:740,minHeight:620).background(Color(nsColor:.windowBackgroundColor)).preferredColorScheme(model.colorScheme).tint(model.tint)
     }
     var languagePicker: some View {
         Picker(L("语言"),selection:$model.language) { Text(L("简体中文")).tag("zh"); Text("English").tag("en") }.labelsHidden().pickerStyle(.segmented)
     }
     var themePicker: some View {
         Picker(L("外观"),selection:$model.theme) { Text(L("跟随系统")).tag("system"); Text(L("浅色")).tag("light"); Text(L("深色")).tag("dark") }.labelsHidden().pickerStyle(.segmented)
+    }
+    var accentPicker: some View {
+        Picker(L("主题色"),selection:$model.accent) {
+            ForEach(MissionAccent.allCases,id:\.rawValue) { choice in
+                Label {Text(choice.title)} icon: {Image(systemName:"circle.fill").foregroundStyle(MissionPalette.accent(choice))}.tag(choice.rawValue)
+            }
+        }.labelsHidden().pickerStyle(.segmented)
     }
     func permission(title:String,icon:String,description:String,status:String,isOn:Binding<Bool>,destination:String,available:Bool=true) -> some View {
         HStack(alignment:.center,spacing:14) {

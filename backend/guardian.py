@@ -21,7 +21,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from platform_support import (lock_file, open_lock, private_directory,
                               private_file_permissions, process_alive, python_command)
 from rpc import Rpc
-from quota import parse_bucket, classify, recovered, next_reset, sample_summary, window_map
+from mission_version import VERSION
+from quota import (parse_bucket, classify, recovered, restoration_reason, restoration_details,
+                   next_reset, sample_summary, window_map)
+from rules import effective_config, effective_rules
 from control_policy import (active_turn, blocked_input, checkpoint_matches, decision, message_id,
                             quota_interrupted, quota_usable, same_goal, valid_goal)
 
@@ -109,7 +112,8 @@ class Store:
             if previous != task["state"]:
                 self.db.execute("INSERT INTO events(created,thread_id,previous_state,state,detail) VALUES(?,?,?,?,?)",
                     (time.time(), task["id"], previous, task["state"], json.dumps({k: task[k]
-                     for k in ("reason", "turn_id", "action_id", "pause_source", "last_control_error") if k in task})))
+                     for k in ("reason", "turn_id", "action_id", "pause_source", "last_control_error",
+                               "recovery_reason", "recovery_evidence") if k in task})))
         return True
 
     def permission(self, thread_id, enabled, expected_revision=None):
@@ -153,9 +157,14 @@ class Controller:
     def __init__(self, rpc, store, config, identity, clock=time.time, identity_check=None):
         self.rpc, self.store, self.config, self.identity, self.clock = rpc, store, config, identity, clock
         self.identity_check = identity_check
+        self.rules_revision = effective_rules(store, config)['revision']
+
+    def rules_current(self):
+        return effective_rules(self.store, self.config)['revision'] == self.rules_revision
 
     def cancelled(self):
-        return self.store.get("supervisor_paused", False) or self.store.get("stop_requested", False)
+        return (self.store.get("supervisor_paused", False) or self.store.get("stop_requested", False)
+                or not self.rules_current())
 
     async def view(self, thread_id):
         thread = (await self.rpc.call("thread/read", {"threadId": thread_id}))["thread"]
@@ -170,6 +179,8 @@ class Controller:
                             "turns": view["turns"], "goal": view["goal"]})
 
     async def adopt(self, thread_id, priority=100):
+        if getattr(self.rpc, 'hosts', {}).get(thread_id, 'local') != 'local':
+            raise ValueError('Only local Codex chats can be managed')
         # Do not reopen an arbitrary saved desktop session in a second executor.
         loaded, cursor = [], None
         while True:
@@ -187,7 +198,7 @@ class Controller:
         if existing and existing["state"] != "watching":
             raise ValueError("task has an unresolved ledger entry")
         task = {"id": thread_id, "name": view["thread"].get("name") or thread_id,
-                "scope": self.identity, "state": "watching", "auto_resume": True, "priority": int(priority)}
+                "scope": self.identity, "host_id": 'local', "state": "watching", "auto_resume": True, "priority": int(priority)}
         if self.store.get("auto_preferences", {}).get(thread_id) is False:
             raise ValueError("用户已撤销此聊天的自动控制")
         self.store.save_task(task)
@@ -254,6 +265,11 @@ class Controller:
             self.review(task, "中断结果不确定；不重试以免影响新任务")
 
     def recovery_allowed(self, task, sample):
+        baseline = task.get('pause_sample') or {}
+        if sample.get('limit_id', self.config['limit_id']) != baseline.get('limit_id', self.config['limit_id']):
+            return False
+        if sample.get('scope') and sample['scope'] != task['scope']:
+            return False
         if not quota_usable(sample, self.config):
             return False
         if task.get("pause_source") == "quota":
@@ -295,6 +311,7 @@ class Controller:
         # A second fresh quota read immediately before dispatch, not only a timer.
         fresh = parse_bucket(await self.rpc.call("account/rateLimits/read"),
                              self.config["limit_id"], self.clock())
+        fresh['scope'] = self.identity
         if (fresh.get("quota_state") in ("metered", "service_only")
                 and not set(window_map(task.get("pause_sample") or {})).issubset(window_map(fresh))):
             return self.review(task, "额度窗口已变化，请重新确认自动续接")
@@ -302,6 +319,9 @@ class Controller:
             task["recovery_first_seen"] = None
             self.store.save_task(task)
             return
+        task['recovery_reason'] = (restoration_reason(fresh, task.get('pause_sample', {}), self.config, self.clock())
+                                   or 'quota_available')
+        task['recovery_evidence'] = restoration_details(fresh, window_map(task.get('pause_sample', {})), task['recovery_reason'])
         if self.identity_check and await self.identity_check() != self.identity:
             return self.review(task, "恢复前账户身份已变化")
         # Recheck after awaited network calls: a newer user turn must win.
@@ -343,7 +363,8 @@ class Controller:
             task.update(state="running", resumed_turn_id=result["turn"]["id"],
                         resumed_at=self.clock())
             self.store.save_task(task)
-            self.store.notice("resumed:" + task["action_id"], "额度管家：已恢复任务", task["name"])
+            label = '新额度窗口' if task['recovery_reason'] == 'window_advanced' else '可用余额已恢复；重置原因未知'
+            self.store.notice("resumed:" + task["action_id"], "额度管家：已恢复任务", task["name"] + '；' + label)
         except Exception as exc:
             task["last_control_error"] = {"type": type(exc).__name__, "detail": str(exc)[:400]}
             self.review(task, "续做请求结果不确定；不会自动重复发送")
@@ -354,6 +375,8 @@ class Controller:
         intent_errors = {}
         tasks = sorted(self.store.tasks(), key=lambda t: (t["priority"], t["id"]))
         for task in tasks:
+            if getattr(self.rpc, 'hosts', {}).get(task['id'], task.get('host_id', 'local')) != 'local':
+                continue
             if task["state"] in ("disabled", "needs_review"):
                 continue
             if task["scope"] != self.identity:
@@ -383,6 +406,8 @@ class Controller:
         errors, views, resume_busy = dict(intent_errors), {}, False
         tasks = sorted(self.store.tasks(), key=lambda t: (t["priority"], t["id"]))
         for task in tasks:
+            if getattr(self.rpc, 'hosts', {}).get(task['id'], task.get('host_id', 'local')) != 'local':
+                continue
             if task["state"] in ("disabled", "needs_review", "held") or task["scope"] != self.identity:
                 continue
             try:
@@ -436,7 +461,7 @@ class Controller:
 async def identity_for(rpc, store=None):
     account = (await rpc.call("account/read", {"refreshToken": False})).get("account")
     if not account or account.get("type") != "chatgpt":
-        raise ValueError("Codex CLI must be signed in with ChatGPT")
+        raise ValueError("Codex CLI requires a subscription account sign-in")
     # Only identity metadata is hashed; tokens never enter logs, reports or our DB.
     auth_path = Path(os.environ.get("CODEX_HOME", str(Path.home() / ".codex"))) / "auth.json"
     workspace = None
@@ -458,7 +483,7 @@ def server_command(config):
         client = windows_client(force=True)
         executable = (client or {}).get('cli')
         if not executable:
-            raise ValueError('Open the installed ChatGPT desktop app or install the official Codex CLI')
+            raise ValueError('Open the compatible desktop client or install the official Codex CLI')
     else:
         executable = shutil.which("codex")
     bundled = "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
@@ -532,6 +557,7 @@ async def requests(controller):
 
 
 async def run(config, once=False):
+    base_config = dict(config)
     store = Store(config["state_dir"])
     lock = open_lock(store.directory / "daemon.lock")
     try:
@@ -552,6 +578,8 @@ async def run(config, once=False):
     failures, identity = 0, None
     try:
         while True:
+            config = effective_config(store, base_config)
+            rules_revision = effective_rules(store, base_config)['revision']
             if config.get("host_pid") and not process_alive(config["host_pid"]):
                 return 0
             if store.get("stop_requested", False):
@@ -628,6 +656,8 @@ async def run(config, once=False):
                                 rpc.hosts.setdefault(task["id"], "local")
                         skipped = {}
                         for tid in (list(rpc.available) if os.name == 'nt' else await rpc.discover()):
+                            if getattr(rpc, 'hosts', {}).get(tid, 'local') != 'local':
+                                continue
                             if tid in excluded or tid in registered or store.get("auto_preferences", {}).get(tid) is False:
                                 continue
                             try:
@@ -640,7 +670,7 @@ async def run(config, once=False):
                     from plans import PlanRunner
                     await PlanRunner(controller).tick(sample)
                     await controller.tick(sample)
-                report = {"version": "0.2.1", "pid": os.getpid(), "observed_at": started,
+                report = {"version": VERSION, "pid": os.getpid(), "observed_at": started,
                           "observed_at_dubai": local_time(started), "mode": config["mode"],
                           "phase": phase, "supervisor_paused": supervisor_paused, "quota": sample,
                           "control_available": control_available,
@@ -694,6 +724,8 @@ async def run(config, once=False):
                 await asyncio.sleep(min(1, max(0.01, deadline - time.monotonic())))
                 if store.get("stop_requested", False):
                     return 0
+                if effective_rules(store, base_config)['revision'] != rules_revision:
+                    break
                 if config.get("host_pid") and not process_alive(config["host_pid"]):
                     return 0
                 if store.db.execute("SELECT 1 FROM requests WHERE kind IN ('execute_now','pause_all') AND state='pending' LIMIT 1").fetchone():
@@ -735,7 +767,7 @@ def make_launch_agent(config, python):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="额度管家：ChatGPT Work / Codex 用量监测")
+    parser = argparse.ArgumentParser(description="任务管家：Codex 用量监测与任务控制")
     parser.add_argument("--config", default=str(ROOT / "config.json"))
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("run", "once", "status", "pause", "unpause", "notices", "start", "stop"):

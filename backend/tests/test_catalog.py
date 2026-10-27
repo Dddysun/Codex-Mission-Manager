@@ -40,15 +40,14 @@ class CatalogTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result["items"][0]["status"],"notLoaded")
         self.assertNotIn("first_user_message",json.dumps(result))
 
-    async def test_cloud_seed_is_account_scoped_and_readonly(self):
+    async def test_cloud_seed_is_ignored_without_modifying_legacy_file(self):
         p=self.store.directory/'chat-catalog-seed.json'
         seed={"account_id":"account-a","observed_at":1,"items":[{"id":"cloud","title":"A ChatGPT chat","kind":"chatgpt","host_id":"chatgpt"}]}
         p.write_text(json.dumps(seed))
         class Rpc: available=[]
         result=await refresh_catalog(Rpc(), self.store, self.config, "scope")
-        cloud=next(x for x in result["items"] if x["id"]=="cloud")
-        self.assertFalse(cloud["can_control"])
-        self.assertEqual(cloud["category"],"chatgpt")
+        self.assertFalse(any(x['id'] == 'cloud' for x in result['items']))
+        self.assertEqual(json.loads(p.read_text()), seed)
         self.store.put("account_display",{"account":{"id":"other-account"}})
         result=await refresh_catalog(Rpc(),self.store,self.config,"other-scope")
         self.assertFalse(any(x["id"]=="cloud" for x in result["items"]))

@@ -4,6 +4,7 @@ import contextlib
 import json
 import os
 import subprocess
+from mission_version import VERSION
 
 
 class RpcError(RuntimeError):
@@ -28,7 +29,7 @@ class Rpc:
             **({'creationflags':subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
         self.reader = asyncio.create_task(self._read())
         result = await self.call("initialize", {"clientInfo": {
-            "name": "usage_guardian", "title": "Usage Guardian", "version": "0.1.0"}})
+            "name": "usage_guardian", "title": "Usage Guardian", "version": VERSION}})
         await self.send({"method": "initialized"})
         return result
 

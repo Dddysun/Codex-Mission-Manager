@@ -5,7 +5,7 @@ import time
 import uuid
 
 from control_policy import active_turn, blocked_input, message_id, quota_usable
-from quota import plan_window, window_map
+from quota import plan_window, window_map, restoration_details
 
 ACTIVE = {"armed", "sending"}
 DEFAULT_PROMPT = "继续任务"
@@ -30,7 +30,9 @@ def save_plan(store, plan, expected_revision=None):
         if not old or old["state"] != plan["state"]:
             store.db.execute("INSERT INTO events(created,thread_id,previous_state,state,detail) VALUES(?,?,?,?,?)",
                 (time.time(), plan["thread_id"], "plan_" + old["state"] if old else None,
-                 "plan_" + plan["state"], json.dumps({"reason": plan.get("reason"), "plan_id": plan["id"]})))
+                 "plan_" + plan["state"], json.dumps({"reason": plan.get("reason"), "plan_id": plan["id"],
+                    "recovery_reason": plan.get('recovery_reason'),
+                    "recovery_evidence": plan.get('recovery_evidence')})))
     return True
 
 
@@ -56,7 +58,9 @@ def set_plan(store, chat, enabled, prompt, revision, sample, now=None):
         "scope": sample.get("scope"), "armed_at": now,
         "armed_window_key": selected[0] if selected else None,
         "armed_window_minutes": selected[1]["minutes"] if selected else None,
-        "armed_window_reset": selected[1]["reset"] if selected else None}
+        "armed_window_reset": selected[1]["reset"] if selected else None,
+        "armed_window_remaining": selected[1]["remaining"] if selected else None,
+        "armed_limit_id": sample.get('limit_id'), "armed_windows": window_map(sample)}
     plan.update(state="armed" if enabled else "cancelled", prompt=prompt.strip(), revision=revision + 1,
                 updated_at=now, recovery_first_seen=None, reason=None)
     if not save_plan(store, plan, revision):
@@ -87,13 +91,31 @@ class PlanRunner:
         return values[0] if len(values) == 1 else None
 
     def ready(self, plan, sample):
+        return self.recovery_reason(plan, sample) is not None
+
+    def recovery_reason(self, plan, sample):
         target = self.anchor_window(plan, sample)
         reset = plan.get("armed_window_reset")
-        return (sample.get("scope", self.controller.identity) == plan["scope"]
+        valid = (sample.get("scope", self.controller.identity) == plan["scope"]
                 and self.controller.clock() - sample["observed_at"] <= self.config["max_sample_age_seconds"]
                 and target is not None and not isinstance(reset, bool) and isinstance(reset, (int, float))
-                and math.isfinite(reset) and target["reset"] > reset
+                and math.isfinite(reset)
                 and quota_usable(sample, self.config))
+        if not valid or (plan.get('armed_limit_id') and plan['armed_limit_id'] != sample.get('limit_id')):
+            return None
+        current = window_map(sample)
+        if any(key not in current or current[key]['minutes'] != old['minutes']
+               for key, old in plan.get('armed_windows', {}).items()):
+            return None
+        if target['reset'] > reset:
+            return 'window_advanced'
+        remaining = plan.get('armed_window_remaining')
+        if type(remaining) in (int, float) and math.isfinite(remaining):
+            low = remaining <= (0 if target['minutes'] == 10080 else self.config['pause_remaining'])
+            required = max(5, self.config['resume_remaining'] - self.config['pause_remaining']) if low else 20
+            if target['remaining'] - remaining >= required:
+                return 'balance_restored'
+        return None
 
     def finish(self, plan, state, reason=None, turn_id=None):
         plan.update(state=state, reason=reason, finished_at=self.controller.clock(), resumed_turn_id=turn_id)
@@ -136,6 +158,9 @@ class PlanRunner:
                     else:
                         self.finish(plan, "needs_review", "上次发送结果未确认，不重复发送")
                     continue
+                managed = self.store.get_task(plan['thread_id'])
+                if managed and managed.get('manual_hold'):
+                    continue
                 if (sample.get("quota_state") in ("metered", "service_only")
                         and self.anchor_window(plan, sample) is None):
                     self.finish(plan, "needs_review", "额度窗口已变化，请重新确认预约")
@@ -172,6 +197,8 @@ class PlanRunner:
                     plan["recovery_first_seen"] = None
                     save_plan(self.store, plan, plan["revision"])
                     continue
+                plan['recovery_reason'] = self.recovery_reason(plan, fresh)
+                plan['recovery_evidence'] = restoration_details(fresh, plan.get('armed_windows', {}), plan['recovery_reason'])
                 if self.controller.identity_check and await self.controller.identity_check() != plan["scope"]:
                     self.finish(plan, "needs_review", "发送前账号已变化")
                     continue
@@ -184,6 +211,9 @@ class PlanRunner:
                     continue
                 current = get_plan(self.store, plan["key"])
                 if self.controller.cancelled() or current["revision"] != plan["revision"] or current["state"] != "armed":
+                    continue
+                managed = self.store.get_task(plan['thread_id'])
+                if managed and managed.get('manual_hold'):
                     continue
                 plan.update(state="sending", action_id=str(uuid.uuid4()))
                 if not save_plan(self.store, plan, plan["revision"]):

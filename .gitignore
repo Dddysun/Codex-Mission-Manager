@@ -16,4 +16,10 @@ state/
 auth.json
 chat-catalog-seed.json
 config.local.json
+/backend/config.json
 github-upload-status.json
+*.pfx
+*.cer
+*.mobileprovision
+*.dSYM/
+artifacts/

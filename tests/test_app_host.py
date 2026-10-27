@@ -32,6 +32,29 @@ class PackagingHostTests(unittest.TestCase):
         self.assertEqual(store.tasks(), [])
         store.close()
 
+    def test_reopening_preserves_existing_config_rules_and_runtime_rule_overrides(self):
+        directory = self.root / 'app'
+        path = make_config(directory, self.root / 'home', 10001)
+        config = json.loads(path.read_text())
+        config.update(poll_seconds=90, near_limit_poll_seconds=15, ui_poll_seconds=8)
+        path.write_text(json.dumps(config))
+        store = Store(directory / 'state')
+        from rules import update_rules, effective_config
+        update_rules(store, config, {'poll_seconds': 120, 'ui_poll_seconds': 9}, 0)
+        store.put('supervisor_paused', True)
+        store.close()
+        reopened = load_config(make_config(directory, self.root / 'home', 10002))
+        self.assertEqual(reopened['poll_seconds'], 90)
+        self.assertEqual(reopened['ui_poll_seconds'], 8)
+        self.assertEqual(reopened['ui_port'], 10002)
+        store = Store(directory / 'state')
+        try:
+            self.assertEqual(effective_config(store, reopened)['poll_seconds'], 120)
+            self.assertEqual(effective_config(store, reopened)['ui_poll_seconds'], 9)
+            self.assertTrue(store.get('supervisor_paused'))
+        finally:
+            store.close()
+
     def test_existing_service_is_attached_without_writes_or_second_executor(self):
         state = self.root / ".codex/usage-guardian/state"
         state.mkdir(parents=True)

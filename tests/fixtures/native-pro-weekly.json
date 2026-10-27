@@ -60,20 +60,20 @@
     },
     {
       "id": "demo-chat-2",
-      "key": "chatgpt:local:demo-chat-2",
-      "name": "梳理下周的学习计划",
+      "key": "codex:local:demo-chat-2",
+      "name": "示例离线聊天",
       "state": "watching",
       "auto_resume": false,
       "manual_hold": false,
       "revision": 3,
       "can_control": false,
-      "category": "chatgpt",
-      "source_label": "ChatGPT · 目录快照",
+      "category": "codex",
+      "source_label": "Codex · 本机",
       "runtime": {
         "type": "unknown"
       },
       "execution_stage": {
-        "text": "当前仅同步目录，执行阶段暂不可读。",
+        "text": "客户端未连接，执行阶段暂不可读。",
         "phase": "progress",
         "updated_at": 1792785600
       },
@@ -81,7 +81,9 @@
         "state": "off",
         "prompt": "继续任务",
         "revision": 2
-      }
+      },
+      "kind": "codex",
+      "host_id": "local"
     }
   ],
   "events": [

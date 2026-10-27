@@ -14,6 +14,8 @@ def main():
     parser.add_argument("--build", required=True, type=Path)
     args = parser.parse_args()
     build = args.build.resolve()
+    manifest = json.loads((build / "build-manifest.json").read_text())
+    version = manifest["version"]
     app = build / "Codex Mission Manager.app"
     if not app.is_dir(): raise SystemExit("Build the application first")
     stage = build / "dmg-stage"
@@ -22,16 +24,16 @@ def main():
     shutil.copytree(app, stage / app.name, symlinks=True)
     (stage / "Applications").symlink_to("/Applications")
     (stage / "安装说明.txt").write_text(
-        "任务管家 V0.2 公开试用版 / Apple Silicon / macOS 14+\n\n"
+        "任务管家 V" + version + " 公开预览版 / Apple Silicon / macOS 14+\n\n"
         "将 Codex Mission Manager.app 拖入 Applications 后打开。关闭窗口后继续后台运行。\n"
         "此版主窗口使用 SwiftUI / AppKit 原生控件，不内嵌网页。\n"
-        "若已有网页版本后台，应用会优先连接它，避免重复执行器。\n\n"
+        "升级前请从菜单栏退出旧版；应用保留既有配置与任务记录。\n\n"
         "本版本尚未 Apple 公证。合盖运行辅助服务暂不可用。\n"
         "若系统阻止打开，请使用后续正式签名版本；本包不提供绕过系统保护的方法。\n\n"
         "首次新安装默认暂停自动控制；确认账号与聊天后再开启。\n"
-        "当前需要已安装且兼容的 ChatGPT/Codex 桌面客户端，本包不分发原客户端。\n"
-        "源码、产品蓝图与验证结果：https://github.com/Dddysun/Codex-Mission-Manager\n", encoding="utf-8")
-    image = build / "Codex-Mission-Manager-0.2.1-arm64-preview.dmg"
+        "需要已安装且兼容的 Codex 桌面客户端，本包不分发原客户端。\n"
+        "源码、使用说明与版本记录：https://github.com/Dddysun/Codex-Mission-Manager\n", encoding="utf-8")
+    image = build / ("Codex-Mission-Manager-" + version + "-arm64-preview.dmg")
     subprocess.run(["hdiutil", "create", "-volname", "Codex Mission Manager", "-srcfolder", str(stage),
                     "-format", "UDZO", "-ov", str(image)], check=True)
     # DiskImages can retain a short-lived handle after create on hosted macOS.

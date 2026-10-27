@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from guardian import (Controller, Store, classify, load_config, parse_bucket, recovered)
 from rpc import Rpc
 
-CONFIG = load_config(Path(__file__).resolve().parents[1] / "config.json")
+CONFIG = load_config(Path(__file__).resolve().parents[1] / "config.example.json")
 CONFIG["recovery_confirm_seconds"] = 0  # Delay behavior has separate clock-controlled tests.
 NOW = 2_000_000_000
 
@@ -39,15 +39,15 @@ class PolicyTests(unittest.TestCase):
 
     def test_clock_alone_does_not_resume(self):
         old = sample()
-        self.assertFalse(recovered(sample(remaining=95), old, CONFIG, NOW))
+        self.assertFalse(recovered(sample(), old, CONFIG, NOW))
         self.assertFalse(recovered(sample(remaining=95, reset=NOW + 18000), old, CONFIG, NOW + 100))
 
     def test_fresh_new_window_recovers(self):
         self.assertTrue(recovered(sample(remaining=95, reset=NOW + 18000), sample(), CONFIG, NOW))
 
-    def test_weekly_block_requires_weekly_window_change(self):
+    def test_weekly_block_accepts_recovered_balance_or_new_window(self):
         old = sample(remaining=95, weekly=0)
-        self.assertFalse(recovered(sample(remaining=95, weekly=65), old, CONFIG, NOW))
+        self.assertTrue(recovered(sample(remaining=95, weekly=65), old, CONFIG, NOW))
         self.assertTrue(recovered(sample(remaining=95, weekly=65, weekly_reset=NOW + 10000), old, CONFIG, NOW))
 
     def test_missing_values_are_unknown_not_zero(self):

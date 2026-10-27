@@ -6,6 +6,7 @@ import json
 import os
 from pathlib import Path
 import plistlib
+import re
 import shutil
 import subprocess
 import sys
@@ -47,6 +48,11 @@ def runtime(source, target):
 
 
 def build(args):
+    version = (ROOT / "VERSION").read_text(encoding="utf-8").strip()
+    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
+        raise SystemExit("VERSION must contain a semantic release version")
+    number = os.environ.get("GITHUB_RUN_NUMBER", "1")
+    build_number = number if number.isdigit() else "1"
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
     app = output / "Codex Mission Manager.app"
@@ -66,6 +72,7 @@ def build(args):
     if bool(team) != (identity != "-"):
         raise SystemExit("Supply both MISSION_TEAM_ID and MISSION_SIGN_IDENTITY, or neither for local preview")
     shared = (ROOT / "native/Shared.swift").read_text().replace("__TEAM_ID__", team, 1)
+    shared = re.sub(r'static let version = "[^"]+"', 'static let version = "' + version + '"', shared, count=1)
     shared_path = scratch / "Shared.swift"
     shared_path.write_text(shared)
     module_cache = scratch / "module-cache"
@@ -92,17 +99,19 @@ def build(args):
             chunks.append(kind + struct.pack(">I", len(data) + 8) + data)
         data = b"".join(chunks)
         icon_path.write_bytes(b"icns" + struct.pack(">I", len(data) + 8) + data)
-    shutil.copyfile(ROOT / "packaging/Info.plist", contents / "Info.plist")
+    info = plistlib.loads((ROOT / "packaging/Info.plist").read_bytes())
+    info.update(CFBundleShortVersionString=version, CFBundleVersion=build_number)
+    (contents / "Info.plist").write_bytes(plistlib.dumps(info))
     shutil.copyfile(ROOT / "packaging/com.dddysun.CodexMissionManager.PowerHelper.plist",
                     contents / "Library/LaunchDaemons/com.dddysun.CodexMissionManager.PowerHelper.plist")
     backend = resources / "backend"
     backend.mkdir()
     for path in (ROOT / "backend").iterdir():
         if path.suffix == ".py" or path.name == "config.example.json": shutil.copyfile(path, backend / path.name)
-    shutil.copytree(ROOT / "backend/web", backend / "web")
     pyversion = runtime(args.python_runtime, resources / "python")
     shutil.copytree(ROOT / "third-party", resources / "third-party")
-    shutil.copyfile(ROOT / "docs/PRODUCT_BLUEPRINT_V0.1.md", resources / "PRODUCT_BLUEPRINT_V0.1.md")
+    shutil.copyfile(ROOT / "docs/USER_GUIDE.md", resources / "USER_GUIDE.md")
+    shutil.copyfile(ROOT / "VERSION", resources / "VERSION")
     run([resources / "python/bin/python3", "-I", backend / "app_host.py", "--self-test"])
     run([contents / "MacOS/CodexMissionManager", "--self-test"])
     run([contents / "Library/HelperTools/PowerHelper", "--self-test"])
@@ -125,10 +134,16 @@ def build(args):
     if identity != "-": command += ["--options", "runtime", "--timestamp"]
     run(command + [app])
     run(["codesign", "--verify", "--deep", "--strict", app])
-    manifest = {"version": "0.2.1", "architecture": "arm64", "minimum_macos": "14.0",
+    defaults = json.loads((ROOT / "backend/config.example.json").read_text(encoding="utf-8"))
+    default_rules = {key: defaults[key] for key in ("pause_remaining", "resume_remaining", "poll_seconds", "near_limit_poll_seconds", "recovery_confirm_seconds", "ui_poll_seconds")}
+    manifest = {"version": version, "preview": "preview." + build_number, "build_number": build_number,
+        "source_commit": os.environ.get("GITHUB_SHA"), "architecture": "arm64", "minimum_macos": "14.0",
         "python": pyversion, "signing": "developer-id" if team else "ad-hoc-local-preview",
         "notarized": False, "privileged_helper_enabled": bool(team), "live_closed_lid_verified": False,
-        "ui": "SwiftUI-AppKit", "webview": False, "private_runtime_data_included": False, "external_dependency": "Compatible installed ChatGPT/Codex desktop client"}
+        "ui": "SwiftUI-AppKit", "webview": False, "private_runtime_data_included": False,
+        "configurable_rules": True, "default_rules": default_rules,
+        "theme_accents": ["green", "blue", "purple", "yellow"], "chat_sources": ["codex"],
+        "external_dependency": "Compatible installed Codex desktop client"}
     (output / "build-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     print("APP_READY", app)
 

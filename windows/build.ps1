@@ -6,10 +6,12 @@ param(
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 $root = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
-$version = '0.2.1'
-$preview = if ($env:GITHUB_RUN_NUMBER -match '^\d+$') { 'windows.'+$env:GITHUB_RUN_NUMBER } else { 'windows.2' }
+$version = [IO.File]::ReadAllText((Join-Path $root 'VERSION')).Trim()
+if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'VERSION must contain a semantic release version.' }
+$buildNumber = if ($env:GITHUB_RUN_NUMBER -match '^\d+$') { $env:GITHUB_RUN_NUMBER } else { '1' }
+$preview = 'preview.'+$buildNumber
 $lock = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'python-runtime.lock.json') -Raw -Encoding UTF8 | ConvertFrom-Json
-if (!$OutputDirectory) { $OutputDirectory = Join-Path $root 'dist\windows-0.2.1-preview' }
+if (!$OutputDirectory) { $OutputDirectory = Join-Path $root ('dist\windows-'+$version+'-preview') }
 $output = [IO.Path]::GetFullPath($OutputDirectory)
 if ($output.TrimEnd('\') -eq $root.TrimEnd('\')) { throw 'Choose a generated output directory outside the source root.' }
 $marker = Join-Path $output '.mission-windows-build-output'
@@ -53,14 +55,14 @@ New-Item -ItemType Directory -Path $backend -Force | Out-Null
 Get-ChildItem -LiteralPath (Join-Path $root 'backend') -File | Where-Object { $_.Extension -eq '.py' -or $_.Name -eq 'config.example.json' } | ForEach-Object {
     Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $backend $_.Name)
 }
-Copy-Item -LiteralPath (Join-Path $root 'backend\web') -Destination (Join-Path $backend 'web') -Recurse
 Copy-Item -LiteralPath (Join-Path $root 'third-party') -Destination (Join-Path $app 'third-party') -Recurse
+Copy-Item -LiteralPath (Join-Path $root 'VERSION') -Destination (Join-Path $app 'VERSION')
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'python-runtime.lock.json') -Destination (Join-Path $app 'python-runtime.lock.json')
 if (Test-Path -LiteralPath (Join-Path $PSScriptRoot 'INSTALL_README.md')) {
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'INSTALL_README.md') -Destination (Join-Path $app 'README.md')
 }
-if (Test-Path -LiteralPath (Join-Path $root 'docs\WINDOWS_PORT.md')) {
-    Copy-Item -LiteralPath (Join-Path $root 'docs\WINDOWS_PORT.md') -Destination (Join-Path $app 'WINDOWS_PORT.md')
+if (Test-Path -LiteralPath (Join-Path $root 'docs\USER_GUIDE.md')) {
+    Copy-Item -LiteralPath (Join-Path $root 'docs\USER_GUIDE.md') -Destination (Join-Path $app 'USER_GUIDE.md')
 }
 $defaults = Get-Content -LiteralPath (Join-Path $backend 'config.example.json') -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($defaults.poll_seconds -ne 30 -or $defaults.near_limit_poll_seconds -ne 10) { throw 'Packaged polling defaults must be 30/10 seconds.' }
@@ -77,8 +79,15 @@ $icon = Join-Path $scratch 'AppIcon.ico'
 $brandIcon = Join-Path $PSScriptRoot 'Assets\AppIcon.ico'
 if (!(Test-Path -LiteralPath $brandIcon)) { throw 'The Mission Manager brand icon is missing.' }
 Copy-Item -LiteralPath $brandIcon -Destination $icon
-$common = @('/nologo','/target:winexe','/platform:x64','/optimize+','/utf8output','/codepage:65001',('/win32manifest:'+(Join-Path $PSScriptRoot 'app.manifest')),('/win32icon:'+$icon))
-$appArgs = $common + @('/out:'+(Join-Path $app 'CodexMissionManager.exe')) + ($references | ForEach-Object { '/reference:'+$_ }) + @(Join-Path $PSScriptRoot 'MissionManager.cs')
+$appManifest = Join-Path $scratch 'app.manifest'
+$manifestSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'app.manifest')) -replace '(assemblyIdentity version=")[^"]+', ('${1}'+$version+'.0')
+[IO.File]::WriteAllText($appManifest,$manifestSource,(New-Object Text.UTF8Encoding($false)))
+$common = @('/nologo','/target:winexe','/platform:x64','/optimize+','/utf8output','/codepage:65001',('/win32manifest:'+$appManifest),('/win32icon:'+$icon))
+$versionInfo = Join-Path $scratch 'VersionInfo.cs'
+$fileBuild = [Math]::Min(65534,[int]$buildNumber)
+$versionSource = '[assembly: System.Reflection.AssemblyVersion("'+$version+'.0")][assembly: System.Reflection.AssemblyFileVersion("'+$version+'.'+$fileBuild+'")][assembly: System.Reflection.AssemblyInformationalVersion("'+$version+'-'+$preview+'")][assembly: System.Reflection.AssemblyProduct("Codex Mission Manager")]'
+[IO.File]::WriteAllText($versionInfo,$versionSource,(New-Object Text.UTF8Encoding($false)))
+$appArgs = $common + @('/out:'+(Join-Path $app 'CodexMissionManager.exe')) + ($references | ForEach-Object { '/reference:'+$_ }) + @((Join-Path $PSScriptRoot 'MissionManager.cs'),$versionInfo)
 Write-Output 'Compiling native Windows application'
 & $compiler @appArgs
 if ($LASTEXITCODE -ne 0) { throw 'Native application compilation failed.' }
@@ -94,14 +103,15 @@ $nativeResult = Get-Content -LiteralPath $nativeReceipt -Raw -Encoding UTF8 | Co
 if (!$nativeResult.native -or $nativeResult.webView -or $nativeResult.hostStarted) { throw 'Native self-test did not satisfy the no-WebView/no-background-host contract.' }
 
 $manifest = [ordered]@{
-    version=$version; preview=$preview; platform='windows'; architecture='x64'
+    version=$version; preview=$preview; build_number=$buildNumber; platform='windows'; architecture='x64'
     minimum_windows='10.0.19041'; framework='.NET Framework 4.8 or later'; framework_bundled=$false
     ui='WPF'; webview=$false; python=$lock.version; python_distribution=$lock.distribution; python_sha256=$lock.sha256
     python_bundled=$true; private_runtime_data_included=$false; signing='unsigned-preview'
     normal_poll_delay_seconds=30; near_limit_or_pending_plan_poll_delay_seconds=10; ui_poll_seconds=5
+    configurable_rules=$true; theme_accents=@('green','blue','purple','yellow'); chat_sources=@('codex')
     data_directory='%LOCALAPPDATA%\CodexMissionManager'; install_scope='current-user'
     per_user_uninstaller=$true; uninstall_preserves_private_data=$true
-    external_dependency='Compatible installed ChatGPT desktop client and user sign-in'
+    external_dependency='Compatible installed Codex desktop client and user sign-in'
     source_commit=if ($env:GITHUB_SHA -match '^[0-9a-f]{40}$') { $env:GITHUB_SHA } else { $null }
 }
 $manifestPath = Join-Path $output 'build-manifest.json'
@@ -114,12 +124,12 @@ if (Test-Path -LiteralPath $portable) { Remove-Item -LiteralPath $portable -Forc
 [IO.Compression.ZipFile]::CreateFromDirectory($app,$portable,[IO.Compression.CompressionLevel]::Optimal,$false)
 $payloadSha = (Get-FileHash -LiteralPath $portable -Algorithm SHA256).Hash.ToLowerInvariant()
 $payloadBytes = (Get-Item -LiteralPath $portable).Length
-$installerSource = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Installer.cs') -Raw -Encoding UTF8).Replace('__PAYLOAD_SHA256__',$payloadSha).Replace('__PAYLOAD_BYTES__',$payloadBytes.ToString([Globalization.CultureInfo]::InvariantCulture))
+$installerSource = (Get-Content -LiteralPath (Join-Path $PSScriptRoot 'Installer.cs') -Raw -Encoding UTF8).Replace('__PAYLOAD_SHA256__',$payloadSha).Replace('__PAYLOAD_BYTES__',$payloadBytes.ToString([Globalization.CultureInfo]::InvariantCulture)).Replace('__PRODUCT_VERSION__',$version)
 $installerCs = Join-Path $scratch 'Installer.cs'
 [IO.File]::WriteAllText($installerCs,$installerSource,(New-Object Text.UTF8Encoding($false)))
 $stub = Join-Path $scratch 'InstallerStub.exe'
 $installerRefs = @('System.dll','System.Core.dll','System.Drawing.dll','System.Windows.Forms.dll','System.Web.Extensions.dll','System.IO.Compression.dll','System.IO.Compression.FileSystem.dll') | ForEach-Object { '/reference:'+(Join-Path $framework $_) }
-$installerArgs = $common + @('/out:'+$stub) + $installerRefs + @($installerCs)
+$installerArgs = $common + @('/out:'+$stub) + $installerRefs + @($installerCs,$versionInfo)
 & $compiler @installerArgs
 if ($LASTEXITCODE -ne 0) { throw 'Native installer compilation failed.' }
 $setup = Join-Path $output ('Codex-Mission-Manager-'+$version+'-windows-x64-setup.exe')

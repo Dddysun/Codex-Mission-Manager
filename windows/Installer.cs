@@ -20,7 +20,7 @@ namespace CodexMissionManagerSetup
 {
     static class Installer
     {
-        const string ProductVersion = "0.2.1";
+        const string ProductVersion = "__PRODUCT_VERSION__";
         const string ExpectedSha256 = "__PAYLOAD_SHA256__";
         const string ExpectedBytes = "__PAYLOAD_BYTES__";
         const string FooterMagic = "CMM-PAYLOAD-0001";
@@ -389,7 +389,7 @@ namespace CodexMissionManagerSetup
             Application.SetCompatibleTextRenderingDefault(false);
             var form = new Form { Text = T("任务管家安装", "Mission Manager Setup"), ClientSize = new Size(560, 305), StartPosition = FormStartPosition.CenterScreen, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, Font = new Font("Segoe UI", 10F), BackColor = Color.White };
             var title = new Label { Text = T("安装任务管家", "Install Mission Manager"), Location = new Point(28, 24), AutoSize = true, Font = new Font("Segoe UI", 19F, FontStyle.Bold) };
-            var description = new Label { Text = T("V0.2.1 · Windows 预览版\n包含原生窗口及 Python 运行环境。现有聊天、预约及账号登录数据保留。", "V0.2.1 · Windows preview\nIncludes the native app and Python runtime. Existing chats, plans and sign-in data are preserved."), Location = new Point(30, 76), Size = new Size(500, 62) };
+            var description = new Label { Text = T("V" + ProductVersion + " · Windows 预览版\n包含原生窗口及 Python 运行环境。现有聊天、预约及账号登录数据保留。", "V" + ProductVersion + " · Windows preview\nIncludes the native app and Python runtime. Existing chats, plans and sign-in data are preserved."), Location = new Point(30, 76), Size = new Size(500, 62) };
             var pathLabel = new Label { Text = InstallationDirectory, Location = new Point(30, 148), Size = new Size(500, 42), ForeColor = Color.DimGray };
             var launch = new CheckBox { Text = T("安装后打开任务管家", "Open Mission Manager after installation"), Location = new Point(30, 195), AutoSize = true, Checked = Array.IndexOf(args, "--no-launch") < 0 };
             var status = new Label { Text = "", Location = new Point(30, 231), Size = new Size(340, 50) };

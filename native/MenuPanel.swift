@@ -23,6 +23,9 @@ struct MissionMenuPanel: View {
                 } else if let note=model.snapshot?.usage?.missingWindowNote {
                     Text(note).font(.caption).foregroundStyle(.secondary).fixedSize(horizontal:false,vertical:true)
                 }
+                if let credits=model.snapshot?.usage?.reset_credits {
+                    Text(L("可用重置次数：%@",credits.displayCount)).font(.caption).foregroundStyle(.secondary)
+                }
                 if !model.connected || model.snapshot?.usage?.stale != false { Label(L("额度待同步"),systemImage:"clock").font(.caption).foregroundStyle(.orange) }
             }
             HStack(spacing:8) {
@@ -50,6 +53,7 @@ struct MissionMenuPanel: View {
             Button(action:openSettings) { Label(L("设置"),systemImage:"gearshape").frame(maxWidth:.infinity,alignment:.leading) }.buttonStyle(.plain)
             HStack { Text(L("语言")).font(.callout); Spacer(); Picker(L("语言"),selection:$model.language) { Text(L("简体中文")).tag("zh"); Text("English").tag("en") }.labelsHidden().frame(width:180) }
             HStack { Text(L("外观")).font(.callout); Spacer(); Picker(L("外观"),selection:$model.theme) { Text(L("跟随系统")).tag("system"); Text(L("浅色")).tag("light"); Text(L("深色")).tag("dark") }.labelsHidden().frame(width:180) }
+            HStack {Text(L("主题色")).font(.callout);Spacer();Picker(L("主题色"),selection:$model.accent) {ForEach(MissionAccent.allCases,id:\.rawValue) {choice in Text(choice.title).tag(choice.rawValue)}}.labelsHidden().frame(width:180)}
             Divider()
             HStack {
                 Label(model.connected ? L("后台已连接") : L("后台未连接"),systemImage:model.connected ? "circle.fill" : "exclamationmark.circle").font(.caption).foregroundStyle(.secondary)
@@ -57,19 +61,19 @@ struct MissionMenuPanel: View {
                 Button(L("退出"),action:quit).buttonStyle(.plain).font(.caption)
             }
         }.padding(20).frame(maxWidth:.infinity,alignment:.leading)
-        }.frame(width:400,height:570).background(Color(nsColor:.windowBackgroundColor)).preferredColorScheme(model.colorScheme)
+        }.frame(width:400,height:570).background(Color(nsColor:.windowBackgroundColor)).preferredColorScheme(model.colorScheme).tint(model.tint)
         .sheet(isPresented:$showResults) {
             VStack(alignment:.leading,spacing:16) {
                 HStack { Text(L("暂停所有任务")).font(.title2.bold()); Spacer(); Button(L("完成")) { showResults=false } }
                 Text(L("暂停允许接管的执行中任务，并关闭全局自动控制。手动暂停的任务需手动恢复。")).font(.callout).foregroundStyle(.secondary)
                 List(model.snapshot?.bulk_pause?.items ?? []) { item in
                     VStack(alignment:.leading,spacing:6) {
-                        Text(model.snapshot?.tasks.first(where:{$0.id==item.thread_id})?.name ?? item.thread_id).fontWeight(.medium)
+                        Text(model.snapshot?.codexTasks.first(where:{$0.id==item.thread_id})?.name ?? item.thread_id).fontWeight(.medium)
                         Text(L(item.state=="paused" ? "已暂停" : item.state=="skipped" ? "已跳过" : "暂停失败")).foregroundStyle(item.state=="failed" ? Color.orange : .secondary)
                         if let reason=item.reason { Text(L(reason)).font(.caption).foregroundStyle(.secondary).textSelection(.enabled) }
                     }.padding(.vertical,6)
                 }.frame(height:260)
-            }.padding(24).frame(width:540).preferredColorScheme(model.colorScheme)
+            }.padding(24).frame(width:540).preferredColorScheme(model.colorScheme).tint(model.tint)
         }
     }
     func meter(_ title:String,quota:MissionQuota?) -> some View {

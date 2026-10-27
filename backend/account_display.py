@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from urllib.parse import urlparse
 
-from quota import parse_bucket, window_map, plan_window
+from quota import parse_bucket, window_map, plan_window, reset_credits
 
 
 def text(value, limit=200):
@@ -88,4 +88,5 @@ def display_snapshot(account_response, quota_response, limit_id, observed_at, au
             "scheduling_available": bool(quota_windows),
             "scheduling_window": scheduling_window,
             "limit_id": limit_id, "limit_name": text(raw.get("limitName")),
+            "reset_credits": reset_credits(quota_response),
             "source": "account/rateLimits/read"}

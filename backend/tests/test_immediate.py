@@ -56,6 +56,14 @@ class ImmediateTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.rpc.count("turn/start"), 1)
         self.assertEqual(self.rpc.count("turn/interrupt"), 0)
 
+    async def test_rules_changed_during_quota_check_prevent_using_old_thresholds(self):
+        from rules import update_rules
+        self.enqueue()
+        self.rpc.on_quota_read = lambda: update_rules(self.store, self.config, {'resume_remaining': 90}, 0)
+        await self.runner.tick(self.sample)
+        self.assertEqual(self.receipt()['state'], 'failed')
+        self.assertEqual(self.rpc.count('turn/start'), 0)
+
     async def test_duplicate_submission_is_idempotent_and_different_pending_rejected(self):
         request_id = self.enqueue()
         self.assertEqual(self.enqueue(request_id=request_id), request_id)

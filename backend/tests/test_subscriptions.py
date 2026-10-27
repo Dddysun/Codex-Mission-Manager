@@ -169,12 +169,12 @@ class SubscriptionPolicyTests(unittest.TestCase):
         old = read(limits(None, meter(10080, 0)))
         same = read(limits(None, meter(10080, 80)))
         new = read(limits(None, meter(10080, 80, NOW + 10000)))
-        self.assertFalse(recovered(same, old, CONFIG, NOW))
+        self.assertTrue(recovered(same, old, CONFIG, NOW))
         self.assertTrue(recovered(new, old, CONFIG, NOW))
 
     def test_custom_window_recovery_waits_for_its_actual_reset(self):
         old = read(limits(meter(60, 8), None))
-        self.assertFalse(recovered(read(limits(meter(60, 90), None)), old, CONFIG, NOW))
+        self.assertTrue(recovered(read(limits(meter(60, 90), None)), old, CONFIG, NOW))
         self.assertTrue(recovered(read(limits(meter(60, 90, NOW + 7200), None)), old, CONFIG, NOW))
 
     def test_disappearing_old_limit_is_not_recovery(self):

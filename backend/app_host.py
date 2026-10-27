@@ -44,6 +44,12 @@ def make_config(directory, home=None, port=8769, parent_pid=None):
     private_directory(directory)
     state = directory / "state"
     cfg = json.loads((ROOT / "config.example.json").read_text(encoding="utf-8"))
+    previous = directory / 'config.json'
+    if previous.exists():
+        saved = json.loads(previous.read_text(encoding='utf-8'))
+        if not isinstance(saved, dict):
+            raise ValueError('Existing application configuration is invalid; it was not overwritten')
+        cfg.update(saved)
     cfg.update(state_dir=str(state), runtime_root=str(ROOT), ui_port=port,
                host_pid=parent_pid, system_notifications=False, native_notifications=True, power_guard_enabled=False)
     cfg["desktop_database"] = str(Path(home or Path.home()) / ".codex/state_5.sqlite")

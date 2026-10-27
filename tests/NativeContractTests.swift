@@ -106,6 +106,63 @@ import Foundation
         precondition(custom.usage?.visibleWindows.map { $0.title } == ["15-minute quota", "1-day quota"])
         precondition(weekly.usage?.visibleWindows.first?.title == "Weekly quota")
         precondition(service.usage?.availabilityNote == "The service allows usage; no fixed quota window was provided.")
+        precondition(state.codexTasks.allSatisfy { $0.isCodex }, "Only Codex tasks belong in the task UI")
+        var directoryOnly=state.tasks[2];directoryOnly.category="chatgpt";directoryOnly.key="chatgpt:cloud:fixture-hidden"
+        var mixed=state;mixed.tasks.append(directoryOnly)
+        precondition(mixed.codexTasks.count == state.codexTasks.count,"An unsupported product directory item must stay hidden")
+        var localWithoutHost=state.tasks[1];localWithoutHost.host_id=nil
+        precondition(localWithoutHost.isCodex,"A legacy local key must not require a new host field")
+        localWithoutHost.category=nil
+        precondition(localWithoutHost.isCodex,"A local Codex key identifies older snapshots without category")
+        var remote=localWithoutHost;remote.category="codex";remote.host_id="remote-host"
+        precondition(!remote.isCodex,"An explicit remote host cannot be displayed as local")
+        remote.host_id=nil;remote.key="codex:remote-host:fixture-hidden"
+        precondition(!remote.isCodex,"A missing host field cannot hide the remote host in a namespaced key")
+        remote.host_id="local"
+        precondition(!remote.isCodex,"Conflicting local metadata must not override a remote key")
+        var legacyBare=state.tasks[1];legacyBare.host_id=nil;legacyBare.key="legacy-local-id";legacyBare.category="codex"
+        precondition(legacyBare.isCodex && legacyBare.sourceTitle == L("Codex · 本机"))
+        precondition(MissionAccent.allCases.map { $0.rawValue } == ["green","blue","purple","yellow"])
+        precondition(MissionAccent.yellow.lightTextHex != "FFFFFF", "Egg-yellow controls need dark foreground text")
+        var ruleText=MissionRuleFields.defaults.mapValues(String.init)
+        precondition(MissionRuleFields.validation(ruleText).values == MissionRuleFields.defaults)
+        ruleText["pause_remaining"]="20";ruleText["resume_remaining"]="24"
+        precondition(MissionRuleFields.validation(ruleText).values == nil,"Recovery needs hysteresis of at least five points")
+        ruleText["resume_remaining"]="25";ruleText["near_limit_poll_seconds"]="31"
+        precondition(MissionRuleFields.validation(ruleText).values == nil,"Near-limit checks cannot be slower than normal checks")
+        ruleText["near_limit_poll_seconds"]="10";ruleText["poll_seconds"]="1.5"
+        precondition(MissionRuleFields.validation(ruleText).values == nil,"Rules accept integers, not silently rounded decimals")
+        ruleText=MissionRuleFields.defaults.mapValues(String.init);ruleText["ui_poll_seconds"]="31"
+        precondition(MissionRuleFields.validation(ruleText).values == nil)
+        let rulesRequest=MissionCommands.rules(MissionRuleFields.defaults,revision:7)
+        precondition(rulesRequest["rules_revision"] as? Int == 7 && rulesRequest["action"] as? String == "set_rules")
+        precondition(rulesRequest["revision"] == nil,"Rules revision is independent of task/global control revision")
+        let confirmedRules=MissionRules(revision:8,values:MissionRuleFields.defaults,bounds:nil)
+        precondition(confirmedRules.confirms(MissionRuleFields.defaults,after:7))
+        precondition(!confirmedRules.confirms(MissionRuleFields.defaults,after:8),"A 200 response with the old revision cannot clear a draft")
+        precondition(!confirmedRules.confirms(MissionRuleFields.defaults,after:9),"An older receipt cannot clear a draft")
+        var changedRuleValues=MissionRuleFields.defaults;changedRuleValues["ui_poll_seconds"]=9
+        precondition(!confirmedRules.confirms(changedRuleValues,after:7),"A receipt for different values must retain the submitted draft")
+        var extraRuleValues=MissionRuleFields.defaults;extraRuleValues["unsupported"]=1
+        precondition(!confirmedRules.confirms(extraRuleValues,after:7),"Only an exact rules receipt confirms the request")
+        for event in ["poll","sort","theme","locale"] {
+            precondition(!MissionPromptSynchronization.shouldApply(current:"正在输入中文",incoming:"旧指令",editing:false,marked:true,hasDraft:false),"\(event) must preserve marked text")
+            precondition(!MissionPromptSynchronization.shouldApply(current:"正在输入中文",incoming:"旧指令",editing:true,marked:false,hasDraft:false),"\(event) must preserve an active caret")
+            precondition(!MissionPromptSynchronization.shouldApply(current:"本地草稿",incoming:"旧指令",editing:false,marked:false,hasDraft:true),"\(event) must preserve an unsaved draft")
+        }
+        precondition(MissionPromptSynchronization.shouldApply(current:"旧指令",incoming:"已确认的服务端指令",editing:false,marked:false,hasDraft:false))
+        precondition(MissionPromptSynchronization.selection(NSRange(location:99,length:4),utf16Length:2) == NSRange(location:2,length:0))
+        precondition(MissionResetCredits(available_count:nil,credits:nil,supported:false).displayCount == L("未提供"))
+        precondition(MissionResetCredits(available_count:0,credits:[],supported:true).displayCount == "0")
+        object["rules"]=["revision":4,"values":MissionRuleFields.defaults,"bounds":["ui_poll_seconds":["min":2,"max":30]],"constraints":["early_balance_restoration_min_drop_percent":20]] as [String:Any]
+        usage["reset_credits"]=["supported":true,"available_count":2,"credits":[["id":"fixture-credit","title":"Fixture reset credit","status":"available","expiresAt":1793000000,"description":"Read-only service metadata"]]] as [String:Any]
+        object["usage"]=usage
+        let modern=try JSONDecoder().decode(MissionSnapshot.self,from:JSONSerialization.data(withJSONObject:object))
+        precondition(modern.rules?.revision == 4 && modern.rules?.values["ui_poll_seconds"] == 5)
+        precondition(modern.usage?.reset_credits?.available_count == 2 && modern.usage?.reset_credits?.credits?.first?.expiresAt == 1793000000)
+        let restored=MissionEventDetail(reason:nil,source:nil,automatic_control_allowed:nil,recovery_reason:"balance_restored")
+        precondition(restored.recoveryNote?.contains("unknown") == true && restored.recoveryNote?.contains("official") == false,"A balance increase is not proof of an official campaign reset")
+        print("Native V0.3.0 rules / Codex filtering / theme / IME synchronization checks passed")
         print("Native snapshot / status / control contract checks passed")
     }
 }

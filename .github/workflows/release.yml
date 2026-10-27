@@ -1,0 +1,369 @@
+name: Build and publish native preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'VERSION'
+      - 'backend/**'
+      - 'native/**'
+      - 'windows/**'
+      - 'packaging/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'third-party/**'
+      - 'docs/USER_GUIDE.md'
+      - 'docs/releases/**'
+      - '.github/workflows/release.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-preview-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PYTHONDONTWRITEBYTECODE: '1'
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.identity.outputs.version }}
+      tag: ${{ steps.identity.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check distributable source and private-data exclusions
+        run: python3 scripts/check_source.py
+      - name: Validate release identity and documentation
+        id: identity
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+          version = Path('VERSION').read_text(encoding='utf-8').strip()
+          if not re.fullmatch(r'(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)', version):
+              raise SystemExit('VERSION must contain a semantic version such as 0.3.0')
+          run = os.environ['GITHUB_RUN_NUMBER']
+          if not run.isdigit():
+              raise SystemExit('Invalid release run number')
+          for document in (Path('docs/releases') / (version + '.md'), Path('docs/USER_GUIDE.md')):
+              if not document.is_file() or not document.read_text(encoding='utf-8').strip():
+                  raise SystemExit('Missing release documentation: ' + str(document))
+          with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as output:
+              output.write('version=' + version + '\n')
+              output.write('tag=v' + version + '-preview.' + run + '\n')
+          PY
+
+  macos:
+    needs: prepare
+    runs-on: macos-15
+    timeout-minutes: 40
+    env:
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Confirm Apple Silicon runner
+        run: test "$(uname -m)" = arm64
+      - name: Fetch verified portable Python
+        run: python3 scripts/fetch_runtime.py --destination "$RUNNER_TEMP/mission-python"
+      - name: Run full backend and packaging-host regressions
+        run: |
+          "$RUNNER_TEMP/mission-python/python/bin/python3" -I windows/run_tests.py \
+            --scope full --output "$RUNNER_TEMP/macos-tests"
+      - name: Verify native control and rules contracts
+        run: |
+          swiftc -swift-version 5 -parse-as-library native/Localization.swift native/NativeState.swift \
+            tests/NativeContractTests.swift -o "$RUNNER_TEMP/native-contract"
+          "$RUNNER_TEMP/native-contract" tests/fixtures/native-state.json
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          report = json.loads((root / 'macos-tests/windows-test-results.json').read_text())
+          assert report['scope'] == 'full' and report['full_backend_suite_run']
+          assert all(value['successful'] for value in report['results'].values())
+          evidence = {
+              'backend_tests_passed': report['results']['backend']['tests_run'] - report['results']['backend']['skipped'],
+              'packaging_host_tests_passed': report['results']['host']['tests_run'] - report['results']['host']['skipped'],
+              'native_control_contract_checks': 'passed',
+              'test_environment': 'isolated GitHub macOS runner; synthetic fixtures; no live chat access',
+          }
+          (root / 'macos-test-evidence.json').write_text(json.dumps(evidence, indent=2) + '\n')
+          PY
+      - name: Build native application with embedded dependencies
+        run: |
+          python3 scripts/build.py --python-runtime "$RUNNER_TEMP/mission-python/python" \
+            --output "$RUNNER_TEMP/mission-macos"
+      - name: Verify native Chinese input composition
+        run: |
+          "$RUNNER_TEMP/mission-macos/Codex Mission Manager.app/Contents/MacOS/CodexMissionManager" \
+            --editor-self-test > "$RUNNER_TEMP/native-editor-macos-arm64.json"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          report = json.loads((Path(os.environ['RUNNER_TEMP']) / 'native-editor-macos-arm64.json').read_text())
+          assert all(report[key] for key in ('nativeTextView', 'markedTextPreserved', 'selectionPreserved', 'draftPreserved'))
+          assert not report['hostStarted'] and report['messagesSent'] == 0 and not report['privatePreferencesLoaded']
+          PY
+      - name: Render isolated native pages and accent themes
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          root = Path(os.environ['RUNNER_TEMP'])
+          output = root / 'macos-ui'
+          output.mkdir()
+          available = subprocess.run(['pgrep', '-x', 'WindowServer'], capture_output=True).returncode == 0
+          reports = []
+          if available:
+              executable = root / 'mission-macos/Codex Mission Manager.app/Contents/MacOS/CodexMissionManager'
+              views = [(accent + '-' + theme, 'native-state', ['--accent', accent] + (['--dark', '--english'] if theme == 'dark' else []))
+                       for accent in ('green', 'blue', 'purple', 'yellow') for theme in ('light', 'dark')]
+              views += [('rules-zh-light', 'native-state', ['--rules']),
+                        ('settings-en-dark', 'native-state', ['--settings', '--dark', '--english']),
+                        ('menu-en-dark', 'native-state', ['--menu-panel', '--dark', '--english'])]
+              for name, fixture, options in views:
+                  image = output / (name + '.png')
+                  result = subprocess.run([str(executable), '--ui-self-test', 'tests/fixtures/' + fixture + '.json',
+                                           str(image), *options], check=True, capture_output=True, text=True, timeout=60)
+                  report = json.loads(result.stdout)
+                  assert report['nativeHosting'] and report['webViewCount'] == 0
+                  assert not report['hostStarted'] and report['messagesSent'] == 0
+                  assert image.is_file() and image.stat().st_size > 0
+                  (output / (name + '.json')).write_text(json.dumps(report, indent=2) + '\n')
+                  reports.append({'fixture': name, **report})
+          summary = {'platform': 'macos-arm64', 'offline_fixture_renders': len(reports),
+                     'ui_rendering_available': available, 'live_chat_messages_sent': 0,
+                     'interactive_gui_verified': False, 'checks': reports}
+          if not available:
+              summary['skipped_reason'] = 'WindowServer is unavailable on this CI runner; interactive visual checks remain manual.'
+          (root / 'native-ui-macos-arm64.json').write_text(json.dumps(summary, indent=2) + '\n')
+          PY
+      - name: Create and verify final DMG
+        run: |
+          python3 scripts/make_dmg.py --build "$RUNNER_TEMP/mission-macos"
+          for image in "$RUNNER_TEMP/mission-macos/"*.dmg; do
+            python3 scripts/verify_dmg.py "$image" \
+              --report "$RUNNER_TEMP/verification-macos-arm64.json" \
+              --test-report "$RUNNER_TEMP/macos-test-evidence.json"
+          done
+      - name: Stage macOS release assets
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          import shutil
+          root = Path(os.environ['RUNNER_TEMP'])
+          build = root / 'mission-macos'
+          manifest = json.loads((build / 'build-manifest.json').read_text())
+          assert manifest['version'] == os.environ['RELEASE_VERSION']
+          assert manifest['source_commit'] == os.environ['GITHUB_SHA']
+          assert manifest['dmg_verified'] and not manifest['private_runtime_data_included']
+          images = list(build.glob('*.dmg'))
+          assert len(images) == 1
+          destination = root / 'release-macos-assets'
+          destination.mkdir()
+          shutil.copyfile(images[0], destination / images[0].name)
+          shutil.copyfile(build / 'build-manifest.json', destination / 'build-manifest-macos-arm64.json')
+          for name in ('verification-macos-arm64.json', 'native-editor-macos-arm64.json', 'native-ui-macos-arm64.json'):
+              shutil.copyfile(root / name, destination / name)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos-assets
+          path: ${{ runner.temp }}/release-macos-assets/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload isolated macOS test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-offline-validation
+          path: |
+            ${{ runner.temp }}/macos-tests/*.json
+            ${{ runner.temp }}/macos-tests/*.log
+            ${{ runner.temp }}/macos-ui/*
+            ${{ runner.temp }}/native-*-macos-arm64.json
+            ${{ runner.temp }}/verification-macos-arm64.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  windows:
+    needs: prepare
+    runs-on: windows-2022
+    timeout-minutes: 35
+    env:
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build native application and current-user EXE installer
+        run: .\windows\build.ps1 -OutputDirectory "$env:RUNNER_TEMP\mission-windows"
+      - name: Run limited packaging-host and Windows platform checks
+        run: |
+          & "$env:RUNNER_TEMP\mission-windows\app\runtime\python\python.exe" -X utf8 -I .\windows\run_tests.py `
+            --scope smoke --output "$env:RUNNER_TEMP\windows-tests"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $report = Get-Content -LiteralPath "$env:RUNNER_TEMP\windows-tests\windows-test-results.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+          if ($report.scope -ne 'smoke' -or $report.full_backend_suite_run) { throw 'Windows checks must remain limited to smoke coverage.' }
+      - name: Verify isolated native editors and lifecycle
+        run: |
+          $exe = "$env:RUNNER_TEMP\mission-windows\app\CodexMissionManager.exe"
+          $native = Get-Content -LiteralPath "$env:RUNNER_TEMP\mission-windows\build-work\native-self-test.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+          if (!$native.native -or $native.webView -or $native.hostStarted -or $native.messagesSent -ne 0 `
+              -or !$native.localRevocationChecks -or !$native.startupDiagnosticFallbackChecks `
+              -or !$native.themePaletteChecks -or !$native.rulesValidationChecks) { throw 'Native self-test checks failed.' }
+          Copy-Item -LiteralPath "$env:RUNNER_TEMP\mission-windows\build-work\native-self-test.json" -Destination "$env:RUNNER_TEMP\native-self-test-windows-x64.json"
+          foreach ($check in @('editor', 'lifecycle')) {
+            $receipt = "$env:RUNNER_TEMP\native-$check-windows-x64.json"
+            $process = Start-Process -FilePath $exe -ArgumentList @("--$check-self-test", ('"'+$receipt+'"')) -Wait -PassThru
+            if ($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $receipt)) { throw ("Native $check checks failed.") }
+            $report = Get-Content -LiteralPath $receipt -Raw -Encoding UTF8 | ConvertFrom-Json
+            if (!$report.checksPassed -or $report.hostStarted -or $report.messagesSent -ne 0 -or $report.systemTrayCreated) { throw 'Offline editor/lifecycle contract failed.' }
+          }
+      - name: Render isolated native pages and accent themes
+        run: |
+          $exe = "$env:RUNNER_TEMP\mission-windows\app\CodexMissionManager.exe"
+          $directory = "$env:RUNNER_TEMP\windows-ui"
+          New-Item -ItemType Directory -Path $directory -Force | Out-Null
+          $views = @()
+          foreach ($accent in @('green', 'blue', 'purple', 'yellow')) {
+            foreach ($theme in @('light', 'dark')) {
+              $views += ,@('home', $(if ($theme -eq 'dark') { 'en' } else { 'zh' }), $theme, 'native-state', $accent)
+            }
+          }
+          $views += ,@('settings', 'zh', 'light', 'native-state', 'blue')
+          $views += ,@('rules', 'en', 'dark', 'native-state', 'purple')
+          $views += ,@('tray', 'en', 'dark', 'native-state', 'yellow')
+          $views += ,@('home', 'zh', 'light', 'native-pro-weekly', 'green')
+          $views += ,@('home', 'zh', 'light', 'native-service-only', 'green')
+          $views += ,@('home', 'en', 'dark', 'native-quota-unknown', 'green')
+          foreach ($view in $views) {
+            $fixture = Join-Path $env:GITHUB_WORKSPACE ("tests\fixtures\" + $view[3] + '.json')
+            $image = Join-Path $directory (($view -join '-') + '.png')
+            $process = Start-Process -FilePath $exe -ArgumentList @('--ui-self-test', ('"'+$fixture+'"'), ('"'+$image+'"'), `
+              '--view', $view[0], '--language', $view[1], '--theme', $view[2], '--accent', $view[4], '--scale', '2') -Wait -PassThru
+            if ($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $image)) { throw ('Native rendering failed: ' + ($view -join '-')) }
+            $receipt = Get-Content -LiteralPath ($image + '.json') -Raw -Encoding UTF8 | ConvertFrom-Json
+            if (!$receipt.native -or $receipt.webView -or $receipt.hostStarted -or $receipt.messagesSent -ne 0 -or $receipt.accent -ne $view[4]) { throw 'Fixture rendering violated the offline native contract.' }
+          }
+          [ordered]@{ platform='windows-x64'; offline_fixture_renders=$views.Count; live_chat_messages_sent=0; `
+            interactive_gui_verified=$false; full_windows_acceptance_run=$false } | ConvertTo-Json | `
+            Set-Content -LiteralPath "$env:RUNNER_TEMP\native-ui-windows-x64.json" -Encoding UTF8
+      - name: Stage Windows release assets
+        run: |
+          $build = "$env:RUNNER_TEMP\mission-windows"
+          $manifest = Get-Content -LiteralPath "$build\build-manifest.json" -Raw -Encoding UTF8 | ConvertFrom-Json
+          if ($manifest.version -ne $env:RELEASE_VERSION -or $manifest.source_commit -ne $env:GITHUB_SHA -or $manifest.private_runtime_data_included) { throw 'Windows build provenance mismatch.' }
+          $destination = "$env:RUNNER_TEMP\release-windows-assets"
+          New-Item -ItemType Directory -Path $destination -Force | Out-Null
+          $installers = @(Get-ChildItem -LiteralPath $build -Filter '*setup.exe')
+          $portable = @(Get-ChildItem -LiteralPath $build -Filter '*preview.zip')
+          if ($installers.Count -ne 1 -or $portable.Count -ne 1) { throw 'Expected one EXE installer and one portable ZIP.' }
+          Copy-Item -LiteralPath $installers[0].FullName -Destination $destination
+          Copy-Item -LiteralPath $portable[0].FullName -Destination $destination
+          Copy-Item -LiteralPath "$build\build-manifest.json" -Destination "$destination\build-manifest-windows-x64.json"
+          Copy-Item -LiteralPath "$env:RUNNER_TEMP\windows-tests\windows-test-results.json" -Destination "$destination\windows-smoke-test-results.json"
+          foreach ($name in @('native-self-test-windows-x64.json', 'native-editor-windows-x64.json', 'native-lifecycle-windows-x64.json', 'native-ui-windows-x64.json')) {
+            Copy-Item -LiteralPath (Join-Path $env:RUNNER_TEMP $name) -Destination $destination
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-assets
+          path: ${{ runner.temp }}/release-windows-assets/*
+          if-no-files-found: error
+          retention-days: 14
+      - name: Upload isolated Windows smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-offline-validation
+          path: |
+            ${{ runner.temp }}/windows-tests/*.json
+            ${{ runner.temp }}/windows-tests/*.log
+            ${{ runner.temp }}/windows-ui/*
+            ${{ runner.temp }}/native-*-windows-x64.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+  publish:
+    needs: [prepare, macos, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_VERSION: ${{ needs.prepare.outputs.version }}
+      RELEASE_TAG: ${{ needs.prepare.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*-assets
+          path: release-assets
+          merge-multiple: true
+      - name: Verify both platforms and create unified checksums
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+          import shutil
+          root = Path('release-assets')
+          version = os.environ['RELEASE_VERSION']
+          expected = [
+              'Codex-Mission-Manager-' + version + '-arm64-preview.dmg',
+              'Codex-Mission-Manager-' + version + '-windows-x64-setup.exe',
+              'Codex-Mission-Manager-' + version + '-windows-x64-preview.zip',
+              'build-manifest-macos-arm64.json', 'build-manifest-windows-x64.json',
+              'verification-macos-arm64.json', 'windows-smoke-test-results.json',
+          ]
+          if any(not (root / name).is_file() for name in expected):
+              raise SystemExit('Both platform packages and verification reports are required')
+          for name in ('build-manifest-macos-arm64.json', 'build-manifest-windows-x64.json'):
+              manifest = json.loads((root / name).read_text(encoding='utf-8-sig'))
+              assert manifest['version'] == version and manifest['source_commit'] == os.environ['GITHUB_SHA']
+              assert not manifest['private_runtime_data_included']
+          shutil.copyfile('docs/USER_GUIDE.md', root / 'USER_GUIDE.md')
+          assets = sorted(path for path in root.iterdir() if path.is_file() and path.name != 'SHA256SUMS')
+          lines = [hashlib.sha256(path.read_bytes()).hexdigest() + '  ' + path.name for path in assets]
+          (root / 'SHA256SUMS').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          PY
+          cd release-assets
+          sha256sum --check SHA256SUMS
+      - name: Create immutable preview tag and unified release
+        shell: bash
+        run: |
+          # Creating a new ref is atomic and fails if the tag already exists.
+          # Reruns never replace a published tag, release, or asset.
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/git/refs" \
+            -f "ref=refs/tags/${RELEASE_TAG}" -f "sha=${GITHUB_SHA}" > /dev/null
+          gh release create "$RELEASE_TAG" release-assets/* \
+            --verify-tag --target "$GITHUB_SHA" --prerelease \
+            --title "V${RELEASE_VERSION} preview ${GITHUB_RUN_NUMBER} · macOS and Windows" \
+            --notes-file "docs/releases/${RELEASE_VERSION}.md"

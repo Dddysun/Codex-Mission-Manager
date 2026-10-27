@@ -18,6 +18,8 @@ from catalog import chat_key, entry
 from plans import get_plan, all_plans, set_plan
 from immediate import enqueue_dispatch, latest_dispatches
 from compatibility import desktop_compatibility
+from rules import effective_config, effective_rules, update_rules
+from quota import reset_credits
 IS_WINDOWS = os.name == 'nt'
 
 
@@ -30,6 +32,8 @@ class Application:
         cfg = load_config(self.config_path)
         store = Store(cfg["state_dir"])
         try:
+            rules = effective_rules(store, cfg)
+            cfg = effective_config(store, cfg)
             try:
                 report = json.loads((store.directory / "status.json").read_text(encoding="utf-8"))
             except (OSError, ValueError):
@@ -50,6 +54,8 @@ class Application:
             catalog = store.get("chat_catalog", {})
             scope = (report.get("quota") or {}).get("scope")
             for task in store.tasks():
+                if task.get('host_id', 'local') != 'local':
+                    continue
                 if scope and task.get("scope") != scope:
                     continue
                 current = runtime.get(task["id"], {})
@@ -67,7 +73,8 @@ class Application:
                     "recovery_first_seen": task.get("recovery_first_seen"),
                 })
             managed = {t["id"]: t for t in tasks}
-            chats = {x["key"]: dict(x) for x in catalog.get("items", [])} if catalog.get("scope") == scope else {}
+            chats = {x["key"]: dict(x) for x in catalog.get("items", [])
+                     if x.get('kind') == 'codex' and x.get('host_id') == 'local'} if catalog.get("scope") == scope else {}
             for t in tasks:
                 key = chat_key("codex", "local", t["id"])
                 if not catalog or catalog.get("local_error"):
@@ -136,6 +143,7 @@ class Application:
                 "quota_state": "unknown", "service_allowed": False, "blocked": False,
                 "scheduling_available": False, "observed_at": None}
             usage["stale"] = not running or now - (usage.get("observed_at") or 0) > cfg["max_sample_age_seconds"]
+            usage.setdefault('reset_credits', reset_credits({}))
             store.db.rollback()
             return {
                 "observed_at": report.get("observed_at"), "now": now, "running": running,
@@ -146,10 +154,10 @@ class Application:
                 "control_revision": global_revision,
                 "service_error": report.get("stage") if report.get("phase") == "unknown" else None,
                 "tasks": tasks, "events": events,
-                "usage": usage, "compatibility": compatibility,
+                "usage": usage, "compatibility": compatibility, "rules": rules,
                 "bulk_pause": store.get("bulk_pause_result"),
-                "catalog": {"observed_at": catalog.get("observed_at"), "cloud_observed_at": catalog.get("cloud_observed_at"),
-                            "cloud_snapshot": True, "cloud_auto_execute": False, "local_error": catalog.get("local_error")},
+                "catalog": {"observed_at": catalog.get("observed_at"), "local_only": True,
+                            "local_error": catalog.get("local_error")},
                 "policy": {"pause": cfg["pause_remaining"], "resume": cfg["resume_remaining"],
                            "confirm_seconds": cfg.get("recovery_confirm_seconds", 5)},
                 "poll_seconds": cfg["poll_seconds"],
@@ -162,10 +170,14 @@ class Application:
     def action(self, payload):
         cfg = load_config(self.config_path)
         action = payload.get("action")
-        if action not in ("pause", "enable", "hold", "release", "start", "set_plan", "set_auto", "execute_now", "pause_all"):
+        if action not in ("pause", "enable", "hold", "release", "start", "set_plan", "set_auto", "execute_now", "pause_all", "set_rules"):
             raise ValueError("未知操作")
         store = Store(cfg["state_dir"])
         try:
+            if action == 'set_rules':
+                return {'rules': update_rules(store, cfg, payload.get('rules'), payload.get('rules_revision')),
+                        'message': '运行规则已保存', 'message_en': 'Operating rules saved.'}
+            cfg = effective_config(store, cfg)
             if action == "start":
                 runtime = Path(cfg.get("runtime_root", ROOT))
                 result = subprocess.run(python_command(runtime / "guardian.py", "--config", self.config_path, "start"), capture_output=True, text=True, timeout=10)
@@ -334,14 +346,10 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(200, self.server.application.state())
             except Exception:
                 return self.reply(503, {"error": "暂时无法读取服务状态，请稍后刷新"})
-        assets = {"/": ("index.html", "text/html; charset=utf-8"),
-                  "/app.js": ("app.js", "text/javascript; charset=utf-8"),
-                  "/style.css": ("style.css", "text/css; charset=utf-8"),
-                  "/favicon.svg": ("favicon.svg", "image/svg+xml")}
-        if self.path not in assets:
+        if self.path != '/':
             return self.reply(404, {"error": "页面不存在"})
-        name, kind = assets[self.path]
-        return self.reply(200, (ROOT / "web" / name).read_bytes(), kind, session=self.path == "/")
+        return self.reply(200, {'service': 'Codex Mission Manager', 'name': '任务管家',
+                               'interface': 'native'}, session=True)
 
     def do_POST(self):
         port = self.server.server_address[1]

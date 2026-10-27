@@ -1,5 +1,4 @@
-"""Metadata-only chat directory; cloud ChatGPT entries are explicitly read-only."""
-import json
+"""Metadata-only directory of local Codex chats."""
 import os
 from pathlib import Path
 import sqlite3
@@ -15,33 +14,16 @@ def chat_key(kind, host, thread_id):
 def entry(thread_id, title, kind="codex", host="local", status="notLoaded", updated_at=None):
     local = kind == "codex" and host == "local"
     return {"key": chat_key(kind, host, thread_id), "id": thread_id, "name": title or thread_id,
-            "kind": kind, "host_id": host, "category": "codex" if local else "chatgpt",
+            "kind": kind, "host_id": host, "category": "codex" if local else "unsupported",
             "status": status, "updated_at": updated_at, "can_control": local,
             "capability_note": None if local else "本次仅显示目录，未启用自动执行",
-            "source_label": "Codex · 本机" if local else "ChatGPT Work · 云端" if kind == "codex" else "ChatGPT"}
+            "source_label": "Codex · 本机" if local else "Codex"}
 
 
 async def refresh_catalog(rpc, store, config, scope):
     now = time.time()
     account_id = ((store.get("account_display") or {}).get("account") or {}).get("id")
     items, error = {}, None
-    seed_path = Path(config["state_dir"]) / "chat-catalog-seed.json"
-    seed = {}
-    try:
-        seed = json.loads(seed_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        pass
-    if seed.get("account_id") != account_id or not account_id:
-        seed = {}
-    for item in seed.get("items", []):
-        if item.get("kind") not in ("codex", "chatgpt"):
-            continue
-        row = entry(item["id"], item.get("title"), item["kind"], item.get("host_id", "local"),
-                    item.get("status", "unknown"), item.get("updated_at"))
-        if row["category"] == "codex":
-            continue  # Local SQLite is authoritative for archive/delete state.
-        row["status_observed_at"] = seed.get("observed_at", 0)
-        items[row["key"]] = row
     path = Path(config.get("desktop_database", str(Path.home() / ".codex/state_5.sqlite")))
     local_ids = set()
     try:
@@ -63,6 +45,8 @@ async def refresh_catalog(rpc, store, config, scope):
         error = type(exc).__name__
     # A metadata read never opens a dormant conversation or starts inference.
     for tid in getattr(rpc, "available", []):
+        if getattr(rpc, 'hosts', {}).get(tid, 'local') != 'local':
+            continue
         if not error and tid not in local_ids:
             continue
         key = chat_key("codex", "local", tid)
@@ -81,8 +65,7 @@ async def refresh_catalog(rpc, store, config, scope):
                 items[key].update(status="unknown", status_observed_at=now)
     result = {"scope": scope, "account_id": account_id, "observed_at": now,
               "items": sorted(items.values(), key=lambda x: x.get("updated_at") or 0, reverse=True),
-              "local_error": error, "cloud_observed_at": seed.get("observed_at"),
-              "cloud_snapshot": True, "cloud_auto_execute": False}
+              "local_error": error, "local_only": True}
     if os.name == 'nt' and not config.get('control_available', False):
         for row in result['items']:
             if row['category'] == 'codex':

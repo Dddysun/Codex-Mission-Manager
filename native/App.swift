@@ -6,15 +6,23 @@ import UserNotifications
 import IOKit.pwr_mgt
 
 final class MissionModel: ObservableObject {
-    @Published var language = UserDefaults.standard.string(forKey: "language") ?? (Locale.preferredLanguages.first?.hasPrefix("zh") == true ? "zh" : "en") {
-        didSet { if NativeLocalization.testLanguage == nil { UserDefaults.standard.set(language, forKey: "language") }; refresh(); onPresentationChanged?() }
+    @Published var language = NativeLocalization.testLanguage ?? UserDefaults.standard.string(forKey: "language") ?? (Locale.preferredLanguages.first?.hasPrefix("zh") == true ? "zh" : "en") {
+        didSet { if NativeLocalization.testLanguage == nil { UserDefaults.standard.set(language, forKey: "language"); refresh() }; onPresentationChanged?() }
     }
-    @Published var theme = UserDefaults.standard.string(forKey: "theme") ?? "system" {
+    @Published var theme = NativeLocalization.testLanguage == nil ? (UserDefaults.standard.string(forKey: "theme") ?? "system") : "system" {
         didSet { if NativeLocalization.testLanguage == nil { UserDefaults.standard.set(theme, forKey: "theme") }; onPresentationChanged?() }
     }
+    @Published var accent = NativeLocalization.testLanguage == nil ? (UserDefaults.standard.string(forKey:"accent") ?? "green") : "green" {
+        didSet { if NativeLocalization.testLanguage == nil { UserDefaults.standard.set(accent,forKey:"accent") }; onPresentationChanged?() }
+    }
+    var accentChoice: MissionAccent { MissionAccent(rawValue:accent) ?? .green }
+    var tint: Color { MissionPalette.accent(accentChoice) }
+    var sidebarInk: Color { MissionPalette.ink(accentChoice) }
+    var selectedNavigation: Color { MissionPalette.selected(accentChoice) }
+    var accentForeground: Color { MissionPalette.foreground(accentChoice) }
     @Published var loginEnabled = false
     @Published var notificationsEnabled = false
-    @Published var notificationDelivery = UserDefaults.standard.object(forKey: "notificationDelivery") as? Bool ?? false
+    @Published var notificationDelivery = NativeLocalization.testLanguage == nil ? (UserDefaults.standard.object(forKey:"notificationDelivery") as? Bool ?? false) : false
     @Published var notificationsDenied = false
     @Published var helperEnabled = false
     @Published var closedLidEnabled = false
@@ -42,6 +50,10 @@ final class MissionModel: ObservableObject {
     @Published var busy = false
     @Published var notice = ""
     @Published var drafts: [String: MissionDraft] = [:]
+    @Published var rulesDraft: [String:String] = [:]
+    @Published var rulesDraftRevision: Int?
+    @Published var rulesStatus = ""
+    @Published var rulesSaving = false
     var refreshing = false
     var host: Process?
     var hostInput: Pipe?
@@ -74,13 +86,20 @@ final class MissionModel: ObservableObject {
             if self.powerConnection != nil { self.disableClosedLid() }
         })
         refresh()
-        timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
+        configureRefreshTimer(5)
+        startHost()
+    }
+
+    func configureRefreshTimer(_ seconds: Double) {
+        let interval=min(30,max(2,seconds.isFinite ? seconds : 5))
+        if let timer, abs(timer.timeInterval-interval)<0.001 { return }
+        timer?.invalidate()
+        timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
             self?.refresh()
             self?.heartbeat()
             self?.deliverNotices()
             Task { await self?.refreshControl() }
         }
-        startHost()
     }
 
     func startHost() {
@@ -143,6 +162,7 @@ final class MissionModel: ObservableObject {
             let value = try JSONDecoder().decode(MissionSnapshot.self, from: data)
             await MainActor.run {
                 self.snapshot = value; self.paused = value.control_paused; self.connected = true; self.connectionError = ""
+                self.configureRefreshTimer(value.rules?.values["ui_poll_seconds"].map(Double.init) ?? value.ui_poll_seconds ?? 5)
             }
         } catch { await MainActor.run { self.connected = false; self.connectionError = L("后台连接待恢复：") + error.localizedDescription } }
     }
@@ -196,15 +216,64 @@ final class MissionModel: ObservableObject {
     }
     func editPrompt(_ chat: MissionChat, text: String) {
         let revision = drafts[chat.key]?.revision ?? chat.plan?.revision ?? 0
-        drafts[chat.key] = MissionDraft(text: String(text.prefix(8000)), revision: revision)
+        // Never truncate provisional IME text. Length is checked on submission.
+        drafts[chat.key] = MissionDraft(text: text, revision: revision)
     }
     func savePlan(_ chat: MissionChat, enabled: Bool) {
         guard chat.controllable else { return }
+        guard !enabled || (drafts[chat.key]?.text ?? chat.plan?.prompt ?? "").count<=8000 else { notice=L("指令最多允许 8000 个字符；草稿已保留。");return }
         perform(MissionCommands.plan(chat, draft: drafts[chat.key], enabled: enabled))
     }
     func executeNow(_ chat: MissionChat) {
         guard chat.canExecute else { return }
+        guard (drafts[chat.key]?.text ?? chat.plan?.prompt ?? "").count<=8000 else { notice=L("指令最多允许 8000 个字符；草稿已保留。");return }
         perform(MissionCommands.immediate(chat, draft: drafts[chat.key]))
+    }
+
+    func editRule(_ key:String,text:String) {
+        guard let current=snapshot?.rules else { return }
+        if rulesDraftRevision == nil {
+            rulesDraftRevision=current.revision
+            rulesDraft=current.values.mapValues(String.init)
+        }
+        rulesDraft[key]=text;rulesStatus=""
+    }
+    func discardRulesDraft() { rulesDraft=[:];rulesDraftRevision=nil;rulesStatus="" }
+    @MainActor func saveRules() async {
+        guard !rulesSaving, !busy, connected, let state=snapshot?.rules, let url=baseURL else { return }
+        let text=rulesDraftRevision == nil ? state.values.mapValues(String.init) : rulesDraft
+        let validated=MissionRuleFields.validation(text,remoteBounds:state.bounds)
+        guard let values=validated.values else {rulesStatus=validated.error ?? L("规则未通过校验。");return}
+        let revision=rulesDraftRevision ?? state.revision
+        rulesSaving=true;rulesStatus=L("正在保存规则…")
+        defer { rulesSaving=false }
+        do {
+            var request=URLRequest(url:url.appendingPathComponent("api/action"))
+            request.httpMethod="POST";request.timeoutInterval=20
+            request.setValue("application/json",forHTTPHeaderField:"Content-Type")
+            request.setValue("1",forHTTPHeaderField:"X-Guardian-UI")
+            request.setValue(url.absoluteString.trimmingCharacters(in:CharacterSet(charactersIn:"/")),forHTTPHeaderField:"Origin")
+            request.httpBody=try JSONSerialization.data(withJSONObject:MissionCommands.rules(values,revision:revision))
+            let (data,response)=try await session.data(for:request)
+            let body=(try? JSONSerialization.jsonObject(with:data)) as? [String:Any]
+            guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+                throw NSError(domain:"Rules",code:1,userInfo:[NSLocalizedDescriptionKey:body?["error"] as? String ?? L("规则保存失败；草稿已保留。")])
+            }
+            guard let metadata=body?["rules"], JSONSerialization.isValidJSONObject(metadata),
+               let encoded=try? JSONSerialization.data(withJSONObject:metadata),
+               let confirmed=try? JSONDecoder().decode(MissionRules.self,from:encoded),
+               confirmed.confirms(values,after:revision) else {
+                throw NSError(domain:"Rules",code:2,userInfo:[NSLocalizedDescriptionKey:L("操作结果待核对，请刷新后检查记录")])
+            }
+            if confirmed.revision >= (snapshot?.rules?.revision ?? 0) {
+                snapshot?.rules=confirmed
+                configureRefreshTimer(Double(confirmed.values["ui_poll_seconds"] ?? 5))
+            }
+            // Preserve any edits made while the request was in flight.
+            if rulesDraftRevision == revision && rulesDraft == text { rulesDraft=[:];rulesDraftRevision=nil }
+            rulesStatus=L("规则已保存。")
+            await refreshControl()
+        } catch { rulesStatus=error.localizedDescription+" · "+L("草稿已保留，请核对后重试。") }
     }
 
     func setAwake(_ value: Bool) {
@@ -234,7 +303,7 @@ final class MissionModel: ObservableObject {
         let p = HardwareState.power()
         power = L("%@ · 电量 %@ · %@", String(describing: p.ac ? "外接电源" : "电池／电源待确认"), String(describing: p.battery.map { "\($0)%" } ?? "未知"), String(describing: HardwareState.lidClosed.map { $0 ? "已合盖" : "开盖" } ?? "机盖状态待确认"))
         if let compatibility = snapshot?.compatibility {
-            if compatibility.status == "client_missing" { client = L("未检测到兼容客户端，请安装并登录桌面客户端。") }
+            if compatibility.status == "client_missing" { client = L("未检测到 Codex 客户端，请安装并登录。") }
             else if compatibility.supported {
                 client = L("客户端 %@ · 兼容配置已匹配", compatibility.build ?? "—") + (connected ? " · " + L("已连接") : " · " + L("连接待恢复"))
             } else { client = L("客户端 %@ 尚未支持，请检查任务管家更新。", compatibility.build ?? "—") }
@@ -442,6 +511,12 @@ final class MissionApp: NSObject, NSApplicationDelegate {
 
 @main enum MissionMain {
     static func main() {
+        if CommandLine.arguments.contains("--editor-self-test") {
+            let app=NSApplication.shared;app.setActivationPolicy(.prohibited)
+            let report=MissionPromptEditorChecks.run()
+            print(String(data:try! JSONSerialization.data(withJSONObject:report,options:.sortedKeys),encoding:.utf8)!)
+            return
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--ui-self-test"), CommandLine.arguments.count > index + 2 {
             do {
                 try MissionPreview.render(fixture: CommandLine.arguments[index + 1], output: CommandLine.arguments[index + 2])

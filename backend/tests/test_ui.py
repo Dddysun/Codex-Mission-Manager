@@ -119,16 +119,16 @@ class InterfaceTests(unittest.TestCase):
         self.assertEqual(self.request(headers={"Cookie": ""})[0], 401)
         self.assertEqual(self.request("POST", "/api/action", {"action": "pause", "revision": 0}, {"Cookie": ""})[0], 403)
 
-    def test_static_page_has_session_and_security_headers(self):
+    def test_native_handshake_has_session_and_security_headers(self):
         status, headers, body = self.request(path="/")
         self.assertEqual(status, 200)
         self.assertIn("SameSite=Strict", headers["Set-Cookie"])
         self.assertIn("HttpOnly", headers["Set-Cookie"])
         self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"])
         self.assertIn("任务管家", body.decode())
-        self.assertIn('id="fiveHourProgress"', body.decode())
-        self.assertIn('id="weeklyProgress"', body.decode())
-        self.assertIn('id="accountId"', body.decode())
+        self.assertEqual(json.loads(body)['interface'], 'native')
+        for asset in ('/app.js', '/style.css', '/favicon.svg'):
+            self.assertEqual(self.request(path=asset)[0], 404)
 
     def test_static_path_cannot_read_runtime_files(self):
         self.assertEqual(self.request(path="/../config.json")[0], 404)
@@ -155,12 +155,12 @@ class InterfaceTests(unittest.TestCase):
         self.store.put("chat_catalog",{"scope":"test","items":[local,cloud],"observed_at":now})
         return local,cloud
 
-    def test_catalog_separates_sources_and_allows_only_local_controls(self):
+    def test_catalog_hides_cloud_sources_and_allows_only_local_controls(self):
         local,cloud=self.prepare_catalog()
         data=json.loads(self.request()[2])
-        self.assertEqual(len(data["tasks"]),2)
+        self.assertEqual(len(data["tasks"]),1)
         self.assertEqual(data["tasks"][0]["name"],"Renamed chat")
-        self.assertFalse(data["tasks"][1]["can_control"])
+        self.assertNotIn(cloud['key'], json.dumps(data['tasks']))
         status,_,_=self.request("POST","/api/action",{"action":"set_plan","key":cloud["key"],"enabled":True,"prompt":"继续任务","revision":0})
         self.assertEqual(status,409)
 
