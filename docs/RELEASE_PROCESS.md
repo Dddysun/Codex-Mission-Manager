@@ -72,11 +72,11 @@ Before uploading, every existing same-name asset is downloaded and compared: ide
 
 ## Release contents / 发行文件
 
-For V0.3.2 the user-facing packages are:
+For V0.3.3 the user-facing packages are:
 
-- `Codex-Mission-Manager-0.3.2-arm64-preview.dmg`
-- `Codex-Mission-Manager-0.3.2-windows-x64-setup.exe`
-- `Codex-Mission-Manager-0.3.2-windows-x64-preview.zip`
+- `Codex-Mission-Manager-0.3.3-arm64-preview.dmg`
+- `Codex-Mission-Manager-0.3.3-windows-x64-setup.exe`
+- `Codex-Mission-Manager-0.3.3-windows-x64-preview.zip`
 
 The same release includes platform build manifests, verification/self-test receipts, `USER_GUIDE.md`, and `SHA256SUMS`. Manifests identify the version, architecture, bundled runtime, source commit, and signing state. Test receipts describe their own scope; packaging success does not prove live delivery.
 

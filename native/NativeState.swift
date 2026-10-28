@@ -220,14 +220,56 @@ struct MissionChat: Decodable, Identifiable {
 struct MissionEvent: Decodable, Identifiable {
     var id: Int; var created: Double; var state: String; var name: String?
     var detail: MissionEventDetail?
+    var thread_id: String?
+    private var hasThreadMetadata: Bool
+    private enum CodingKeys: String, CodingKey { case id, created, state, name, detail, thread_id }
+    init(from decoder: Decoder) throws {
+        let values=try decoder.container(keyedBy:CodingKeys.self)
+        id=try values.decode(Int.self,forKey:.id);created=try values.decode(Double.self,forKey:.created)
+        state=try values.decode(String.self,forKey:.state);name=try values.decodeIfPresent(String.self,forKey:.name)
+        detail=try values.decodeIfPresent(MissionEventDetail.self,forKey:.detail)
+        thread_id=try values.decodeIfPresent(String.self,forKey:.thread_id)
+        hasThreadMetadata=values.contains(.thread_id)
+    }
+    var isQuotaRestored: Bool { state == "quota_restored" }
+    var isGlobal: Bool { isQuotaRestored || (hasThreadMetadata && (thread_id?.trimmingCharacters(in:.whitespacesAndNewlines).isEmpty != false)) }
+    var scopeTitle: String {
+        if isQuotaRestored { return L("全局额度事件") }
+        if isGlobal { return L("全局控制") }
+        return name ?? L("全局控制")
+    }
     var label: String {
+        if isQuotaRestored { return MissionQuotaRestorationText.category(detail?.category) }
         if let allowed = detail?.automatic_control_allowed { return allowed ? L("允许自动控制") : L("保持任务") }
         return ["rules_updated":L("运行规则已更新"),"watching":L("纳入监测"), "pause_intent":L("开始暂停"), "paused":L("已确认暂停"), "resume_intent":L("提交续做"), "running":L("已续做"), "needs_review":L("需要核对"), "disabled":L("已撤销控制"), "held":L("保持任务"), "supervisor_paused":L("暂停自动控制"), "supervisor_enabled":L("启用自动控制"), "plan_armed":L("预约下一窗口执行"), "plan_sending":L("提交预约指令"), "plan_sent":L("预约指令已发送"), "plan_cancelled":L("取消预约"), "plan_needs_review":L("预约需要确认"), "immediate_pending":L("提交立刻执行"), "immediate_sent":L("立刻执行已确认发送"), "immediate_failed":L("立刻执行未发送"), "immediate_unknown":L("立刻执行结果待核对")][state] ?? state
+    }
+    var restorationLines: [String] {
+        guard isQuotaRestored else { return [] }
+        var lines=[L("根据余额、刷新时间和重置权益变化判定"),L("此分类为证据推断，并非官方直接原因说明。")]
+        if detail?.category == "user_reset" { lines.append(L("依据权益变化判定")) }
+        lines.append(L("观测时间：%@ → %@",MissionQuotaRestorationText.time(detail?.previous_observed_at),MissionQuotaRestorationText.time(detail?.observed_at)))
+        let windows=detail?.windows ?? []
+        if windows.isEmpty { lines.append(L("未提供可核实的额度窗口变化。")) }
+        for window in windows {
+            lines.append(L("%@ · 余额 %@ → %@",window.title,MissionQuotaRestorationText.percent(window.previous_remaining),MissionQuotaRestorationText.percent(window.remaining)))
+            lines.append(L("刷新时间：%@ → %@",MissionQuotaRestorationText.time(window.previous_reset),MissionQuotaRestorationText.time(window.reset)))
+            if let classification=window.classification { lines.append(L("窗口判定：%@",MissionQuotaRestorationText.category(classification))) }
+        }
+        if let credits=detail?.reset_credits, credits.hasKnownCount {
+            lines.append(L("重置权益次数：%@ → %@",MissionQuotaRestorationText.count(credits.previous_available_count),MissionQuotaRestorationText.count(credits.available_count)))
+        } else { lines.append(L("重置权益次数未提供。")) }
+        return lines
     }
 }
 struct MissionEventDetail: Decodable {
     var reason: String?; var source: String?; var automatic_control_allowed: Bool?
     var recovery_reason: String?
+    var category: String? = nil
+    var classification_basis: String? = nil
+    var previous_observed_at: Double? = nil
+    var observed_at: Double? = nil
+    var windows: [MissionQuotaRestorationWindow]? = nil
+    var reset_credits: MissionQuotaRestorationCredits? = nil
     var recoveryNote: String? {
         guard let recovery_reason else {return nil}
         switch recovery_reason {
@@ -237,6 +279,50 @@ struct MissionEventDetail: Decodable {
         case "service_permission_restored":return L("服务许可已恢复")
         default:return L("恢复原因待核实")
         }
+    }
+}
+struct MissionQuotaRestorationWindow: Decodable {
+    var minutes: Double?
+    var previous_remaining: Double?
+    var remaining: Double?
+    var previous_reset: Double?
+    var reset: Double?
+    var classification: String?
+    var title: String {
+        guard let minutes, minutes.isFinite, minutes>0 else {return L("额度窗口未提供")}
+        return MissionQuotaWindow(id:"event-window",kind:"",minutes:minutes,remaining:nil,reset:nil).title
+    }
+}
+struct MissionQuotaRestorationCredits: Decodable {
+    var previous_available_count: Double?
+    var available_count: Double?
+    var delta: Double?
+    var hasKnownCount: Bool { MissionQuotaRestorationText.validCount(previous_available_count) != nil || MissionQuotaRestorationText.validCount(available_count) != nil }
+}
+enum MissionQuotaRestorationText {
+    static func category(_ value: String?) -> String {
+        switch value {
+        case "user_reset":return L("用户主动恢复")
+        case "official_scheduled_reset":return L("官方正常周期重置")
+        case "official_independent_reset":return L("官方独立重置")
+        default:return L("额度恢复·原因待确认")
+        }
+    }
+    static func percent(_ value: Double?) -> String {
+        guard let value, value.isFinite, (0...100).contains(value) else {return L("未提供")}
+        return String(format:"%.1f%%",value)
+    }
+    static func validCount(_ value: Double?) -> Double? {
+        guard let value, value.isFinite, value>=0, value.rounded()==value else {return nil}
+        return value
+    }
+    static func count(_ value: Double?) -> String {
+        guard let value=validCount(value) else {return L("未提供")}
+        return String(format:"%g",value)
+    }
+    static func time(_ value: Double?) -> String {
+        guard let value, value.isFinite, value>0 else {return L("未提供")}
+        return missionTime(value)
     }
 }
 struct MissionDraft { var text: String; var revision: Int }

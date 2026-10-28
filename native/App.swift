@@ -711,6 +711,14 @@ enum MissionLifecycleChecks {
             print(String(data:try! JSONSerialization.data(withJSONObject:report,options:.sortedKeys),encoding:.utf8)!)
             return
         }
+        if let index=CommandLine.arguments.firstIndex(of:"--activity-preview"), !CommandLine.arguments.contains("--ui-self-test") {
+            guard CommandLine.arguments.count>index+2 else {
+                fputs("Usage: --activity-preview fixture.json output.png [--dark] [--english]\n",stderr);exit(2)
+            }
+            do {try MissionPreview.render(fixture:CommandLine.arguments[index+1],output:CommandLine.arguments[index+2])}
+            catch {fputs("Native activity preview failed: \(error)\n",stderr);exit(1)}
+            return
+        }
         if let index = CommandLine.arguments.firstIndex(of: "--ui-self-test"), CommandLine.arguments.count > index + 2 {
             do {
                 try MissionPreview.render(fixture: CommandLine.arguments[index + 1], output: CommandLine.arguments[index + 2])

@@ -32,10 +32,15 @@ struct MissionPrimaryButtonStyle: ButtonStyle {
 struct MissionWindow: View {
     @ObservedObject var model: MissionModel
     var showSettings: () -> Void
-    @State private var section = "tasks"
+    @State private var section: String
     @State private var search = ""
     @State private var filter = "all"
     @State private var selected: String?
+
+    init(model: MissionModel, showSettings: @escaping () -> Void, initialSection: String = "tasks") {
+        self.model=model;self.showSettings=showSettings
+        _section=State(initialValue:initialSection == "events" ? "events" : "tasks")
+    }
 
     var chats: [MissionChat] {
         (model.snapshot?.codexTasks ?? []).filter { chat in
@@ -223,15 +228,21 @@ struct MissionWindow: View {
     var eventsPage: some View {
         VStack(alignment: .leading, spacing: 20) {
             Text(L("操作记录")).font(.largeTitle.bold())
-            Text(L("查看最近 200 条任务控制与指令发送记录。")).foregroundStyle(.secondary)
+            Text(L("查看最近 200 条额度恢复、任务控制与指令发送记录。")).foregroundStyle(.secondary)
             List(model.snapshot?.events ?? []) { event in
                 HStack(alignment: .top, spacing: 18) {
-                    Image(systemName: "clock").foregroundStyle(model.tint)
+                    Image(systemName: event.isQuotaRestored ? "arrow.clockwise.circle" : "clock").foregroundStyle(model.tint)
                     VStack(alignment: .leading, spacing: 5) {
                         Text(L(event.label)).fontWeight(.semibold)
-                        Text(event.name ?? L("全局控制"))
-                        if let recovery=event.detail?.recoveryNote {Text(recovery).font(.callout).foregroundStyle(.secondary)}
-                        if let reason = event.detail?.reason { Text(L(reason)).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
+                        Text(event.scopeTitle)
+                        if event.isQuotaRestored {
+                            ForEach(Array(event.restorationLines.enumerated()),id:\.offset) { _,line in
+                                Text(line).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+                            }
+                        } else {
+                            if let recovery=event.detail?.recoveryNote {Text(recovery).font(.callout).foregroundStyle(.secondary)}
+                            if let reason = event.detail?.reason { Text(L(reason)).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
+                        }
                     }
                     Spacer()
                     Text(missionTime(event.created)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
@@ -527,7 +538,8 @@ enum MissionPreview {
         model.language=args.contains("--english") ? "en" : "zh"
         model.theme=dark ? "dark" : "light"
         let controller:NSViewController
-        if args.contains("--rules") {controller=NSHostingController(rootView:MissionRulesEditor(model:model))}
+        if args.contains("--activity") || args.contains("--activity-preview") {controller=NSHostingController(rootView:MissionWindow(model:model,showSettings:{},initialSection:"events"))}
+        else if args.contains("--rules") {controller=NSHostingController(rootView:MissionRulesEditor(model:model))}
         else if args.contains("--settings") { controller=NSHostingController(rootView:MissionSettings(model:model)) }
         else if args.contains("--menu-panel") { controller=NSHostingController(rootView:MissionMenuPanel(model:model,openWindow:{},openSettings:{},quit:{})) }
         else { controller=NSHostingController(rootView:MissionWindow(model:model,showSettings:{})) }
@@ -551,7 +563,8 @@ enum MissionPreview {
         func classes(_ view: NSView) -> [String] { [String(describing: type(of: view))] + view.subviews.flatMap { classes($0) } }
         let hierarchy = classes(view)
         precondition(!hierarchy.contains { $0.contains("WKWeb") || $0.contains("WebView") })
-        let report: [String: Any] = ["nativeHosting": true, "webViewCount": 0, "fixtureChats": state.codexTasks.count, "sourceChats":state.tasks.count, "accent":model.accent, "rulesEditable":state.rules != nil, "renderedViews": hierarchy.count, "messagesSent": 0, "hostStarted": model.host != nil]
+        let previewView=args.contains("--activity") || args.contains("--activity-preview") ? "activity" : args.contains("--rules") ? "rules" : args.contains("--settings") ? "settings" : args.contains("--menu-panel") ? "menu" : "home"
+        let report: [String: Any] = ["nativeHosting": true, "webViewCount": 0, "fixtureChats": state.codexTasks.count, "sourceChats":state.tasks.count, "accent":model.accent, "rulesEditable":state.rules != nil, "renderedViews": hierarchy.count, "messagesSent": 0, "hostStarted": model.host != nil,"privatePreferencesLoaded":false,"view":previewView,"language":model.language,"theme":model.theme]
         print(String(data: try JSONSerialization.data(withJSONObject: report, options: .sortedKeys), encoding: .utf8)!)
         window.close()
     }

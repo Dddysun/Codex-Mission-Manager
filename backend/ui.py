@@ -134,7 +134,14 @@ class Application:
                 if event["thread_id"] and event["thread_id"] not in names:
                     continue
                 event["detail"] = json.loads(event["detail"] or "{}")
-                event["name"] = names.get(event["thread_id"], "全局控制")
+                if event["state"] == "quota_restored":
+                    detail = event["detail"]
+                    if (not scope or detail.get("scope") != scope
+                            or detail.get("limit_id") != cfg["limit_id"]):
+                        continue
+                    event["name"] = "额度恢复"
+                else:
+                    event["name"] = names.get(event["thread_id"], "全局控制")
                 events.append(event)
             global_revision = store.get("control_revision", 0)
             stop_requested = store.get("stop_requested", False)

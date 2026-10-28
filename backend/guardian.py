@@ -24,6 +24,7 @@ from rpc import Rpc
 from mission_version import VERSION
 from quota import (parse_bucket, classify, recovered, restoration_reason, restoration_details,
                    next_reset, sample_summary, window_map)
+from quota_audit import observe_quota
 from rules import effective_config, effective_rules
 from control_policy import (active_turn, blocked_input, checkpoint_matches, decision, message_id,
                             quota_interrupted, quota_usable, same_goal, valid_goal)
@@ -604,6 +605,9 @@ async def run(config, once=False):
                     store.put("account_display", rpc.account_display)
                 sample = parse_bucket(quota_response, config["limit_id"], started)
                 sample["scope"] = identity
+                # Audit every successful service sample, even without managed
+                # tasks, pending plans, notifications, or control permission.
+                observe_quota(store, sample, config)
                 phase = classify(sample, config)
                 if os.name == 'nt' and hasattr(rpc, 'refresh_control'):
                     await rpc.refresh_control()

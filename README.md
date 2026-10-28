@@ -4,7 +4,7 @@
 
 A native macOS and Windows companion for Codex. Pause authorized tasks when quota runs low, resume after verified recovery, schedule one-time instructions, and inspect delivery records.
 
-**V0.3.2 公开预览 / Public preview.** [发行下载 / Downloads](https://github.com/Dddysun/Codex-Mission-Manager/releases) · [使用指南 / User guide](docs/USER_GUIDE.md) · [V0.3.2 发行说明 / Release notes](docs/releases/0.3.2.md)
+**V0.3.3 公开预览 / Public preview.** [发行下载 / Downloads](https://github.com/Dddysun/Codex-Mission-Manager/releases) · [使用指南 / User guide](docs/USER_GUIDE.md) · [V0.3.3 发行说明 / Release notes](docs/releases/0.3.3.md)
 
 ## 中文
 
@@ -16,13 +16,14 @@ A native macOS and Windows companion for Codex. Pause authorized tasks when quot
 - 按服务实际返回的数据展示额度窗口、剩余额度、刷新时间和账号信息，不根据订阅名称推断固定额度。
 - 编辑六项运行规则，选择绿、蓝、紫、鹅蛋黄主题色，使用中英文及跟随系统、浅色、深色外观。
 - 若服务提供重置权益，展示数量和详情；权益仅供查看，不自动兑换。
+- 独立记录观察到的额度恢复，即使没有受管任务或自动控制已暂停。操作记录展示恢复前后的余额、刷新时间与权益数量，并明确标示来源推断及证据不足的情况。
 
 ### 下载与安装
 
-在 [Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases) 选择 V0.3.2 预览发行。预览标签形式为 `v0.3.2-preview.N`；请以该发行页的文件和说明为准。
+在 [Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases) 选择 V0.3.3 预览发行。预览标签形式为 `v0.3.3-preview.N`；请以该发行页的文件和说明为准。
 
-- **Mac：**Apple Silicon、macOS 14 或更新版本。下载 `Codex-Mission-Manager-0.3.2-arm64-preview.dmg`，将应用拖到 Applications。
-- **Windows：**Windows 10 build 19041 或更新版本、x64、.NET Framework 4.8 或更新版本。下载 `Codex-Mission-Manager-0.3.2-windows-x64-setup.exe`，安装到当前用户；另提供便携 ZIP。
+- **Mac：**Apple Silicon、macOS 14 或更新版本。下载 `Codex-Mission-Manager-0.3.3-arm64-preview.dmg`，将应用拖到 Applications。
+- **Windows：**Windows 10 build 19041 或更新版本、x64、.NET Framework 4.8 或更新版本。下载 `Codex-Mission-Manager-0.3.3-windows-x64-setup.exe`，安装到当前用户；另提供便携 ZIP。
 - 两种安装包都包含后端和独立 Python 运行环境，使用者无需另装 Python、Node.js 或开发工具。
 - 需要自行安装、登录兼容的官方 Codex 桌面客户端。发行包不包含原客户端、凭据或个人聊天数据。
 
@@ -32,7 +33,7 @@ A native macOS and Windows companion for Codex. Pause authorized tasks when quot
 
 客户端控制依赖版本敏感的本机通信适配，并非稳定公开的客户端控制 API。未知客户端版本会停止控制；连接成功也不代表完整暂停、恢复和发送流程已通过验收。
 
-当前 Mac 预览为本机临时签名、未经过 Apple 公证；Windows 预览未签名。系统可能阻止打开。预览版不提供无外屏合盖运行保证，Mac 合盖辅助服务暂未开放；防止空闲睡眠不等于阻止手动睡眠或合盖睡眠。完整实机验收及待验证项目见 [发行说明](docs/releases/0.3.2.md)。
+当前 Mac 预览为本机临时签名、未经过 Apple 公证；Windows 预览未签名。系统可能阻止打开。预览版不提供无外屏合盖运行保证，Mac 合盖辅助服务暂未开放；防止空闲睡眠不等于阻止手动睡眠或合盖睡眠。完整实机验收及待验证项目见 [发行说明](docs/releases/0.3.3.md)。
 
 ## English
 
@@ -44,13 +45,14 @@ A native macOS and Windows companion for Codex. Pause authorized tasks when quot
 - Quota windows, remaining allowance, reset times, and account details from service data. Subscription names do not determine assumed limits.
 - Six editable operating rules; green, blue, purple, and egg-yellow accents; Chinese and English; system, light, and dark appearance.
 - Read-only reset-credit counts and details when supplied by the service. Credits are never redeemed automatically.
+- Independent records of observed quota restoration, including when there are no managed tasks or automatic control is paused. Activity shows before/after allowance, reset times, and credit counts, with explicit inferred attribution and insufficient-evidence cases.
 
 ### Install
 
-Choose a V0.3.2 preview from [Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases). Preview tags use `v0.3.2-preview.N`; the selected release page is the source of truth for its files and limitations.
+Choose a V0.3.3 preview from [Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases). Preview tags use `v0.3.3-preview.N`; the selected release page is the source of truth for its files and limitations.
 
-- **Mac:** Apple Silicon, macOS 14 or later. Download `Codex-Mission-Manager-0.3.2-arm64-preview.dmg` and drag the app to Applications.
-- **Windows:** Windows 10 build 19041 or later, x64, .NET Framework 4.8 or later. Use `Codex-Mission-Manager-0.3.2-windows-x64-setup.exe` for a current-user installation, or extract the portable ZIP.
+- **Mac:** Apple Silicon, macOS 14 or later. Download `Codex-Mission-Manager-0.3.3-arm64-preview.dmg` and drag the app to Applications.
+- **Windows:** Windows 10 build 19041 or later, x64, .NET Framework 4.8 or later. Use `Codex-Mission-Manager-0.3.3-windows-x64-setup.exe` for a current-user installation, or extract the portable ZIP.
 - Both distributions bundle the backend and an isolated Python runtime. Users do not need Python, Node.js, or development tools.
 - Install a compatible official Codex desktop client and sign in separately. Client software, credentials, and personal chat data are not included.
 
@@ -60,7 +62,7 @@ Global automatic control starts paused on a new installation. Verify the account
 
 Live-client control uses a version-sensitive local adapter, rather than a stable public client-control API. Unknown client versions block control. A successful connection does not establish that live pause, recovery, and delivery have passed acceptance testing.
 
-The Mac preview is ad-hoc signed and not Apple-notarized; the Windows preview is unsigned. The operating system may block opening it. Closed-lid operation without an external display is not guaranteed; the Mac closed-lid helper is unavailable in this preview. Idle-sleep prevention does not prevent manual sleep or guarantee operation with the lid closed. See [release notes](docs/releases/0.3.2.md) for verified scope and outstanding checks.
+The Mac preview is ad-hoc signed and not Apple-notarized; the Windows preview is unsigned. The operating system may block opening it. Closed-lid operation without an external display is not guaranteed; the Mac closed-lid helper is unavailable in this preview. Idle-sleep prevention does not prevent manual sleep or guarantee operation with the lid closed. See [release notes](docs/releases/0.3.3.md) for verified scope and outstanding checks.
 
 ## Project information / 项目信息
 

@@ -76,6 +76,108 @@ namespace CodexMissionManager
         }
     }
 
+    // Pure presentation policy: no client access, task routing or permission
+    // changes. Unknown evidence remains unknown on both desktop platforms.
+    static class QuotaRestorationEvents
+    {
+        static string T(bool english, string zh, string en) { return english ? en : zh; }
+        public static bool IsRestored(Dictionary<string, object> item) { return Json.Text(item, "state") == "quota_restored"; }
+        public static bool IsGlobal(Dictionary<string, object> item)
+        { return IsRestored(item) || (item.ContainsKey("thread_id") && String.IsNullOrWhiteSpace(Json.Text(item, "thread_id"))); }
+        public static string ScopeTitle(Dictionary<string, object> item, bool english)
+        {
+            if (IsRestored(item)) return T(english, "全局额度事件", "Global quota event");
+            if (IsGlobal(item)) return T(english, "全局控制", "Global control");
+            return Json.Text(item, "name", T(english, "全局控制", "Global control"));
+        }
+        public static string Category(string value, bool english)
+        {
+            switch (value)
+            {
+                case "user_reset": return T(english, "用户主动恢复", "User-initiated reset");
+                case "official_scheduled_reset": return T(english, "官方正常周期重置", "Scheduled service reset");
+                case "official_independent_reset": return T(english, "官方独立重置", "Independent service reset");
+                default: return T(english, "额度恢复·原因待确认", "Quota restored · cause unconfirmed");
+            }
+        }
+        static double Number(Dictionary<string, object> item, string key)
+        { return Json.Number(item, key, Double.NaN); }
+        static bool Finite(double value) { return !Double.IsNaN(value) && !Double.IsInfinity(value); }
+        static bool KnownCount(double value) { return Finite(value) && value >= 0 && Math.Round(value) == value; }
+        public static string Percent(Dictionary<string, object> item, string key, bool english)
+        {
+            double value = Number(item, key);
+            return Finite(value) && value >= 0 && value <= 100 ? value.ToString("0.0", CultureInfo.InvariantCulture) + "%" : T(english, "未提供", "Unavailable");
+        }
+        public static string Count(Dictionary<string, object> item, string key, bool english)
+        {
+            double value = Number(item, key);
+            return KnownCount(value) ? value.ToString("G", CultureInfo.InvariantCulture) : T(english, "未提供", "Unavailable");
+        }
+        static string Time(Dictionary<string, object> item, string key, bool english)
+        {
+            double value = Number(item, key);
+            return Finite(value) && value > 0 ? MissionWindow.FormatTime(value) : T(english, "未提供", "Unavailable");
+        }
+        static string WindowTitle(Dictionary<string, object> item, bool english)
+        {
+            double minutes = Number(item, "minutes");
+            if (!Finite(minutes) || minutes <= 0) return T(english, "额度窗口未提供", "Quota window not provided");
+            if (minutes == 300) return T(english, "五小时额度", "5-hour quota");
+            if (minutes == 10080) return T(english, "周额度", "Weekly quota");
+            if (minutes % 1440 == 0) return (minutes / 1440).ToString("0", CultureInfo.InvariantCulture) + T(english, "天额度", "-day quota");
+            if (minutes % 60 == 0) return (minutes / 60).ToString("0", CultureInfo.InvariantCulture) + T(english, "小时额度", "-hour quota");
+            return minutes.ToString("0", CultureInfo.InvariantCulture) + T(english, "分钟额度", "-minute quota");
+        }
+        public static List<string> Lines(Dictionary<string, object> item, bool english)
+        {
+            var lines = new List<string>(); if (!IsRestored(item)) return lines;
+            var detail = Json.Child(item, "detail");
+            lines.Add(T(english, "根据余额、刷新时间和重置权益变化判定", "Inferred from balance, reset-time and reset-credit changes"));
+            lines.Add(T(english, "此分类为证据推断，并非官方直接原因说明。", "This classification is inferred from evidence, not a direct service explanation."));
+            if (Json.Text(detail, "category") == "user_reset") lines.Add(T(english, "依据权益变化判定", "Inferred from credit changes"));
+            lines.Add(T(english, "观测时间：", "Observed: ") + Time(detail, "previous_observed_at", english) + " → " + Time(detail, "observed_at", english));
+            var windows = Json.Rows(detail, "windows");
+            if (windows.Count == 0) lines.Add(T(english, "未提供可核实的额度窗口变化。", "Verified quota-window changes were not provided."));
+            foreach (var window in windows)
+            {
+                lines.Add(WindowTitle(window, english) + T(english, " · 余额 ", " · Balance ") + Percent(window, "previous_remaining", english) + " → " + Percent(window, "remaining", english));
+                lines.Add(T(english, "刷新时间：", "Reset time: ") + Time(window, "previous_reset", english) + " → " + Time(window, "reset", english));
+                string classification = Json.Text(window, "classification");
+                if (classification.Length > 0) lines.Add(T(english, "窗口判定：", "Window classification: ") + Category(classification, english));
+            }
+            var credits = Json.Child(detail, "reset_credits");
+            if (KnownCount(Number(credits, "previous_available_count")) || KnownCount(Number(credits, "available_count")))
+                lines.Add(T(english, "重置权益次数：", "Reset credits: ") + Count(credits, "previous_available_count", english) + " → " + Count(credits, "available_count", english));
+            else lines.Add(T(english, "重置权益次数未提供。", "Reset-credit counts were not provided."));
+            return lines;
+        }
+        public static bool SelfTest()
+        {
+            var window = Json.Values("minutes", 300, "previous_remaining", 2, "remaining", 100,
+                "previous_reset", 1793152800, "reset", 1793170800, "classification", "user_reset");
+            var detail = Json.Values("category", "user_reset", "previous_observed_at", 1793152700, "observed_at", 1793152800,
+                "classification_basis", "fixture_evidence", "official_reason", null, "windows", new object[] { window },
+                "reset_credits", Json.Values("previous_available_count", 2, "available_count", 1, "delta", -1));
+            var item = Json.Values("state", "quota_restored", "thread_id", null, "name", "ghost task must stay hidden", "detail", detail);
+            var lines = Lines(item, true);
+            if (!IsGlobal(item) || ScopeTitle(item, true) != "Global quota event" || lines.Any(line => line.Contains("ghost task"))) return false;
+            if (!lines.Any(line => line.Contains("2.0% → 100.0%")) || !lines.Any(line => line == "Reset credits: 2 → 1") || !lines.Any(line => line == "Inferred from credit changes")) return false;
+            foreach (string category in new[] { "user_reset", "official_scheduled_reset", "official_independent_reset", "unattributed", "future_category" })
+                if (Category(category, false).Length == 0 || Category(category, true).Length == 0) return false;
+            if (Category("future_category", true) != "Quota restored · cause unconfirmed") return false;
+            detail["reset_credits"] = Json.Values("previous_available_count", null, "available_count", 0);
+            if (!Lines(item, true).Contains("Reset credits: Unavailable → 0")) return false;
+            detail["reset_credits"] = Json.Values("previous_available_count", null, "available_count", null);
+            if (!Lines(item, true).Contains("Reset-credit counts were not provided.")) return false;
+            var missing = Json.Values(); if (Percent(missing, "remaining", true) != "Unavailable" || Count(missing, "available_count", true) != "Unavailable") return false;
+            var task = Json.Values("state", "running", "thread_id", "fixture-chat", "name", "Existing task");
+            if (IsGlobal(task) || ScopeTitle(task, true) != "Existing task" || Lines(task, true).Count != 0) return false;
+            task["thread_id"] = null; if (ScopeTitle(task, true) != "Global control") return false;
+            task.Remove("thread_id"); return ScopeTitle(task, true) == "Existing task";
+        }
+    }
+
     sealed class Preferences
     {
         public string Language = CultureInfo.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase) ? "zh" : "en";
@@ -970,18 +1072,26 @@ namespace CodexMissionManager
         void BuildEvents()
         {
             var title = Text(T("操作记录", "Activity"), 26, true); title.Margin = new Thickness(0, 0, 0, 20); content.Children.Add(title);
-            var description = Text(T("查看最近 200 条任务控制与指令发送记录。", "Review the latest 200 task-control and instruction-delivery records."), 13); description.Foreground = secondary; description.Margin = new Thickness(0, 0, 0, 20); content.Children.Add(description);
+            var description = Text(T("查看最近 200 条额度恢复、任务控制与指令发送记录。", "Review the latest 200 quota-recovery, task-control and instruction-delivery records."), 13); description.Foreground = secondary; description.Margin = new Thickness(0, 0, 0, 20); content.Children.Add(description);
             var events = Json.Rows(snapshot, "events");
             foreach (var item in events.Take(200))
             {
                 var row = new DockPanel { Margin = new Thickness(12, 10, 12, 10) };
                 var icon = Glyph("clock", accent, 16); icon.Margin = new Thickness(0, 2, 18, 0); icon.VerticalAlignment = VerticalAlignment.Top; DockPanel.SetDock(icon, Dock.Left); row.Children.Add(icon);
                 var stamp = Text(FormatTime(Json.Number(item, "created")), 10); stamp.Foreground = secondary; stamp.Margin = new Thickness(18, 1, 0, 0); DockPanel.SetDock(stamp, Dock.Right); row.Children.Add(stamp);
-                var labels = new StackPanel(); var heading = Text(EventLabel(Json.Text(item, "state")), 13, true); heading.Margin = new Thickness(0, 0, 0, 5); labels.Children.Add(heading);
-                var name = Text(Json.Text(item, "name", T("全局控制", "Global control")), 13); name.Margin = new Thickness(0); labels.Children.Add(name);
+                bool restored = QuotaRestorationEvents.IsRestored(item); bool english = preferences.Language == "en";
+                var labels = new StackPanel(); var heading = Text(restored ? QuotaRestorationEvents.Category(Json.Text(Json.Child(item, "detail"), "category"), english) : EventLabel(Json.Text(item, "state")), 13, true); heading.Margin = new Thickness(0, 0, 0, 5); labels.Children.Add(heading);
+                var name = Text(QuotaRestorationEvents.ScopeTitle(item, english), 13); name.Margin = new Thickness(0); labels.Children.Add(name);
+                if (restored)
+                {
+                    foreach (string line in QuotaRestorationEvents.Lines(item, english)) { var evidence = Text(line, 12); evidence.Foreground = secondary; evidence.Margin = new Thickness(0, 5, 0, 0); labels.Children.Add(evidence); }
+                }
+                else
+                {
                 var eventDetail = Json.Child(item, "detail"); string reason = Json.Text(eventDetail, "reason"); string recovery = RecoveryLabel(Json.Text(eventDetail, "recovery_reason"));
                 if (recovery.Length > 0) { var evidence = Text(recovery, 12); evidence.Foreground = secondary; evidence.Margin = new Thickness(0, 5, 0, 0); labels.Children.Add(evidence); }
                 if (reason.Length > 0 && reason != recovery) { var detail = Text(reason, 12); detail.Foreground = secondary; detail.Margin = new Thickness(0, 5, 0, 0); labels.Children.Add(detail); }
+                }
                 row.Children.Add(labels); content.Children.Add(row); content.Children.Add(DividerLine(Tint(secondary, 0.15), new Thickness(46, 0, 12, 0)));
             }
             if (events.Count == 0) { var empty = Text(T("暂无控制操作记录", "No control activity has been recorded"), 13); empty.Foreground = secondary; content.Children.Add(empty); }
@@ -2108,11 +2218,11 @@ namespace CodexMissionManager
         {
             if (args.Length > 0 && args[0] == "--self-test")
             {
-                bool revocationChecks = ChatControlPolicy.SelfTest(); bool startupChecks = StartupDiagnostic.SelfTest(); bool paletteChecks = ThemePalette.SelfTest(); bool rulesChecks = RulesPolicy.SelfTest();
+                bool revocationChecks = ChatControlPolicy.SelfTest(); bool startupChecks = StartupDiagnostic.SelfTest(); bool paletteChecks = ThemePalette.SelfTest(); bool rulesChecks = RulesPolicy.SelfTest(); bool quotaEventChecks = QuotaRestorationEvents.SelfTest();
                 string result = Json.Stringify(Json.Values("version", AppVersion(), "platform", "windows", "native", true, "ui", "WPF", "webView", false,
-                    "hostStarted", false, "messagesSent", 0, "cacheRefreshSeconds", 5, "localRevocationChecks", revocationChecks, "startupDiagnosticFallbackChecks", startupChecks, "themePaletteChecks", paletteChecks, "rulesValidationChecks", rulesChecks));
+                    "hostStarted", false, "messagesSent", 0, "cacheRefreshSeconds", 5, "localRevocationChecks", revocationChecks, "startupDiagnosticFallbackChecks", startupChecks, "themePaletteChecks", paletteChecks, "rulesValidationChecks", rulesChecks, "quotaRestorationEventChecks", quotaEventChecks));
                 if (args.Length > 1) File.WriteAllText(args[1], result, new UTF8Encoding(false));
-                Console.WriteLine(result); return revocationChecks && startupChecks && paletteChecks && rulesChecks ? 0 : 1;
+                Console.WriteLine(result); return revocationChecks && startupChecks && paletteChecks && rulesChecks && quotaEventChecks ? 0 : 1;
             }
             if (args.Length > 0 && args[0] == "--textbox-layout-self-test")
             {

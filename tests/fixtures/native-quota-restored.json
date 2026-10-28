@@ -1,0 +1,80 @@
+{
+  "observed_at": 1793156400,
+  "now": 1793156400,
+  "running": true,
+  "healthy": true,
+  "stale": false,
+  "control_paused": true,
+  "control_enabled": false,
+  "control_revision": 4,
+  "tasks": [
+    {
+      "id": "demo-chat-0", "key": "codex:local:demo-chat-0", "name": "整理示例发布清单",
+      "state": "watching", "auto_resume": false, "manual_hold": false, "revision": 3,
+      "can_control": true, "category": "codex", "host_id": "local", "source_label": "Codex · 本机",
+      "runtime": {"type": "idle"},
+      "execution_stage": {"text": "示例步骤已完成，等待下一条指令。", "phase": "progress", "updated_at": 1793156400},
+      "plan": {"state": "off", "prompt": "继续任务", "revision": 2}
+    }
+  ],
+  "events": [
+    {
+      "id": 104, "created": 1793156400, "state": "quota_restored", "thread_id": null, "name": "全局控制",
+      "detail": {
+        "category": "user_reset", "scope": "demo-scope", "limit_id": "codex",
+        "previous_observed_at": 1793156340, "observed_at": 1793156400,
+        "classification_basis": "observed_credit_consumption_correlated_with_balance_restoration", "official_reason": null,
+        "windows": [{"minutes": 300, "previous_remaining": 2, "remaining": 100,
+          "previous_reset": 1793167200, "reset": 1793174400, "classification": "user_reset"}],
+        "reset_credits": {"previous_available_count": 2, "available_count": 1, "delta": -1}
+      }
+    },
+    {
+      "id": 103, "created": 1793138400, "state": "quota_restored", "thread_id": null, "name": "全局控制",
+      "detail": {
+        "category": "official_scheduled_reset", "scope": "demo-scope", "limit_id": "codex",
+        "previous_observed_at": 1793138340, "observed_at": 1793138400,
+        "classification_basis": "observed_due_window_rollover_and_stable_credit_inventory", "official_reason": null,
+        "windows": [{"minutes": 300, "previous_remaining": 8, "remaining": 100,
+          "previous_reset": 1793138400, "reset": 1793156400, "classification": "official_scheduled_reset"}],
+        "reset_credits": {"previous_available_count": 1, "available_count": 1, "delta": 0}
+      }
+    },
+    {
+      "id": 102, "created": 1793120400, "state": "quota_restored", "thread_id": null, "name": "全局控制",
+      "detail": {
+        "category": "official_independent_reset", "scope": "demo-scope", "limit_id": "codex",
+        "previous_observed_at": 1793120340, "observed_at": 1793120400,
+        "classification_basis": "observed_early_balance_increase_and_stable_credit_inventory", "official_reason": null,
+        "windows": [{"minutes": 300, "previous_remaining": 4, "remaining": 100,
+          "previous_reset": 1793127600, "reset": 1793138400, "classification": "official_independent_reset"}],
+        "reset_credits": {"previous_available_count": 1, "available_count": 1, "delta": 0}
+      }
+    },
+    {
+      "id": 101, "created": 1793102400, "state": "quota_restored", "thread_id": null, "name": "全局控制",
+      "detail": {
+        "category": "unattributed", "scope": "demo-scope", "limit_id": "codex",
+        "previous_observed_at": 1793102340, "observed_at": 1793102400,
+        "classification_basis": "reset_credit_statistics_missing", "official_reason": null,
+        "windows": [{"minutes": 300, "previous_remaining": 5, "remaining": 76,
+          "previous_reset": 1793109600, "reset": 1793120400, "classification": "unattributed"}],
+        "reset_credits": {"previous_available_count": null, "available_count": null, "delta": null}
+      }
+    },
+    {
+      "id": 100, "created": 1793100000, "state": "running", "thread_id": "demo-chat-0",
+      "name": "整理示例发布清单", "detail": {"recovery_reason": "window_advanced"}
+    }
+  ],
+  "usage": {
+    "account": {"id": "demo-account-quota-preview", "name": "示例账号", "email": "quota-preview@example.invalid", "plan_type": "plus"},
+    "windows": {"five_hour": {"remaining": 100, "reset": 1793174400}, "weekly": {"remaining": 47, "reset": 1793404800}},
+    "observed_at": 1793156400, "stale": false,
+    "reset_credits": {"supported": true, "available_count": 1, "credits": []}
+  },
+  "catalog": {"observed_at": 1793156400},
+  "policy": {"pause": 10, "resume": 20, "confirm_seconds": 5},
+  "poll_seconds": 30,
+  "ui_poll_seconds": 5
+}

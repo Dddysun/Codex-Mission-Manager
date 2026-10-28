@@ -99,6 +99,31 @@ class InterfaceTests(unittest.TestCase):
             self.assertEqual(self.store.get("supervisor_paused"), expected)
         self.assertEqual(self.store.db.execute("SELECT count(*) FROM events WHERE thread_id IS NULL").fetchone()[0], 2)
 
+    def test_quota_recovery_without_chats_is_visible_only_for_current_account_and_bucket(self):
+        self.prepare_catalog()
+        self.store.db.execute('DELETE FROM tasks')
+        self.store.put('chat_catalog', {'scope': 'test', 'items': []})
+        for scope, bucket in [('test', 'codex'), ('another-account', 'codex'), ('test', 'other')]:
+            detail = {'scope': scope, 'limit_id': bucket, 'category': 'official_independent_reset',
+                      'windows': [{'minutes': 10080, 'previous_remaining': 5, 'remaining': 99}]}
+            self.store.db.execute('INSERT INTO events(created,state,detail) VALUES(?,?,?)',
+                                  (time.time(), 'quota_restored', json.dumps(detail)))
+        self.store.db.commit()
+        data = json.loads(self.request()[2])
+        records = [e for e in data['events'] if e['state'] == 'quota_restored']
+        self.assertEqual(data['tasks'], [])
+        self.assertEqual(len(records), 1)
+        self.assertIsNone(records[0]['thread_id'])
+        self.assertEqual(records[0]['detail']['windows'][0]['previous_remaining'], 5)
+        self.assertNotIn('another-account', json.dumps(data['events']))
+
+    def test_quota_history_is_hidden_until_account_identity_is_known(self):
+        self.store.db.execute('INSERT INTO events(created,state,detail) VALUES(?,?,?)',
+            (time.time(), 'quota_restored', json.dumps({'scope': 'test', 'limit_id': 'codex'})))
+        self.store.db.commit()
+        data = json.loads(self.request()[2])
+        self.assertFalse(any(e['state'] == 'quota_restored' for e in data['events']))
+
     def test_task_controls_and_stale_revision(self):
         self.assertEqual(self.request("POST", "/api/action", {"action": "hold", "thread_id": "task-1", "revision": 0})[0], 200)
         self.assertTrue(self.store.get_task("task-1")["manual_hold"])

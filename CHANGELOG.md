@@ -1,5 +1,16 @@
 # Changelog / 版本记录
 
+## 0.3.3 — Quota recovery history / 额度恢复记录
+
+- Record observed quota restoration independently of task activity, automatic-control settings, and notification permission. / 独立记录观察到的额度恢复，不依赖任务活动、自动控制开关或通知权限。
+- Show before/after allowance, reset deadlines, credit counts, and observation times in the native Activity pages on both platforms. / 两平台原生操作记录展示恢复前后余额、刷新时间、权益数量及采样时间。
+- Distinguish inferred user resets, scheduled service resets, independent service resets, and unattributed recovery; retain per-window evidence when sources differ. / 区分推断的用户主动恢复、官方正常周期重置、官方独立重置及未归因恢复，多个窗口结论不同时保留逐窗口依据。
+- Keep attribution unresolved for 120 seconds after credit changes, and record credible new cycles even when fresh consumption masks a balance increase. / 权益变化后保留 120 秒来源观察期；新消耗掩盖余额回升时，仍记录可信的新周期。
+- Persist account-and-bucket baselines and events atomically to avoid duplicate records after restart; the first observation establishes a baseline without reconstructing earlier activity. / 按账号与额度类别原子保存基线和事件，避免重启重复记录；首次观察只建立基线，不补写此前历史。
+- Keep reset credits read-only and preserve existing pause, recovery, consent, and delivery safeguards. / 重置权益保持只读，保留既有暂停、恢复、授权和发送保护。
+
+Attribution is inferred from comparable observations; there is no direct official reset receipt. Missing or ambiguous evidence remains unattributed. See [0.3.3 release notes](docs/releases/0.3.3.md). / 来源依据可比采样推断，未获得官方直接重置回执；证据缺失或含糊时保留未归因状态。详见 [0.3.3 发行说明](docs/releases/0.3.3.md)。
+
 ## 0.3.2 — Windows text layout / Windows 输入框布局修复
 
 - Removed duplicated padding from the shared Windows text-input template. / 修复 Windows 输入框模板重复扣除内边距的问题。

@@ -157,7 +157,9 @@ jobs:
                        for accent in ('green', 'blue', 'purple', 'yellow') for theme in ('light', 'dark')]
               views += [('rules-zh-light', 'native-state', ['--rules']),
                         ('settings-en-dark', 'native-state', ['--settings', '--dark', '--english']),
-                        ('menu-en-dark', 'native-state', ['--menu-panel', '--dark', '--english'])]
+                        ('menu-en-dark', 'native-state', ['--menu-panel', '--dark', '--english']),
+                        ('activity-zh-light', 'native-quota-restored', ['--activity', '--accent', 'blue']),
+                        ('activity-en-dark', 'native-quota-restored', ['--activity', '--dark', '--english', '--accent', 'purple'])]
               for name, fixture, options in views:
                   image = output / (name + '.png')
                   result = subprocess.run([str(executable), '--ui-self-test', 'tests/fixtures/' + fixture + '.json',
@@ -165,6 +167,11 @@ jobs:
                   report = json.loads(result.stdout)
                   assert report['nativeHosting'] and report['webViewCount'] == 0
                   assert not report['hostStarted'] and report['messagesSent'] == 0
+                  if name.startswith('activity-'):
+                      assert report['view'] == 'activity' and report['privatePreferencesLoaded'] is False
+                      assert report['language'] == ('en' if '--english' in options else 'zh')
+                      assert report['theme'] == ('dark' if '--dark' in options else 'light')
+                      assert report['accent'] == options[options.index('--accent') + 1]
                   assert image.is_file() and image.stat().st_size > 0
                   (output / (name + '.json')).write_text(json.dumps(report, indent=2) + '\n')
                   reports.append({'fixture': name, **report})
@@ -267,7 +274,8 @@ jobs:
           $native = Get-Content -LiteralPath "$env:RUNNER_TEMP\mission-windows\build-work\native-self-test.json" -Raw -Encoding UTF8 | ConvertFrom-Json
           if (!$native.native -or $native.webView -or $native.hostStarted -or $native.messagesSent -ne 0 `
               -or !$native.localRevocationChecks -or !$native.startupDiagnosticFallbackChecks `
-              -or !$native.themePaletteChecks -or !$native.rulesValidationChecks) { throw 'Native self-test checks failed.' }
+              -or !$native.themePaletteChecks -or !$native.rulesValidationChecks `
+              -or !$native.quotaRestorationEventChecks) { throw 'Native self-test checks failed.' }
           Copy-Item -LiteralPath "$env:RUNNER_TEMP\mission-windows\build-work\native-self-test.json" -Destination "$env:RUNNER_TEMP\native-self-test-windows-x64.json"
           foreach ($check in @('editor', 'lifecycle')) {
             $receipt = "$env:RUNNER_TEMP\native-$check-windows-x64.json"
@@ -309,6 +317,8 @@ jobs:
           $views += ,@('rules', 'zh', 'light', 'native-state', 'blue')
           $views += ,@('rules', 'en', 'dark', 'native-state', 'purple')
           $views += ,@('tray', 'en', 'dark', 'native-state', 'yellow')
+          $views += ,@('activity', 'zh', 'light', 'native-quota-restored', 'blue')
+          $views += ,@('activity', 'en', 'dark', 'native-quota-restored', 'purple')
           $views += ,@('home', 'zh', 'light', 'native-pro-weekly', 'green')
           $views += ,@('home', 'zh', 'light', 'native-service-only', 'green')
           $views += ,@('home', 'en', 'dark', 'native-quota-unknown', 'green')
@@ -320,6 +330,9 @@ jobs:
             if ($process.ExitCode -ne 0 -or !(Test-Path -LiteralPath $image)) { throw ('Native rendering failed: ' + ($view -join '-')) }
             $receipt = Get-Content -LiteralPath ($image + '.json') -Raw -Encoding UTF8 | ConvertFrom-Json
             if (!$receipt.native -or $receipt.webView -or $receipt.hostStarted -or $receipt.messagesSent -ne 0 -or $receipt.accent -ne $view[4]) { throw 'Fixture rendering violated the offline native contract.' }
+            if ($view[0] -eq 'activity' -and ($receipt.view -ne 'activity' -or $receipt.language -ne $view[1] `
+                -or $receipt.theme -ne $view[2] -or $receipt.privatePreferencesLoaded -ne $false `
+                -or $receipt.width -ne 2760 -or $receipt.height -ne 1800)) { throw 'Quota activity rendering metadata does not match the release profile.' }
           }
           [ordered]@{ platform='windows-x64'; offline_fixture_renders=$views.Count; live_chat_messages_sent=0; `
             interactive_gui_verified=$false; full_windows_acceptance_run=$false } | ConvertTo-Json | `

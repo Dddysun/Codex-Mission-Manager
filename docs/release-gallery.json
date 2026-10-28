@@ -80,6 +80,46 @@
           "highlight": false, "caption": {"en": "Mac menu with the fixed Quit action", "zh": "Mac 菜单及固定退出入口"}
         }
       ]
+    },
+    "0.3.3": {
+      "images": [
+        {
+          "id": "quota-recovery", "platform": "macos", "kind": "activity", "view": "activity",
+          "file": "activity-zh-light.png", "receipt": "activity-zh-light.json",
+          "dimensions": [[1380, 900], [2760, 1800]], "accent": "blue", "theme": "light", "language": "zh",
+          "highlight": true, "caption": {"en": "Quota recovery history with observation-based attribution · Chinese / Light", "zh": "额度恢复记录与来源推断 · 中文／浅色"}
+        },
+        {
+          "id": "quota-recovery", "platform": "windows", "kind": "activity", "view": "activity",
+          "file": "activity-en-dark-native-quota-restored-purple.png", "receipt": "activity-en-dark-native-quota-restored-purple.png.json",
+          "dimensions": [[2760, 1800]], "accent": "purple", "theme": "dark", "language": "en",
+          "highlight": true, "caption": {"en": "Quota recovery history with before/after evidence · English / Dark", "zh": "额度恢复记录与前后采样依据 · 英文／深色"}
+        },
+        {
+          "id": "main", "platform": "macos", "kind": "home", "view": "home",
+          "file": "green-light.png", "receipt": "green-light.json",
+          "dimensions": [[1380, 900], [2760, 1800]], "accent": "green", "theme": "light", "language": "zh",
+          "highlight": false, "caption": {"en": "Mac Codex chats and task controls", "zh": "Mac Codex 聊天与任务控制"}
+        },
+        {
+          "id": "main", "platform": "windows", "kind": "home", "view": "home",
+          "file": "home-zh-light-native-state-green.png", "receipt": "home-zh-light-native-state-green.png.json",
+          "dimensions": [[2760, 1800]], "accent": "green", "theme": "light", "language": "zh",
+          "highlight": false, "caption": {"en": "Windows Codex chats and task controls", "zh": "Windows Codex 聊天与任务控制"}
+        },
+        {
+          "id": "settings", "platform": "windows", "kind": "settings", "view": "settings",
+          "file": "settings-zh-light-native-state-blue.png", "receipt": "settings-zh-light-native-state-blue.png.json",
+          "dimensions": [[1600, 2200]], "accent": "blue", "theme": "light", "language": "zh",
+          "highlight": false, "caption": {"en": "Appearance, background operation and permissions", "zh": "外观、后台运行与权限设置"}
+        },
+        {
+          "id": "menu", "platform": "macos", "kind": "menu", "view": "menu",
+          "file": "menu-en-dark.png", "receipt": "menu-en-dark.json",
+          "dimensions": [[400, 570], [800, 1140]], "accent": "green", "theme": "dark", "language": "en",
+          "highlight": false, "caption": {"en": "Mac menu with the fixed Quit action", "zh": "Mac 菜单及固定退出入口"}
+        }
+      ]
     }
   }
 }

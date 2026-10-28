@@ -471,7 +471,24 @@ enum NativeLocalization {
   "可用余额恢复；重置原因未知": "Available balance recovered; the reset cause is unknown",
   "额度已重新核验可用": "Quota was verified as available again",
   "服务许可已恢复": "Service permission was restored",
-  "恢复原因待核实": "Recovery reason is unverified"
+  "恢复原因待核实": "Recovery reason is unverified",
+  "查看最近 200 条额度恢复、任务控制与指令发送记录。": "Review the latest 200 quota-recovery, task-control and instruction-delivery records.",
+  "全局额度事件": "Global quota event",
+  "用户主动恢复": "User-initiated reset",
+  "官方正常周期重置": "Scheduled service reset",
+  "官方独立重置": "Independent service reset",
+  "额度恢复·原因待确认": "Quota restored · cause unconfirmed",
+  "根据余额、刷新时间和重置权益变化判定": "Inferred from balance, reset-time and reset-credit changes",
+  "此分类为证据推断，并非官方直接原因说明。": "This classification is inferred from evidence, not a direct service explanation.",
+  "依据权益变化判定": "Inferred from credit changes",
+  "观测时间：%@ → %@": "Observed: %@ → %@",
+  "%@ · 余额 %@ → %@": "%@ · Balance %@ → %@",
+  "刷新时间：%@ → %@": "Reset time: %@ → %@",
+  "窗口判定：%@": "Window classification: %@",
+  "重置权益次数：%@ → %@": "Reset credits: %@ → %@",
+  "重置权益次数未提供。": "Reset-credit counts were not provided.",
+  "未提供可核实的额度窗口变化。": "Verified quota-window changes were not provided.",
+  "额度窗口未提供": "Quota window not provided"
 }
 """#.data(using:.utf8)!
         return try! JSONDecoder().decode([String:String].self,from:data)

@@ -32,7 +32,26 @@
 
 采集间隔从上一轮结束后计时，每轮采集和处理耗时另计。连接异常还有独立重试退避，因此状态可能延迟更新。保存失败或发生设置冲突时保留草稿；使用“放弃修改”重新载入当前规则。
 
-正常窗口刷新、余额提前恢复和服务许可恢复会分别记录。余额回升本身不能证明官方活动或人工重置；应用在原因未知时明确标为未知。如果账号返回重置权益，数量和详情仅供查看，不会自动兑换，也不会将未使用的权益视为额度已经恢复。
+既有任务恢复记录区分新额度窗口、余额提前恢复和服务许可恢复。如果账号返回重置权益，数量和详情仅供查看，不会自动兑换，也不会将未使用的权益视为额度已经恢复。
+
+### 额度恢复记录
+
+V0.3.3 起，管家从通过时效及身份校验的服务采样中独立记录观察到的额度恢复。没有受管任务、全局自动控制已暂停或通知已关闭时，仍会记录。应用需要运行并能够取得服务数据；离线期间的变化无法完整重建。
+
+相同刷新截止时间下，余额至少回升 5 个百分点才触发记录；较小回升伴随可信的截止时间推进时也可记录，但来源可能仍待确认。采样跨越旧截止时间，且刷新时间推进约一个完整周期时，会记录新周期；即使新消耗使净余额从 98% 降至 97%，仍保留周期变化，并标明净余额未上涨。记录门槛与用于任务续接的恢复阈值分别生效。
+
+操作记录将显示恢复前后各窗口的剩余百分比与刷新时间、重置权益可用数量、前后采样时间和来源判断依据。记录中的来源属于观察推断：
+
+- **用户主动恢复：**同时观察到余额恢复，以及可核对的权益清单与数量变化，推断与权益使用相关；可用次数减少本身不足以确认用户操作。
+- **官方正常周期重置：**观察到原窗口到期附近的周期推进，且可比的权益清单和数量保持稳定。
+- **官方独立重置：**观察到原窗口截止前的显著余额回升，且可比的权益清单和数量保持稳定。该名称不确认某次官方活动。
+- **未归因恢复：**余额或周期变化可见，但来源依据不足。权益字段缺失、无法区分权益过期与使用、清单不完整、采样间隔过长或窗口变化不明确时，保留不确定性。多个窗口的判断不同时，整体显示未归因，详情保留逐窗口结论。
+
+权益的数量、清单、支持状态或字段发生变化后，有 120 秒的来源观察期，即使发生变化的当次采样没有余额回升也会生效。观察期内随后出现的余额回升会保留未归因，避免将延迟生效的权益使用误判为官方恢复；同一采样中具备完整、可核对的权益使用依据时，仍可标为推断的用户主动恢复。记录在检测到变化时立即写入，不等待观察期结束，也不根据稍后的权益变化追溯改写既有记录。
+
+服务目前没有为这些记录提供直接的重置原因回执，`official_reason` 保持空值。首次安装或升级至此功能版本，以及切换账号、额度类别时先建立基线，不补写当天较早的历史；持久化基线与事件一起保存，应用重启不会重复记录同一已观察变化。
+
+该记录独立于任务续接。满足既有条件的任务和一次性预约可在余额恢复后继续核验与执行；账号、额度、连续确认、人工接管、聊天授权及发送保护仍然适用。
 
 ### 外观、通知与后台
 
@@ -85,7 +104,26 @@ The following integer settings take effect after saving:
 
 Collection intervals begin after the previous round finishes. Collection and processing time are additional, and connection retries have separate backoff. Failed or conflicting saves retain the draft; **Discard changes** reloads current rules.
 
-Records distinguish a new quota window, early balance recovery, and restored service permission. A balance increase alone does not prove an official promotion or manual reset; an unknown cause stays unknown. Reset credits, when supplied, are read-only. They are never automatically redeemed, and unused credits are not evidence of recovered quota.
+Existing task-recovery records distinguish a new quota window, early balance recovery, and restored service permission. Reset credits, when supplied, are read-only. They are never automatically redeemed, and unused credits are not evidence of recovered quota.
+
+### Quota recovery history
+
+From V0.3.3, Mission Manager records observed quota restoration independently from service samples that pass freshness and identity checks. Recording continues with no managed tasks, global automatic control paused, or notifications disabled. The application must be running and able to obtain service data; changes during an offline period cannot be fully reconstructed.
+
+A balance increase with the same reset deadline must reach 5 percentage points to create a record. Smaller increases accompanied by a credible deadline advance can also be recorded, with attribution left unresolved when evidence is insufficient. Samples crossing the prior deadline with an advance of approximately one full period record the new cycle, even if subsequent spending reduces the net balance from 98% to 97%; details identify that the net balance did not increase. The recording threshold is separate from the task-resumption threshold.
+
+Activity shows each affected window's before/after remaining percentage and reset deadline, available reset-credit counts, both observation times, and attribution evidence. Source labels describe inferences from observations:
+
+- **User-initiated reset:** balance restoration coincides with reconcilable credit-inventory and count changes suggesting credit use. A falling available count alone does not establish a user action.
+- **Scheduled service reset:** the prior window rolls over near its deadline while comparable credit inventory and counts remain stable.
+- **Independent service reset:** a substantial balance increase occurs before the prior deadline while comparable credit inventory and counts remain stable. The label does not confirm a particular service promotion.
+- **Unattributed recovery:** restoration or rollover is visible, but attribution evidence is insufficient. Missing credit fields, expiry that cannot be distinguished from use, incomplete inventories, long observation gaps, and ambiguous window changes retain uncertainty. If windows receive different classifications, the overall record is unattributed and details preserve each window's conclusion.
+
+A change in credit counts, inventory, support status, or fields starts a 120-second attribution observation period, even if the balance does not increase in that sample. A subsequent balance increase during that period remains unattributed, avoiding an official-reset inference for delayed credit use. Complete, reconcilable credit-use evidence in the same sample can still support an inferred user-initiated reset. Records are written immediately when a change is detected; they do not wait for the observation period or receive retrospective attribution changes from later credit observations.
+
+The service does not supply a direct reset-cause receipt for these records; `official_reason` remains null. The first observation after installing or upgrading to this feature version, or changing accounts or quota buckets, establishes a baseline without reconstructing earlier activity that day. Baselines and events are persisted together, so restarting does not duplicate an already observed change.
+
+These records are independent of task resumption. Eligible tasks and one-time schedules continue through the existing recovery checks when quota becomes available. Account matching, allowance, consecutive confirmation, manual intervention, chat authorization, and delivery safeguards still apply.
 
 ### Appearance and background operation
 
