@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="qj-6" class="qj" data-state="idle" data-animated="false" data-reduced="false" width="256" height="256" viewBox="0 0 256 256" focusable="false" role="img" aria-labelledby="qj-6-title">
+      <title id="qj-6-title">额度榨汁机 · 空闲</title>
+      <style>#qj-6{--qj-blue:#4878AF;--qj-glass:#172638;--qj-gray:#7F8C9C;--qj-gold:#E7B43C;--qj-swirl:#537A9F;--qj-muted:#637285;--qj-badge:#1C2939;--qj-red:#D67A80;display:block;overflow:visible}
+      
+      #qj-6 .blue{fill:var(--qj-blue)}#qj-6 .glass{fill:var(--qj-glass)}
+      #qj-6 .handle{stroke:var(--qj-blue)}#qj-6 .bolt{fill:var(--qj-gray)}
+      #qj-6[data-state="working"] .bolt{fill:var(--qj-gold)}
+      #qj-6[data-state="disconnected"]{--qj-blue:var(--qj-muted)}
+      #qj-6 .swirl{stroke:var(--qj-swirl)}#qj-6 .arcs{stroke:var(--qj-gold);opacity:.65}
+      #qj-6 .badge-bg{fill:var(--qj-badge)}#qj-6 .pause-mark{stroke:var(--qj-gold)}
+      #qj-6 .disconnect-mark{stroke:var(--qj-gray)}#qj-6 .error-mark{fill:var(--qj-red)}
+      </style>
+      <defs><clipPath id="qj-6-cup"><path d="M78 76H177L166 155Q165 163 155 163H99Q89 163 88 155Z"/></clipPath></defs>
+      <g data-layer="handle"><path class="handle" d="M180 78H199Q229 78 226 110L223 128Q220 156 176 153" fill="none" stroke-width="15" stroke-linejoin="round"/></g>
+      <g data-layer="cup"><path class="blue" d="M62 63H193L181 158Q179 177 160 177H94Q75 177 73 158Z"/><path class="glass" d="M78 76H177L166 155Q165 163 155 163H99Q89 163 88 155Z"/></g>
+      <g data-layer="vortex" clip-path="url(#qj-6-cup)">
+        <path class="swirl" d="M99 147Q125 158 153 145" fill="none" stroke-width="4" stroke-linecap="round" opacity=".4"/>
+      </g>
+      <g data-layer="lid"><rect class="blue" x="57" y="48" width="142" height="22" rx="11"/></g>
+      <g data-layer="top-knob"><rect class="blue" x="110" y="29" width="35" height="14" rx="6"/><g class="motion knob-rotor"><circle class="glass" cx="127" cy="36" r="5"/><path class="blue" d="M127 32V36" stroke="var(--qj-blue)" stroke-width="2.5" stroke-linecap="round"/></g></g>
+      <g data-layer="base"><path class="blue" d="M88 182H166Q183 182 187 199L190 212Q192 222 180 222H74Q62 222 64 212L67 199Q71 182 88 182Z"/></g>
+      <g data-layer="control"><circle class="glass" cx="127" cy="202" r="10"/><path d="M127 196V201" stroke="var(--qj-blue)" stroke-width="3" stroke-linecap="round"/></g>
+      <g data-layer="lightning"><path class="bolt" d="M129 83H151L133 108H153L113 145L124 118H104Z"/></g>
+      <g data-layer="arcs" class="motion arcs" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" display="none"><path d="M40 92L29 106H40L30 120"/><path d="M205 44L214 35"/><path d="M208 177L221 183"/></g>
+      <g data-layer="status-badge"></g>
+    </svg>

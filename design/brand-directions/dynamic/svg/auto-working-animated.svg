@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="qj-13" class="qj" data-state="working" data-animated="true" data-reduced="false" width="256" height="256" viewBox="0 0 256 256" focusable="false" role="img" aria-labelledby="qj-13-title">
+      <title id="qj-13-title">额度榨汁机 · 工作中</title>
+      <style>#qj-13{--qj-blue:#2168D5;--qj-glass:#EAF3FF;--qj-gray:#8795A8;--qj-gold:#E7AA16;--qj-swirl:#74A0D9;--qj-muted:#758598;--qj-badge:#F5F7FA;--qj-red:#CD5058;display:block;overflow:visible}
+      @media(prefers-color-scheme:dark){#qj-13{--qj-blue:#4878AF;--qj-glass:#172638;--qj-gray:#7F8C9C;--qj-gold:#E7B43C;--qj-swirl:#537A9F;--qj-muted:#637285;--qj-badge:#1C2939;--qj-red:#D67A80}}
+      #qj-13 .blue{fill:var(--qj-blue)}#qj-13 .glass{fill:var(--qj-glass)}
+      #qj-13 .handle{stroke:var(--qj-blue)}#qj-13 .bolt{fill:var(--qj-gray)}
+      #qj-13[data-state="working"] .bolt{fill:var(--qj-gold)}
+      #qj-13[data-state="disconnected"]{--qj-blue:var(--qj-muted)}
+      #qj-13 .swirl{stroke:var(--qj-swirl)}#qj-13 .arcs{stroke:var(--qj-gold);opacity:.65}
+      #qj-13 .badge-bg{fill:var(--qj-badge)}#qj-13 .pause-mark{stroke:var(--qj-gold)}
+      #qj-13 .disconnect-mark{stroke:var(--qj-gray)}#qj-13 .error-mark{fill:var(--qj-red)}
+      
+      #qj-13[data-state="working"] .vortex-rotor{transform-origin:127px 121px;animation:qj-swirl 2.4s linear infinite}
+      #qj-13[data-state="working"] .knob-rotor{transform-origin:127px 36px;animation:qj-turn 3.2s linear infinite}
+      #qj-13[data-state="working"] .arcs{animation:qj-arc 2.8s ease-in-out infinite}
+      #qj-13[data-animated="false"] .motion{animation-play-state:paused!important}
+      #qj-13[data-reduced="true"] .motion{animation:none!important}
+      @media(prefers-reduced-motion:reduce){#qj-13 .motion{animation:none!important}}
+      @keyframes qj-swirl{to{transform:rotate(360deg)}}
+      @keyframes qj-turn{to{transform:rotate(360deg)}}
+      @keyframes qj-arc{0%,100%{opacity:.35}50%{opacity:.8}}</style>
+      <defs><clipPath id="qj-13-cup"><path d="M78 76H177L166 155Q165 163 155 163H99Q89 163 88 155Z"/></clipPath></defs>
+      <g data-layer="handle"><path class="handle" d="M180 78H199Q229 78 226 110L223 128Q220 156 176 153" fill="none" stroke-width="15" stroke-linejoin="round"/></g>
+      <g data-layer="cup"><path class="blue" d="M62 63H193L181 158Q179 177 160 177H94Q75 177 73 158Z"/><path class="glass" d="M78 76H177L166 155Q165 163 155 163H99Q89 163 88 155Z"/></g>
+      <g data-layer="vortex" clip-path="url(#qj-13-cup)">
+        <g class="motion vortex-rotor" opacity=".55"><path class="swirl" d="M103 121C103 94 151 94 151 121C151 138 119 145 112 130M151 121C151 149 103 148 103 121C103 104 135 98 142 113" fill="none" stroke-width="4.5" stroke-linecap="round"/><circle cx="127" cy="121" r="37" fill="none" class="swirl" stroke-width="2" stroke-dasharray="48 68" opacity=".5"/></g>
+      </g>
+      <g data-layer="lid"><rect class="blue" x="57" y="48" width="142" height="22" rx="11"/></g>
+      <g data-layer="top-knob"><rect class="blue" x="110" y="29" width="35" height="14" rx="6"/><g class="motion knob-rotor"><circle class="glass" cx="127" cy="36" r="5"/><path class="blue" d="M127 32V36" stroke="var(--qj-blue)" stroke-width="2.5" stroke-linecap="round"/></g></g>
+      <g data-layer="base"><path class="blue" d="M88 182H166Q183 182 187 199L190 212Q192 222 180 222H74Q62 222 64 212L67 199Q71 182 88 182Z"/></g>
+      <g data-layer="control"><circle class="glass" cx="127" cy="202" r="10"/><path d="M127 196V201" stroke="var(--qj-blue)" stroke-width="3" stroke-linecap="round"/></g>
+      <g data-layer="lightning"><path class="bolt" d="M129 83H151L133 108H153L113 145L124 118H104Z"/></g>
+      <g data-layer="arcs" class="motion arcs" fill="none" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" ><path d="M40 92L29 106H40L30 120"/><path d="M205 44L214 35"/><path d="M208 177L221 183"/></g>
+      <g data-layer="status-badge"></g>
+    </svg>

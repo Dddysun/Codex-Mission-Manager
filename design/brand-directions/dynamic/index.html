@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>额度榨汁机 · 动态品牌组件</title>
+<style>
+:root{color-scheme:dark;--bg:#101823;--panel:#182331;--line:#2a394b;--text:#d4dfed;--muted:#91a2b9;--blue:#84a3cc;--gold:#e7b43c;--field:#101c2a}
+:root[data-theme=light]{color-scheme:light;--bg:#f3f6fa;--panel:#fff;--line:#dde5ef;--text:#1c2e49;--muted:#65778e;--blue:#2168d5;--gold:#b48108;--field:#f5f8fc}
+@media(prefers-color-scheme:light){:root[data-theme=auto]{color-scheme:light;--bg:#f3f6fa;--panel:#fff;--line:#dde5ef;--text:#1c2e49;--muted:#65778e;--blue:#2168d5;--gold:#b48108;--field:#f5f8fc}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:15px/1.65 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}main{max-width:1240px;margin:auto;padding:40px 36px}header{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:30px}.eyebrow{font-size:11px;letter-spacing:2px;color:var(--blue);text-transform:uppercase}h1{font-size:34px;letter-spacing:-1px;margin:6px 0}h2{font-size:18px;margin:0}p{color:var(--muted);margin:6px 0}.chip{font-size:12px;color:var(--gold);border:1px solid var(--line);padding:6px 12px;border-radius:99px}.hero{display:grid;grid-template-columns:1.1fr 1fr;border:1px solid var(--line);border-radius:24px;background:var(--panel);overflow:hidden}.stage{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:420px;gap:10px;padding:24px}.stage.checker{background-image:conic-gradient(var(--field) 25%,transparent 0 50%,var(--field) 0 75%,transparent 0);background-size:24px 24px}.controls{padding:34px;border-left:1px solid var(--line)}.controls>p{font-size:13px}.field{display:flex;align-items:center;justify-content:space-between;gap:14px;margin:22px 0}.field label{font-weight:550}.field select{width:180px}select,button{font:inherit;background:var(--field);border:1px solid var(--line);border-radius:9px;color:var(--text);padding:9px 12px}button{cursor:pointer}button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--blue);outline-offset:3px}input[type=checkbox]{width:18px;height:18px;accent-color:var(--blue)}.note{font-size:12px;padding:14px 16px;background:var(--field);border-radius:12px;color:var(--muted)}#motion-status{color:var(--gold)}.grid{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-top:24px}.state-card{border:1px solid var(--line);border-radius:18px;background:var(--panel);padding:18px 12px;text-align:center}.state-card quota-juicer{display:block;margin:auto;width:112px}.state-card h3{margin:8px 0 0;font-size:14px}.state-card code{font-size:11px;color:var(--muted)}.bottom{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:24px}.box{border:1px solid var(--line);border-radius:18px;background:var(--panel);padding:22px}.sizes{display:flex;align-items:center;gap:26px;min-height:92px}.size{text-align:center;font-size:11px;color:var(--muted)}.size quota-juicer{display:block;margin:0 auto 6px}pre{font:12px/1.8 ui-monospace,monospace;white-space:pre-wrap;color:var(--muted)}footer{margin:26px 0 0;color:var(--muted);font-size:12px}a{color:var(--blue)}.inline-note{font-size:12px;color:var(--muted)}@media(max-width:850px){.hero,.bottom{grid-template-columns:1fr}.controls{border-left:0;border-top:1px solid var(--line)}.grid{grid-template-columns:repeat(3,1fr)}main{padding:24px 18px}.stage{min-height:330px}header{align-items:flex-start}.chip{display:none}}@media(max-width:500px){.grid{grid-template-columns:repeat(2,1fr)}.controls{padding:22px}h1{font-size:28px}}
+</style><script src="quota-juicer.js"></script></head>
+<body><main><header><div><div class="eyebrow">Quota Juicer · Identity 01</div><h1>额度榨汁机</h1><p>安静地等待，专注地运行。</p></div><span class="chip">实心几何 · 动态品牌组件</span></header>
+<section class="hero"><div class="stage" id="stage"><quota-juicer id="hero" state="working" theme="dark" size="288"></quota-juicer><strong id="state-label">工作中</strong><span class="inline-note">透明 SVG · 金黄色闪电 · 无发光滤镜</span></div>
+<div class="controls"><h2>预览控制</h2><p>此预览独立于应用，不会启动或暂停任何任务。</p>
+<div class="field"><label for="state">运行状态</label><select id="state"><option value="idle">空闲</option><option value="working" selected>工作中</option><option value="waiting">等待额度</option><option value="disconnected">连接断开</option><option value="error">发生错误</option></select></div>
+<div class="field"><label for="theme">外观</label><select id="theme"><option value="dark" selected>深色</option><option value="light">浅色</option><option value="auto">跟随系统</option></select></div>
+<div class="field"><label for="animate">播放动画</label><input id="animate" type="checkbox" checked></div>
+<div class="field"><label for="reduce">模拟减少动态效果</label><input id="reduce" type="checkbox"></div>
+<div class="field"><label for="checker">显示透明网格</label><input id="checker" type="checkbox"></div>
+<div class="note"><div id="motion-status" role="status"></div><div id="system-status"></div>减少动态效果优先于播放开关；保留状态颜色和图形，停止循环运动。</div></div></section>
+<section class="grid" aria-label="五种状态">
+<div class="state-card"><quota-juicer state="idle" theme="dark" size="112"></quota-juicer><h3>空闲</h3><code>idle</code></div>
+<div class="state-card"><quota-juicer state="working" theme="dark" size="112"></quota-juicer><h3>工作中</h3><code>working</code></div>
+<div class="state-card"><quota-juicer state="waiting" theme="dark" size="112"></quota-juicer><h3>等待额度</h3><code>waiting</code></div>
+<div class="state-card"><quota-juicer state="disconnected" theme="dark" size="112"></quota-juicer><h3>连接断开</h3><code>disconnected</code></div>
+<div class="state-card"><quota-juicer state="error" theme="dark" size="112"></quota-juicer><h3>发生错误</h3><code>error</code></div></section>
+<section class="bottom"><div class="box"><h2>多尺寸预览</h2><div class="sizes" id="sizes"></div><p class="inline-note">小尺寸以杯体剪影与闪电为主，细节随尺寸自然收敛。</p></div><div class="box"><h2>独立、可复用</h2><pre>&lt;script src="quota-juicer.js"&gt;&lt;/script&gt;
+&lt;quota-juicer state="working" theme="auto"
+  size="128" animated="true"&gt;&lt;/quota-juicer&gt;</pre><p class="inline-note">无依赖 · 无网络请求 · 支持多个实例</p></div></section>
+<footer>静态 SVG：<a href="svg/light-working.svg">浅色工作态</a> · <a href="svg/dark-working.svg">深色工作态</a>　｜　动画 SVG：<a href="svg/auto-working-animated.svg">跟随系统</a>　｜　<a href="README.md">组件说明</a></footer>
+</main><script>
+const $=id=>document.getElementById(id), motion=matchMedia('(prefers-reduced-motion: reduce)');
+for(const s of [64,48,32,24]) $('sizes').insertAdjacentHTML('beforeend',`<div class="size"><quota-juicer state="working" theme="dark" size="${s}"></quota-juicer>${s}px</div>`);
+function status(){const reduced=motion.matches||$('reduce').checked;$('motion-status').textContent=reduced?'减少动态效果已生效':!$('animate').checked?'动画已暂停':$('state').value==='working'?'工作动画正在播放':'当前状态保持静止';$('system-status').textContent='系统减少动态效果：'+(motion.matches?'已开启':'未开启');}
+$('state').onchange=()=>{$('hero').state=$('state').value;$('state-label').textContent=$('state').selectedOptions[0].textContent;status();};
+$('theme').onchange=()=>{document.documentElement.dataset.theme=$('theme').value;document.querySelectorAll('quota-juicer').forEach(el=>el.theme=$('theme').value);};
+$('animate').onchange=()=>{document.querySelectorAll('quota-juicer').forEach(el=>el.animated=$('animate').checked);status();};
+$('reduce').onchange=()=>{document.querySelectorAll('quota-juicer').forEach(el=>el.setAttribute('reduced-motion',String($('reduce').checked)));status();};
+$('checker').onchange=()=>{$('stage').classList.toggle('checker',$('checker').checked);};
+motion.addEventListener('change',status);status();
+</script></body></html>
