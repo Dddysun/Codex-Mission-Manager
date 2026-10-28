@@ -25,6 +25,7 @@ from mission_version import VERSION
 from quota import (parse_bucket, classify, recovered, restoration_reason, restoration_details,
                    next_reset, sample_summary, window_map)
 from quota_audit import observe_quota
+from event_origin import origin_detail
 from rules import effective_config, effective_rules
 from control_policy import (active_turn, blocked_input, checkpoint_matches, decision, message_id,
                             quota_interrupted, quota_usable, same_goal, valid_goal)
@@ -101,7 +102,7 @@ class Store:
     def tasks(self):
         return [json.loads(row[0]) for row in self.db.execute("SELECT value FROM tasks")]
 
-    def save_task(self, task):
+    def save_task(self, task, origin=None):
         with self.db:
             old = self.db.execute("SELECT value FROM tasks WHERE id=?", (task["id"],)).fetchone()
             if old and task.get("control_revision", 0) != json.loads(old[0]).get("control_revision", 0):
@@ -112,9 +113,9 @@ class Store:
             previous = json.loads(old[0])["state"] if old else None
             if previous != task["state"]:
                 self.db.execute("INSERT INTO events(created,thread_id,previous_state,state,detail) VALUES(?,?,?,?,?)",
-                    (time.time(), task["id"], previous, task["state"], json.dumps({k: task[k]
+                    (time.time(), task["id"], previous, task["state"], json.dumps(origin_detail(task['state'], {k: task[k]
                      for k in ("reason", "turn_id", "action_id", "pause_source", "last_control_error",
-                               "recovery_reason", "recovery_evidence") if k in task})))
+                               "recovery_reason", "recovery_evidence") if k in task}, origin))))
         return True
 
     def permission(self, thread_id, enabled, expected_revision=None):
@@ -131,7 +132,8 @@ class Store:
                 task.update(state="watching", reason=None, recovery_first_seen=None)
             self.db.execute("UPDATE tasks SET value=? WHERE id=?", (json.dumps(task), thread_id))
             self.db.execute("INSERT INTO events(created,thread_id,state,detail) VALUES(?,?,?,?)",
-                (time.time(), thread_id, task["state"], json.dumps({"automatic_control_allowed": bool(enabled)})))
+                (time.time(), thread_id, task["state"], json.dumps(origin_detail(task['state'],
+                    {"automatic_control_allowed": bool(enabled)}, 'user'))))
 
     def get_task(self, thread_id):
         row = self.db.execute("SELECT value FROM tasks WHERE id=?", (thread_id,)).fetchone()
@@ -179,7 +181,7 @@ class Controller:
         return fingerprint({"updated": view["thread"].get("updatedAt"),
                             "turns": view["turns"], "goal": view["goal"]})
 
-    async def adopt(self, thread_id, priority=100):
+    async def adopt(self, thread_id, priority=100, origin='automatic'):
         if getattr(self.rpc, 'hosts', {}).get(thread_id, 'local') != 'local':
             raise ValueError('Only local Codex chats can be managed')
         # Do not reopen an arbitrary saved desktop session in a second executor.
@@ -202,23 +204,24 @@ class Controller:
                 "scope": self.identity, "host_id": 'local', "state": "watching", "auto_resume": True, "priority": int(priority)}
         if self.store.get("auto_preferences", {}).get(thread_id) is False:
             raise ValueError("用户已撤销此聊天的自动控制")
-        self.store.save_task(task)
+        self.store.save_task(task, origin=origin)
         return {"id": thread_id, "state": "watching"}
 
-    def review(self, task, reason):
+    def review(self, task, reason, origin='automatic'):
         task.update(state="needs_review", reason=reason)
-        self.store.save_task(task)
+        self.store.save_task(task, origin=origin)
         self.store.notice("review:" + task["id"] + ":" + str(task.get("action_id", "")),
                           "额度管家：任务需要检查", task["name"] + "；" + reason)
 
     async def pause(self, task, sample, manual=False):
+        origin = 'user' if manual else 'automatic'
         if self.clock() - sample["observed_at"] > self.config["max_sample_age_seconds"]:
             return
         view = await self.view(task["id"])
         status = view["thread"]["status"]
         goal = view["goal"]
         if goal is not None and (not self.config.get("goal_control_enabled") or not valid_goal(goal)):
-            return self.review(task, "Goal 控制不可用或目标身份不完整")
+            return self.review(task, "Goal 控制不可用或目标身份不完整", origin=origin)
         paused_for_goal = bool(goal and goal.get("status") == "active")
         if status.get("activeFlags"):
             return  # Never interrupt a task waiting for the user's decision.
@@ -233,7 +236,7 @@ class Controller:
                     action_id=str(uuid.uuid4()), checkpoint={"time": self.clock(),
                         "cwd": view["thread"].get("cwd"), "recent_turns": view["turns"]},
                     **({"manual_hold": True, "auto_resume": False} if manual else {}))
-        if (self.store.get('stop_requested',False) if manual else self.cancelled()) or not self.store.save_task(task):
+        if (self.store.get('stop_requested',False) if manual else self.cancelled()) or not self.store.save_task(task, origin=origin):
             return  # Intent is durable before any side effect.
         try:
             # Expected turn ID prevents interrupting a newer turn after a race.
@@ -244,26 +247,26 @@ class Controller:
                 view = await self.view(task["id"])
                 latest = view["turns"][0] if view["turns"] else {}
                 if paused_for_goal and not same_goal(view["goal"], task["paused_goal"]):
-                    return self.review(task, "暂停期间 Goal 已变化")
+                    return self.review(task, "暂停期间 Goal 已变化", origin=origin)
                 if not paused_for_goal and latest.get("id") != turn_id:
-                    return self.review(task, "中断期间会话已变化")
+                    return self.review(task, "中断期间会话已变化", origin=origin)
                 confirmed = ((view["goal"] or {}).get("status") == "paused" if paused_for_goal
                              else latest.get("status") == "interrupted")
                 if confirmed and view["thread"]["status"]["type"] == "idle":
                     task.update(state="paused", pause_anchor=self.anchor(view), paused_at=self.clock(),
                                 baseline_message_id=message_id(view),
                                 paused_goal_updated_at=(view["goal"] or {}).get("updatedAt"))
-                    self.store.save_task(task)
+                    self.store.save_task(task, origin=origin)
                     self.store.notice("paused:" + task["action_id"], "额度管家：已暂停任务", task["name"])
                     return
                 if not paused_for_goal and latest.get("status") in ("completed", "failed"):
-                    return self.review(task, "回合已完成或失败，不自动续做")
+                    return self.review(task, "回合已完成或失败，不自动续做", origin=origin)
                 if asyncio.get_running_loop().time() >= deadline:
-                    return self.review(task, "未收到可靠的中断确认；后台进程状态也需核对")
+                    return self.review(task, "未收到可靠的中断确认；后台进程状态也需核对", origin=origin)
                 await asyncio.sleep(0.1)
         except Exception as exc:
             task["last_control_error"] = {"type": type(exc).__name__, "detail": str(exc)[:400]}
-            self.review(task, "中断结果不确定；不重试以免影响新任务")
+            self.review(task, "中断结果不确定；不重试以免影响新任务", origin=origin)
 
     def recovery_allowed(self, task, sample):
         baseline = task.get('pause_sample') or {}
@@ -548,7 +551,7 @@ async def requests(controller):
                 store.permission(value["thread_id"], True)
                 result = {"id": value["thread_id"], "state": "watching"}
             else:
-                result = await controller.adopt(value["thread_id"], value.get("priority", 100))
+                result = await controller.adopt(value["thread_id"], value.get("priority", 100), origin='user')
             state = "done"
         except Exception as exc:
             result, state = {"error": str(exc) if isinstance(exc, ValueError) else type(exc).__name__}, "failed"
@@ -841,7 +844,7 @@ def main():
             for task in store.tasks():
                 if task["id"] == args.thread_id:
                     task["state"] = "disabled"
-                    store.save_task(task)
+                    store.save_task(task, origin='user')
                     found = True
             if not found:
                 raise SystemExit("未找到受管任务")

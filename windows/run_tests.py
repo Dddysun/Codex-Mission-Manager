@@ -32,6 +32,7 @@ def main():
             selections.append(('owned_process', root/'backend/tests', 'test_owned_process.py'))
         if args.scope == 'smoke':
             selections.append(('quota_audit', root/'backend/tests', 'test_quota_audit.py'))
+            selections.append(('event_origin', root/'backend/tests', 'test_event_origin.py'))
         for name, directory, pattern in selections:
             stream = io.StringIO()
             suite = unittest.TestLoader().discover(str(directory), pattern=pattern)

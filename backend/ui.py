@@ -20,6 +20,7 @@ from immediate import enqueue_dispatch, latest_dispatches
 from compatibility import desktop_compatibility
 from rules import effective_config, effective_rules, update_rules
 from quota import reset_credits
+from event_origin import event_origin, origin_detail
 IS_WINDOWS = os.name == 'nt'
 
 
@@ -134,6 +135,7 @@ class Application:
                 if event["thread_id"] and event["thread_id"] not in names:
                     continue
                 event["detail"] = json.loads(event["detail"] or "{}")
+                event["origin"] = event_origin(event["state"], event["detail"])
                 if event["state"] == "quota_restored":
                     detail = event["detail"]
                     if (not scope or detail.get("scope") != scope
@@ -306,7 +308,9 @@ class Application:
                 for key, value in (("control_revision", revision + 1), ("supervisor_paused", paused)):
                     store.db.execute("INSERT OR REPLACE INTO kv VALUES(?,?)", (key, json.dumps(value)))
                 store.db.execute("INSERT INTO events(created,state,detail) VALUES(?,?,?)",
-                    (time.time(), "supervisor_paused" if paused else "supervisor_enabled", json.dumps({"source": "local_ui"})))
+                    (time.time(), "supervisor_paused" if paused else "supervisor_enabled",
+                     json.dumps(origin_detail("supervisor_paused" if paused else "supervisor_enabled",
+                                              {"source": "local_ui"}, 'user'))))
             return {"message": "已暂停自动控制，当前聊天继续执行" if paused else "已启用自动控制，将按规则检查任务"}
         finally:
             store.close()

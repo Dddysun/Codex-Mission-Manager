@@ -178,6 +178,37 @@ namespace CodexMissionManager
         }
     }
 
+    // The API owns origin classification. Older or unknown values stay in the
+    // automatic bucket; filtering never rewrites the cached event dictionaries.
+    static class ActivityEventFilter
+    {
+        public static string Normalize(string value) { return value == "user" || value == "automatic" ? value : "all"; }
+        public static string Origin(Dictionary<string, object> item) { return Json.Text(item, "origin") == "user" ? "user" : "automatic"; }
+        public static List<Dictionary<string, object>> Apply(IEnumerable<Dictionary<string, object>> events, string selection)
+        {
+            string filter = Normalize(selection);
+            return events.Take(200).Where(item => filter == "all" || Origin(item) == filter).ToList();
+        }
+        public static bool SelfTest()
+        {
+            var events = new List<Dictionary<string, object>> {
+                Json.Values("id", 1, "origin", "user", "state", "quota_restored"),
+                Json.Values("id", 2, "origin", "automatic"), Json.Values("id", 3),
+                Json.Values("id", 4, "origin", "future_origin"), Json.Values("id", 5, "origin", null),
+                Json.Values("id", 6, "origin", "automatic", "detail", Json.Values("origin", "user", "category", "user_reset"))
+            };
+            string before = Json.Stringify(events);
+            if (Apply(events, "all").Count != 6 || Apply(events, "user").Count != 1 || Apply(events, "automatic").Count != 5) return false;
+            if (Apply(events, "future_filter").Count != 6 || Apply(events, "user")[0] != events[0]) return false;
+            if (Origin(events[2]) != "automatic" || Origin(events[3]) != "automatic" || Origin(events[5]) != "automatic") return false;
+            if (Json.Stringify(events) != before || events.Count != 6) return false;
+            var longHistory = Enumerable.Range(0, 201).Select(index => Json.Values("id", index, "origin", index == 200 ? "user" : "automatic")).ToList();
+            return Apply(longHistory, "all").Count == 200 && Apply(longHistory, "user").Count == 0
+                && Apply(longHistory, "automatic").Count == 200 && longHistory.Count == 201
+                && Apply(new List<Dictionary<string, object>>(), "user").Count == 0;
+        }
+    }
+
     sealed class Preferences
     {
         public string Language = CultureInfo.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase) ? "zh" : "en";
@@ -441,6 +472,7 @@ namespace CodexMissionManager
         StartupDiagnostic startupDiagnostic;
         bool preferenceSaveFailed, preferenceSaveAccessFailure;
         string statusFilter = "all";
+        string activityFilter = "all";
         Brush background, surface, foreground, secondary, border, accent, accentText, accentInk, sideBackground, sideSelected, groupSurface;
         Grid root;
         StackPanel sidebar, quotaPanel, content;
@@ -455,8 +487,10 @@ namespace CodexMissionManager
         TextBlock noticeBlock, stateBlock, syncBlock;
         Button globalButton;
         StackPanel rowsPanel;
+        StackPanel eventRowsPanel;
         TextBox searchBox;
         ComboBox filterBox;
+        ComboBox activityFilterBox;
         Window settingsWindow, trayPanelWindow;
         readonly Dictionary<string, string> rulesDraft = new Dictionary<string, string>();
         readonly Dictionary<string, TextBox> ruleInputs = new Dictionary<string, TextBox>();
@@ -772,7 +806,7 @@ namespace CodexMissionManager
             // the page so WPF never assigns a second logical parent. Drafts
             // remain in their row instances and in the owner draft cache.
             if (rowsPanel != null) rowsPanel.Children.Clear();
-            rowsPanel = null; globalButton = null; stateBlock = null;
+            rowsPanel = null; eventRowsPanel = null; activityFilterBox = null; globalButton = null; stateBlock = null;
             if (currentView == "tasks") { pageHost.Content = BuildTaskPage(); }
             else
             {
@@ -876,7 +910,7 @@ namespace CodexMissionManager
             ApplyUiPollInterval(); RenderQuota(); UpdateNavigation(); UpdateNotices();
             if (lastSync != null) lastSync.Text = T("最近同步 ", "Last updated ") + FormatTime(Json.Number(snapshot, "observed_at"));
             if (currentView == "tasks") { RenderHeader(); RenderChats(); }
-            else if (currentView == "events" && !busy) BuildContent();
+            else if (currentView == "events" && !busy) RenderEvents();
             else if (currentView == "rules") RefreshRulesPresentation();
             RefreshSettingsWindow(); BuildTrayMenu();
         }
@@ -1072,9 +1106,30 @@ namespace CodexMissionManager
         void BuildEvents()
         {
             var title = Text(T("操作记录", "Activity"), 26, true); title.Margin = new Thickness(0, 0, 0, 20); content.Children.Add(title);
-            var description = Text(T("查看最近 200 条额度恢复、任务控制与指令发送记录。", "Review the latest 200 quota-recovery, task-control and instruction-delivery records."), 13); description.Foreground = secondary; description.Margin = new Thickness(0, 0, 0, 20); content.Children.Add(description);
-            var events = Json.Rows(snapshot, "events");
-            foreach (var item in events.Take(200))
+            var filterLine = new DockPanel { Margin = new Thickness(0, 0, 0, 20), LastChildFill = true };
+            var choice = Choice(new[] { T("全部记录", "All records"), T("用户操作", "User actions"), T("自动进程", "Automated processes") });
+            choice.Width = 200; choice.Margin = new Thickness(18, 0, 0, 0); choice.VerticalAlignment = VerticalAlignment.Top;
+            System.Windows.Automation.AutomationProperties.SetName(choice, T("记录来源", "Record source"));
+            choice.SelectedIndex = activityFilter == "user" ? 1 : activityFilter == "automatic" ? 2 : 0;
+            activityFilterBox = choice;
+            choice.SelectionChanged += delegate {
+                if (currentView != "events" || activityFilterBox != choice || choice.SelectedIndex < 0) return;
+                string selected = choice.SelectedIndex == 1 ? "user" : choice.SelectedIndex == 2 ? "automatic" : "all";
+                if (selected == activityFilter) return;
+                activityFilter = selected; RenderEvents();
+            };
+            DockPanel.SetDock(choice, Dock.Right); filterLine.Children.Add(choice);
+            var description = Text(T("查看最近 200 条额度恢复、任务控制与指令发送记录。", "Review the latest 200 quota-recovery, task-control and instruction-delivery records."), 13); description.Foreground = secondary; description.Margin = new Thickness(0); filterLine.Children.Add(description); content.Children.Add(filterLine);
+            eventRowsPanel = new StackPanel(); content.Children.Add(eventRowsPanel); RenderEvents();
+        }
+        void RenderEvents()
+        {
+            if (eventRowsPanel == null || currentView != "events") return;
+            // Keep the native selector and its keyboard/dropdown focus alive
+            // while the five-second cache refresh updates only the record rows.
+            eventRowsPanel.Children.Clear();
+            var events = ActivityEventFilter.Apply(Json.Rows(snapshot, "events"), activityFilter);
+            foreach (var item in events)
             {
                 var row = new DockPanel { Margin = new Thickness(12, 10, 12, 10) };
                 var icon = Glyph("clock", accent, 16); icon.Margin = new Thickness(0, 2, 18, 0); icon.VerticalAlignment = VerticalAlignment.Top; DockPanel.SetDock(icon, Dock.Left); row.Children.Add(icon);
@@ -1092,9 +1147,9 @@ namespace CodexMissionManager
                 if (recovery.Length > 0) { var evidence = Text(recovery, 12); evidence.Foreground = secondary; evidence.Margin = new Thickness(0, 5, 0, 0); labels.Children.Add(evidence); }
                 if (reason.Length > 0 && reason != recovery) { var detail = Text(reason, 12); detail.Foreground = secondary; detail.Margin = new Thickness(0, 5, 0, 0); labels.Children.Add(detail); }
                 }
-                row.Children.Add(labels); content.Children.Add(row); content.Children.Add(DividerLine(Tint(secondary, 0.15), new Thickness(46, 0, 12, 0)));
+                row.Children.Add(labels); eventRowsPanel.Children.Add(row); eventRowsPanel.Children.Add(DividerLine(Tint(secondary, 0.15), new Thickness(46, 0, 12, 0)));
             }
-            if (events.Count == 0) { var empty = Text(T("暂无控制操作记录", "No control activity has been recorded"), 13); empty.Foreground = secondary; content.Children.Add(empty); }
+            if (events.Count == 0) { var empty = Text(T("此筛选条件下暂无记录", "No records match this filter"), 13); empty.Foreground = secondary; eventRowsPanel.Children.Add(empty); }
         }
         string RecoveryLabel(string value)
         {
@@ -2218,11 +2273,11 @@ namespace CodexMissionManager
         {
             if (args.Length > 0 && args[0] == "--self-test")
             {
-                bool revocationChecks = ChatControlPolicy.SelfTest(); bool startupChecks = StartupDiagnostic.SelfTest(); bool paletteChecks = ThemePalette.SelfTest(); bool rulesChecks = RulesPolicy.SelfTest(); bool quotaEventChecks = QuotaRestorationEvents.SelfTest();
+                bool revocationChecks = ChatControlPolicy.SelfTest(); bool startupChecks = StartupDiagnostic.SelfTest(); bool paletteChecks = ThemePalette.SelfTest(); bool rulesChecks = RulesPolicy.SelfTest(); bool quotaEventChecks = QuotaRestorationEvents.SelfTest(); bool activityFilterChecks = ActivityEventFilter.SelfTest();
                 string result = Json.Stringify(Json.Values("version", AppVersion(), "platform", "windows", "native", true, "ui", "WPF", "webView", false,
-                    "hostStarted", false, "messagesSent", 0, "cacheRefreshSeconds", 5, "localRevocationChecks", revocationChecks, "startupDiagnosticFallbackChecks", startupChecks, "themePaletteChecks", paletteChecks, "rulesValidationChecks", rulesChecks, "quotaRestorationEventChecks", quotaEventChecks));
+                    "hostStarted", false, "messagesSent", 0, "cacheRefreshSeconds", 5, "localRevocationChecks", revocationChecks, "startupDiagnosticFallbackChecks", startupChecks, "themePaletteChecks", paletteChecks, "rulesValidationChecks", rulesChecks, "quotaRestorationEventChecks", quotaEventChecks, "activityFilterChecks", activityFilterChecks));
                 if (args.Length > 1) File.WriteAllText(args[1], result, new UTF8Encoding(false));
-                Console.WriteLine(result); return revocationChecks && startupChecks && paletteChecks && rulesChecks && quotaEventChecks ? 0 : 1;
+                Console.WriteLine(result); return revocationChecks && startupChecks && paletteChecks && rulesChecks && quotaEventChecks && activityFilterChecks ? 0 : 1;
             }
             if (args.Length > 0 && args[0] == "--textbox-layout-self-test")
             {

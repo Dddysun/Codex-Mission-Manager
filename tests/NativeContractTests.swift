@@ -193,10 +193,27 @@ import Foundation
         let globalRules=try decodeEvent(["id":901,"created":1793156400,"state":"rules_updated","thread_id":NSNull(),"name":"ghost task must stay hidden"])
         precondition(globalRules.scopeTitle == "Global control")
         precondition(state.events.first?.scopeTitle == state.events.first?.name,"Older snapshots without thread metadata retain task titles")
+        precondition(MissionActivityFilter.all.title == "All records" && MissionActivityFilter.user.title == "User actions" && MissionActivityFilter.automatic.title == "Automated processes")
+        let cachedIDs=quotaEvents.events.map(\.id)
+        precondition(MissionActivityFilter.all.apply(to:quotaEvents.events).map(\.id) == cachedIDs)
+        precondition(MissionActivityFilter.user.apply(to:quotaEvents.events).map(\.id) == [104])
+        precondition(MissionActivityFilter.automatic.apply(to:quotaEvents.events).map(\.id) == [103,102,101,100])
+        let futureOrigin=try decodeEvent(["id":902,"created":1793156400,"state":"quota_restored","origin":"future_origin","detail":["category":"user_reset","origin":"user"]])
+        let nullOrigin=try decodeEvent(["id":903,"created":1793156400,"state":"running","origin":NSNull()])
+        let invalidOrigin=try decodeEvent(["id":904,"created":1793156400,"state":"running","origin":true])
+        let legacyEvents=[globalRules,futureOrigin,nullOrigin,invalidOrigin]
+        precondition(legacyEvents.allSatisfy { $0.origin == .automatic },"Only API event.origin determines the filter bucket; legacy or unknown values are automatic")
+        precondition(MissionActivityFilter.user.apply(to:legacyEvents).isEmpty && MissionActivityFilter.automatic.apply(to:legacyEvents).count == 4)
+        let extendedHistory=Array(repeating:globalRules,count:200)+[quotaEvents.events[0]]
+        precondition(MissionActivityFilter.all.apply(to:extendedHistory).count == 200 && MissionActivityFilter.user.apply(to:extendedHistory).isEmpty,"Filter after selecting the latest 200 cached records")
+        precondition(quotaEvents.events.map(\.id) == cachedIDs && extendedHistory.count == 201,"Filtering retains the complete immutable cache")
+        precondition(MissionActivityFilter.all.apply(to:[]).isEmpty && MissionActivityFilter.user.apply(to:[]).isEmpty && MissionActivityFilter.automatic.apply(to:[]).isEmpty)
         NativeLocalization.testLanguage="zh"
+        precondition(MissionActivityFilter.all.title == "全部记录" && MissionActivityFilter.user.title == "用户操作" && MissionActivityFilter.automatic.title == "自动进程")
         precondition(globalEvents.map(\.label) == ["用户主动恢复","官方正常周期重置","官方独立重置","额度恢复·原因待确认"])
         precondition(globalEvents[0].scopeTitle == "全局额度事件" && globalEvents[0].restorationLines.contains("依据权益变化判定"))
         NativeLocalization.testLanguage="en"
+        print("Native activity origin / three filters / immutable latest-200 cache checks passed")
         print("Native V0.3.0 rules / Codex filtering / theme / IME synchronization checks passed")
         print("Native snapshot / status / control contract checks passed")
     }

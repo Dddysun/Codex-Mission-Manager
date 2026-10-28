@@ -217,18 +217,39 @@ struct MissionChat: Decodable, Identifiable {
         return ["idle":L("等待指令"), "notLoaded":L("未打开"), "systemError":L("回合出错")][runtime?.type ?? ""] ?? (controllable ? L("状态待核对") : L("状态待同步"))
     }
 }
+enum MissionEventOrigin: String { case user, automatic }
+
+// Filtering is local to the latest 200 cached records. It never changes the
+// snapshot or derives origin from event type, task state or reset evidence.
+enum MissionActivityFilter: String, CaseIterable, Identifiable {
+    case all, user, automatic
+    var id: String { rawValue }
+    var title: String {
+        switch self {
+        case .all: return L("全部记录")
+        case .user: return L("用户操作")
+        case .automatic: return L("自动进程")
+        }
+    }
+    func apply(to events: [MissionEvent]) -> [MissionEvent] {
+        Array(events.prefix(200)).filter { self == .all || $0.origin.rawValue == rawValue }
+    }
+}
+
 struct MissionEvent: Decodable, Identifiable {
     var id: Int; var created: Double; var state: String; var name: String?
     var detail: MissionEventDetail?
     var thread_id: String?
+    var origin: MissionEventOrigin
     private var hasThreadMetadata: Bool
-    private enum CodingKeys: String, CodingKey { case id, created, state, name, detail, thread_id }
+    private enum CodingKeys: String, CodingKey { case id, created, state, name, detail, thread_id, origin }
     init(from decoder: Decoder) throws {
         let values=try decoder.container(keyedBy:CodingKeys.self)
         id=try values.decode(Int.self,forKey:.id);created=try values.decode(Double.self,forKey:.created)
         state=try values.decode(String.self,forKey:.state);name=try values.decodeIfPresent(String.self,forKey:.name)
         detail=try values.decodeIfPresent(MissionEventDetail.self,forKey:.detail)
         thread_id=try values.decodeIfPresent(String.self,forKey:.thread_id)
+        origin=MissionEventOrigin(rawValue:(try? values.decode(String.self,forKey:.origin)) ?? "") ?? .automatic
         hasThreadMetadata=values.contains(.thread_id)
     }
     var isQuotaRestored: Bool { state == "quota_restored" }

@@ -275,7 +275,7 @@ jobs:
           if (!$native.native -or $native.webView -or $native.hostStarted -or $native.messagesSent -ne 0 `
               -or !$native.localRevocationChecks -or !$native.startupDiagnosticFallbackChecks `
               -or !$native.themePaletteChecks -or !$native.rulesValidationChecks `
-              -or !$native.quotaRestorationEventChecks) { throw 'Native self-test checks failed.' }
+              -or !$native.quotaRestorationEventChecks -or !$native.activityFilterChecks) { throw 'Native self-test checks failed.' }
           Copy-Item -LiteralPath "$env:RUNNER_TEMP\mission-windows\build-work\native-self-test.json" -Destination "$env:RUNNER_TEMP\native-self-test-windows-x64.json"
           foreach ($check in @('editor', 'lifecycle')) {
             $receipt = "$env:RUNNER_TEMP\native-$check-windows-x64.json"

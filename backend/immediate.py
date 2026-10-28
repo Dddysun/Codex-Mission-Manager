@@ -4,6 +4,7 @@ import time
 import uuid
 
 from control_policy import active_turn, blocked_input, message_id, quota_usable
+from event_origin import origin_detail
 
 PENDING = {"pending", "checking", "sending"}
 
@@ -55,7 +56,8 @@ def enqueue_dispatch(store, chat, prompt, request_id, revision, sample, config, 
         store.db.execute("INSERT INTO requests VALUES(?,?,?,? ,NULL)",
             (request_id, "execute_now", json.dumps(value), "pending"))
         store.db.execute("INSERT INTO events(created,thread_id,state,detail) VALUES(?,?,?,?)",
-            (now, chat["id"], "immediate_pending", json.dumps({"request_id": request_id})))
+            (now, chat["id"], "immediate_pending", json.dumps(origin_detail('immediate_pending',
+                {"request_id": request_id}, 'user'))))
     return request_id
 
 
@@ -72,7 +74,8 @@ class ImmediateRunner:
                 (state, json.dumps(result), row["id"]))
             self.store.db.execute("INSERT INTO events(created,thread_id,state,detail) VALUES(?,?,?,?)",
                 (self.controller.clock(), value["thread_id"], "immediate_" + state,
-                 json.dumps({"reason": message, "request_id": row["id"], "turn_id": turn_id})))
+                 json.dumps(origin_detail('immediate_' + state,
+                    {"reason": message, "request_id": row["id"], "turn_id": turn_id}, 'user'))))
         if state in ("failed", "unknown"):
             self.store.notice("immediate:" + row["id"], "任务管家：即时发送需要处理", value["name"] + "；" + message)
 
@@ -91,7 +94,7 @@ class ImmediateRunner:
         if (task and task.get("scope") == value["scope"] and task.get("auto_resume", True)
                 and not task.get("manual_hold") and task["state"] not in ("disabled", "held", "needs_review")):
             task.update(state="running", resumed_turn_id=turn_id, resumed_at=self.controller.clock())
-            self.store.save_task(task)
+            self.store.save_task(task, origin='user')
         # Keep an independently armed future instruction, acknowledging this
         # explicitly authorized new turn without replacing its prompt/window.
         from plans import get_plan, save_plan

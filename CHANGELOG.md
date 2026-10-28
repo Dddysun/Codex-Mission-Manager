@@ -1,5 +1,14 @@
 # Changelog / 版本记录
 
+## 0.3.4 — Activity source filters / 操作记录来源筛选
+
+- Added All records, User actions, and Automatic processes to both native Activity pages. / 两平台原生操作记录增加“全部记录／用户操作／自动进程”下拉筛选。
+- Assigned event origins consistently in the backend, with compatible classification of older records at read time. / 后台统一标注事件来源，旧记录在读取时兼容分类。
+- Kept the selected filter across refresh, language, and appearance changes, with a clear empty-result message. / 刷新、语言及外观切换时保留当前筛选，无匹配结果时显示提示。
+- Limited filtering to the latest 200 loaded records in total; existing records and task controls remain unchanged. / 筛选作用于最近载入的 200 条总记录，保留原记录及任务控制行为。
+
+See [0.3.4 release notes](docs/releases/0.3.4.md). / 详见 [0.3.4 发行说明](docs/releases/0.3.4.md)。
+
 ## 0.3.3 — Quota recovery history / 额度恢复记录
 
 - Record observed quota restoration independently of task activity, automatic-control settings, and notification permission. / 独立记录观察到的额度恢复，不依赖任务活动、自动控制开关或通知权限。

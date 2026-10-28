@@ -19,8 +19,9 @@
   ],
   "events": [
     {
-      "id": 104, "created": 1793156400, "state": "quota_restored", "thread_id": null, "name": "全局控制",
+      "id": 104, "created": 1793156400, "state": "quota_restored", "thread_id": null, "name": "全局控制", "origin": "user",
       "detail": {
+        "origin": "user",
         "category": "user_reset", "scope": "demo-scope", "limit_id": "codex",
         "previous_observed_at": 1793156340, "observed_at": 1793156400,
         "classification_basis": "observed_credit_consumption_correlated_with_balance_restoration", "official_reason": null,
@@ -30,8 +31,9 @@
       }
     },
     {
-      "id": 103, "created": 1793138400, "state": "quota_restored", "thread_id": null, "name": "全局控制",
+      "id": 103, "created": 1793138400, "state": "quota_restored", "thread_id": null, "name": "全局控制", "origin": "automatic",
       "detail": {
+        "origin": "automatic",
         "category": "official_scheduled_reset", "scope": "demo-scope", "limit_id": "codex",
         "previous_observed_at": 1793138340, "observed_at": 1793138400,
         "classification_basis": "observed_due_window_rollover_and_stable_credit_inventory", "official_reason": null,
@@ -41,8 +43,9 @@
       }
     },
     {
-      "id": 102, "created": 1793120400, "state": "quota_restored", "thread_id": null, "name": "全局控制",
+      "id": 102, "created": 1793120400, "state": "quota_restored", "thread_id": null, "name": "全局控制", "origin": "automatic",
       "detail": {
+        "origin": "automatic",
         "category": "official_independent_reset", "scope": "demo-scope", "limit_id": "codex",
         "previous_observed_at": 1793120340, "observed_at": 1793120400,
         "classification_basis": "observed_early_balance_increase_and_stable_credit_inventory", "official_reason": null,
@@ -52,8 +55,9 @@
       }
     },
     {
-      "id": 101, "created": 1793102400, "state": "quota_restored", "thread_id": null, "name": "全局控制",
+      "id": 101, "created": 1793102400, "state": "quota_restored", "thread_id": null, "name": "全局控制", "origin": "automatic",
       "detail": {
+        "origin": "automatic",
         "category": "unattributed", "scope": "demo-scope", "limit_id": "codex",
         "previous_observed_at": 1793102340, "observed_at": 1793102400,
         "classification_basis": "reset_credit_statistics_missing", "official_reason": null,
@@ -63,8 +67,8 @@
       }
     },
     {
-      "id": 100, "created": 1793100000, "state": "running", "thread_id": "demo-chat-0",
-      "name": "整理示例发布清单", "detail": {"recovery_reason": "window_advanced"}
+      "id": 100, "created": 1793100000, "state": "running", "thread_id": "demo-chat-0", "origin": "automatic",
+      "name": "整理示例发布清单", "detail": {"origin": "automatic", "recovery_reason": "window_advanced"}
     }
   ],
   "usage": {

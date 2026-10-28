@@ -1,6 +1,7 @@
 """Account-independent, revisioned local operating preferences."""
 import json
 import time
+from event_origin import origin_detail
 
 BOUNDS = {
     'pause_remaining': {'min': 1, 'max': 50, 'default': 10},
@@ -70,5 +71,5 @@ def update_rules(store, config, changes, revision):
         saved = {'revision': revision + 1, 'values': values}
         store.db.execute('INSERT OR REPLACE INTO kv VALUES(?,?)', ('runtime_rules', json.dumps(saved)))
         store.db.execute('INSERT INTO events(created,state,detail) VALUES(?,?,?)',
-                         (time.time(), 'rules_updated', json.dumps(saved)))
+                         (time.time(), 'rules_updated', json.dumps(origin_detail('rules_updated', saved, 'user'))))
     return effective_rules(store, config)

@@ -6,6 +6,7 @@ import uuid
 
 from control_policy import active_turn, blocked_input, message_id, quota_usable
 from quota import plan_window, window_map, restoration_details
+from event_origin import origin_detail
 
 ACTIVE = {"armed", "sending"}
 DEFAULT_PROMPT = "继续任务"
@@ -30,9 +31,10 @@ def save_plan(store, plan, expected_revision=None):
         if not old or old["state"] != plan["state"]:
             store.db.execute("INSERT INTO events(created,thread_id,previous_state,state,detail) VALUES(?,?,?,?,?)",
                 (time.time(), plan["thread_id"], "plan_" + old["state"] if old else None,
-                 "plan_" + plan["state"], json.dumps({"reason": plan.get("reason"), "plan_id": plan["id"],
+                 "plan_" + plan["state"], json.dumps(origin_detail("plan_" + plan["state"],
+                    {"reason": plan.get("reason"), "plan_id": plan["id"],
                     "recovery_reason": plan.get('recovery_reason'),
-                    "recovery_evidence": plan.get('recovery_evidence')})))
+                    "recovery_evidence": plan.get('recovery_evidence')}))))
     return True
 
 

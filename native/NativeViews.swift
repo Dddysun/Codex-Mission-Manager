@@ -35,6 +35,7 @@ struct MissionWindow: View {
     @State private var section: String
     @State private var search = ""
     @State private var filter = "all"
+    @State private var activityFilter: MissionActivityFilter = .all
     @State private var selected: String?
 
     init(model: MissionModel, showSettings: @escaping () -> Void, initialSection: String = "tasks") {
@@ -228,8 +229,14 @@ struct MissionWindow: View {
     var eventsPage: some View {
         VStack(alignment: .leading, spacing: 20) {
             Text(L("操作记录")).font(.largeTitle.bold())
-            Text(L("查看最近 200 条额度恢复、任务控制与指令发送记录。")).foregroundStyle(.secondary)
-            List(model.snapshot?.events ?? []) { event in
+            HStack(spacing: 18) {
+                Text(L("查看最近 200 条额度恢复、任务控制与指令发送记录。")).foregroundStyle(.secondary)
+                Spacer(minLength: 12)
+                Picker(L("记录来源"), selection: $activityFilter) {
+                    ForEach(MissionActivityFilter.allCases) { choice in Text(choice.title).tag(choice) }
+                }.pickerStyle(.menu).labelsHidden().frame(width: 200).accessibilityLabel(L("记录来源"))
+            }
+            List(activityEvents) { event in
                 HStack(alignment: .top, spacing: 18) {
                     Image(systemName: event.isQuotaRestored ? "arrow.clockwise.circle" : "clock").foregroundStyle(model.tint)
                     VStack(alignment: .leading, spacing: 5) {
@@ -247,10 +254,12 @@ struct MissionWindow: View {
                     Spacer()
                     Text(missionTime(event.created)).font(.caption).foregroundStyle(.secondary).monospacedDigit()
                 }.padding(.vertical, 10)
-            }.listStyle(.inset)
-            if model.snapshot?.events.isEmpty != false { Text(L("暂无控制操作记录")).foregroundStyle(.secondary) }
+            }.listStyle(.inset).overlay {
+                if activityEvents.isEmpty { Text(L("此筛选条件下暂无记录")).foregroundStyle(.secondary) }
+            }
         }.padding(26)
     }
+    var activityEvents: [MissionEvent] { activityFilter.apply(to: model.snapshot?.events ?? []) }
     var rulesPage: some View { MissionRulesEditor(model:model) }
     func rule(_ title: String, _ text: String) -> some View {
         GroupBox { VStack(alignment: .leading, spacing: 10) { Text(title).font(.headline); Text(text).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true) }.padding(12).frame(maxWidth: .infinity, alignment: .leading) }
