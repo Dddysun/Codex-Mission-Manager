@@ -24,10 +24,10 @@ Requirements: Apple Silicon Mac, macOS 14 or later, Apple Command Line Tools wit
 Use new output directories for each build. / 每次构建使用新的输出目录。
 
 ```sh
-python3 scripts/fetch_runtime.py --destination /tmp/tokenmax-python-043
-python3 scripts/build.py --python-runtime /tmp/tokenmax-python-043/python --output /tmp/tokenmax-macos-043
-python3 scripts/make_dmg.py --build /tmp/tokenmax-macos-043
-python3 scripts/verify_dmg.py /tmp/tokenmax-macos-043/TokenMax-0.4.3-arm64-preview.dmg --report /tmp/tokenmax-macos-043/verification.json
+python3 scripts/fetch_runtime.py --destination /tmp/tokenmax-python-044
+python3 scripts/build.py --python-runtime /tmp/tokenmax-python-044/python --output /tmp/tokenmax-macos-044
+python3 scripts/make_dmg.py --build /tmp/tokenmax-macos-044
+python3 scripts/verify_dmg.py /tmp/tokenmax-macos-044/TokenMax-0.4.4-arm64-preview.dmg --report /tmp/tokenmax-macos-044/verification.json
 ```
 
 The build produces `TokenMax.app`, the arm64 preview DMG, `build-manifest.json`, and `SHA256SUMS`. The interface is compiled from SwiftUI/AppKit sources. The runtime is copied into the application; global Python, user packages, and private runtime configuration are not included. The DMG check mounts read-only and runs isolated self-tests without installing the application or controlling live chats.
@@ -45,7 +45,7 @@ Requirements: Windows 10 build 19041 or later, x64, Windows PowerShell 5.1, and 
 构建环境需要 Windows 10 build 19041 或更新版本、x64、Windows PowerShell 5.1，以及具备 x64 C# 编译器和 WPF 程序集的 .NET Framework 4.8 或更新版本。打包脚本不要求 .NET SDK、Visual Studio、Node.js 或全局 Python。
 
 ```powershell
-.\windows\build.ps1 -OutputDirectory .\dist\windows-043
+.\windows\build.ps1 -OutputDirectory .\dist\windows-044
 ```
 
 The script downloads the official CPython 3.13.17 x64 embeddable ZIP and verifies the SHA-256 in `windows/python-runtime.lock.json`. To use an already downloaded matching archive:
@@ -53,7 +53,7 @@ The script downloads the official CPython 3.13.17 x64 embeddable ZIP and verifie
 脚本下载官方 CPython 3.13.17 x64 嵌入式 ZIP，并核验锁文件中的 SHA-256。也可指定已下载且校验一致的归档：
 
 ```powershell
-.\windows\build.ps1 -PythonArchive .\downloads\python-3.13.17-embed-amd64.zip -OutputDirectory .\dist\windows-043-offline
+.\windows\build.ps1 -PythonArchive .\downloads\python-3.13.17-embed-amd64.zip -OutputDirectory .\dist\windows-044-offline
 ```
 
 Outputs include the WPF application, a current-user setup EXE, a portable ZIP, `build-manifest.json`, and `SHA256SUMS`. WinForms is used for native tray integration and the installer; the main interface is WPF. Python is bundled; .NET Framework remains a Windows prerequisite. The current script creates an unsigned preview. The installer self-test verifies its embedded payload without installing it.
@@ -72,9 +72,9 @@ Run checks against synthetic fixtures, outside an installed application's data d
 
 ```sh
 python3 scripts/check_source.py
-python3 windows/run_tests.py --scope full --output /tmp/tokenmax-tests-043
-swiftc -swift-version 5 -parse-as-library native/Localization.swift native/NativeState.swift tests/NativeContractTests.swift -o /tmp/tokenmax-native-contract-043
-/tmp/tokenmax-native-contract-043 tests/fixtures/native-state.json
+python3 windows/run_tests.py --scope full --output /tmp/tokenmax-tests-044
+swiftc -swift-version 5 -parse-as-library native/Localization.swift native/NativeState.swift tests/NativeContractTests.swift -o /tmp/tokenmax-native-contract-044
+/tmp/tokenmax-native-contract-044 tests/fixtures/native-state.json
 ```
 
 The first two commands are portable; the Swift contract check requires macOS. On Windows, use a newly built interpreter for the full isolated suite. Use `--scope smoke` only when intentionally limiting the check; record that scope explicitly:
@@ -82,12 +82,12 @@ The first two commands are portable; the Swift contract check requires macOS. On
 前两项可跨平台运行；Swift 契约检查需要 macOS。Windows 使用刚打包的解释器执行完整隔离套件。只有明确需要限制范围时才使用 `--scope smoke`，并记录该范围：
 
 ```powershell
-& .\dist\windows-043\app\runtime\python\python.exe -B -X utf8 -I .\windows\run_tests.py --scope full --output .\dist\windows-043-checks
+& .\dist\windows-044\app\runtime\python\python.exe -B -X utf8 -I .\windows\run_tests.py --scope full --output .\dist\windows-044-checks
 ```
 
-Native self-tests and fixture-render options are exercised by [the release workflow](../.github/workflows/release.yml). Fixture renders and editor/lifecycle checks start no live backend and send no chat messages. GUI rendering depends on an available desktop/window server; unavailable checks must be recorded as skipped. See [release validation](releases/0.4.3.md) for the distinction between offline checks and live acceptance.
+Native self-tests and fixture-render options are exercised by [the release workflow](../.github/workflows/release.yml). Fixture renders and editor/lifecycle checks start no live backend and send no chat messages. GUI rendering depends on an available desktop/window server; unavailable checks must be recorded as skipped. See [release validation](releases/0.4.4.md) for the distinction between offline checks and live acceptance.
 
-原生自检、界面渲染和编辑器／窗口生命周期检查由 [发行工作流](../.github/workflows/release.yml) 执行。示例渲染不启动真实后台、不发送聊天消息。图形渲染依赖可用桌面或窗口服务，无法执行时须记录为跳过。离线检查与实机验收的区别见 [发行说明](releases/0.4.3.md)。
+原生自检、界面渲染和编辑器／窗口生命周期检查由 [发行工作流](../.github/workflows/release.yml) 执行。示例渲染不启动真实后台、不发送聊天消息。图形渲染依赖可用桌面或窗口服务，无法执行时须记录为跳过。离线检查与实机验收的区别见 [发行说明](releases/0.4.4.md)。
 
 ## Brand 1.3.0 / 品牌组件
 

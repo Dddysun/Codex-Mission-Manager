@@ -21,8 +21,8 @@ from stages import from_turn
 from platform_support import sqlite_ro_uri
 IS_WINDOWS = os.name == "nt"
 # Long desktop conversations can include image-heavy history in a snapshot.
-# Keep a bounded allocation while accepting valid frames above the old 64 MiB cap.
-MAX_DESKTOP_FRAME_BYTES = 128 * 1024 * 1024
+# Keep a bounded allocation while accepting the observed 197 MiB history; larger frames are still rejected.
+MAX_DESKTOP_FRAME_BYTES = 256 * 1024 * 1024
 # The supported router can take ten seconds to finish a negative discovery.
 # A shorter local deadline loses its explicit no-client-found response.
 OWNER_DISCOVERY_TIMEOUT_SECONDS = 12
@@ -229,29 +229,38 @@ class DesktopIPC:
         await self.send({"type": "broadcast", "method": "thread-stream-following-changed", "version": 1,
             "sourceClientId": self.client_id, "targetClientIds": [owner],
             "params": {"conversationId": thread_id, "hostId": host, "following": True}})
-        # Large valid frames can take more than five seconds on a named pipe.
-        # Honor the configured transport budget while keeping a finite minimum
-        # for the snapshot burst used by short diagnostic connections.
-        deadline = time.monotonic() + max(5, self.timeout)
-        first_seen = None
-        while time.monotonic() < deadline:
-            if self.disconnected:
-                raise DesktopError(self.last_error or "desktop connection unavailable")
-            batch = [entry for entry in self.snapshots.get(thread_id, []) if entry[0] > before]
-            if batch:
-                now = time.monotonic()
-                first_seen = first_seen or now
-                # The same desktop owner can emit an old cached view before the
-                # live view. A newly emitted frame is not proof of current history.
-                # Collect the burst and rank by the newest actual turn, rather
-                # than choosing the first frame or blindly choosing the last.
-                if now - batch[-1][1] >= .3 or now - first_seen >= 1:
-                    selected = max(batch, key=lambda entry: self.snapshot_rank(entry[2]) + (entry[0],))[2]
-                    self.states[thread_id] = selected
-                    return selected
-            await asyncio.sleep(.02)
-        self.owners.pop(thread_id, None)
-        raise DesktopError("fresh desktop snapshot unavailable")
+        try:
+            # Large valid frames can take more than five seconds on a named pipe.
+            # Honor the configured transport budget while keeping a finite minimum
+            # for the snapshot burst used by short diagnostic connections.
+            deadline = time.monotonic() + max(5, self.timeout)
+            first_seen = None
+            while time.monotonic() < deadline:
+                if self.disconnected:
+                    raise DesktopError(self.last_error or "desktop connection unavailable")
+                batch = [entry for entry in self.snapshots.get(thread_id, []) if entry[0] > before]
+                if batch:
+                    now = time.monotonic()
+                    first_seen = first_seen or now
+                    # The same desktop owner can emit an old cached view before the
+                    # live view. A newly emitted frame is not proof of current history.
+                    # Collect the burst and rank by the newest actual turn, rather
+                    # than choosing the first frame or blindly choosing the last.
+                    if now - batch[-1][1] >= .3 or now - first_seen >= 1:
+                        selected = max(batch, key=lambda entry: self.snapshot_rank(entry[2]) + (entry[0],))[2]
+                        self.states[thread_id] = selected
+                        return selected
+                await asyncio.sleep(.02)
+            self.owners.pop(thread_id, None)
+            raise DesktopError("fresh desktop snapshot unavailable")
+        finally:
+            # This subscriber needs a fresh sample, not a continuous history
+            # stream. Never change the owner's task or another client's follow.
+            with contextlib.suppress(Exception):
+                await asyncio.wait_for(self.send({"type": "broadcast", "method": "thread-stream-following-changed", "version": 1,
+                    "sourceClientId": self.client_id, "targetClientIds": [owner],
+                    "params": {"conversationId": thread_id, "hostId": host, "following": False}}), 1)
+
 
     @staticmethod
     def snapshot_rank(view):

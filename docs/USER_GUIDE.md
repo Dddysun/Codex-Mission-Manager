@@ -58,6 +58,8 @@
 
 ### 升级与排查
 
+0.4.4 修复超长聊天状态触发接收上限后导致的连接中断，并在采样完成后释放本工具的订阅，减少闲置期间的重复推送。仍保留有限接收上限；超过上限会明确报错，不把旧状态当成当前状态。
+
 0.4.3 增加监控窗口选择。旧设置自动适配：仅周额度的账号现在同样使用已设置的暂停／恢复阈值，不再仅等周额度用尽。请在运行规则中核对选择。
 
 例行检查不会关闭全局榨汁，也不会仅因核验提示中断正在运行的聊天。新额度在聊天采集前更新，时间戳取实际采样时间；真正过期或通信失败时仍暂缓自动续接并提示重试。Logo 仍反映连接、额度和调度状态；灰色不一定代表用户按下了暂停。界面区分“已停止”和“待核验”。
@@ -125,6 +127,8 @@ Closing the window keeps the app in the menu bar or tray. Use **Quit TokenMax** 
 Keep-awake prevents idle sleep, not manual sleep or guaranteed operation with the lid closed. The Mac preview does not enable the closed-lid helper. Ordinary control needs no Accessibility, Screen Recording, or Full Disk Access; protected project folders may still require system consent.
 
 ### Upgrade and troubleshoot
+
+0.4.4 fixes disconnections from long chat snapshots exceeding the receive limit and releases this tool’s subscription after sampling, reducing unnecessary background pushes. A finite limit remains; larger frames fail explicitly rather than presenting old state as current.
 
 0.4.3 adds monitoring-window selection. Legacy settings adapt automatically: weekly-only accounts now use the configured pause/resume thresholds instead of waiting for weekly exhaustion. Review the selection in Operating rules.
 

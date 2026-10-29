@@ -86,6 +86,7 @@ class NativeProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.snapshot_burst = None
         self.connections = set()
         self.handler_errors = []
+        self.following_changes = []
         self.pipe_servers = []
         self.attestation = None
         if os.name == 'nt':
@@ -159,6 +160,9 @@ class NativeProtocolTests(unittest.IsolatedAsyncioTestCase):
                 value = json.loads(await reader.readexactly(size))
                 if value["type"] == "broadcast":
                     if value["method"] == "thread-stream-following-changed":
+                        self.following_changes.append(value["params"]["following"])
+                        if not value["params"]["following"]:
+                            continue
                         for current in self.snapshot_burst or [self.state]:
                             await self.send(writer, {"type": "broadcast", "method": "thread-stream-state-changed",
                                 "version": 11, "params": {"conversationId": "one", "hostId": "local",
@@ -324,9 +328,9 @@ class NativeProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(any(v["method"]=="thread-follower-start-turn" for v in self.requests))
 
     async def test_large_history_snapshot_does_not_disconnect_other_chats(self):
-        # A long real conversation crossed 64 MiB. Exercise the framed stream,
+        # A live image-heavy conversation reached 197 MiB. Exercise the framed stream,
         # parser and subsequent request, rather than only checking the constant.
-        self.state["fixturePadding"] = "x" * (64 * 1024 * 1024)
+        self.state["fixturePadding"] = "x" * (200 * 1024 * 1024)
         # Use the production transport budget for this large Windows pipe
         # transfer; the two-second small-fixture budget is not a size contract.
         self.adapter.ipc.timeout = CONFIG['rpc_timeout_seconds']
@@ -335,6 +339,8 @@ class NativeProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("fixturePadding", json.dumps(view))
         self.assertFalse(self.adapter.ipc.disconnected)
         self.assertEqual(await self.adapter.ipc.owner("another"), "desktop-owner")
+        self.assertEqual(self.following_changes, [True, False])
+        self.assertFalse(any(v["method"].startswith("thread-follower-") for v in self.requests))
 
     async def test_closed_transport_fails_immediately_then_reconnects_on_mac(self):
         ipc = self.adapter.ipc
