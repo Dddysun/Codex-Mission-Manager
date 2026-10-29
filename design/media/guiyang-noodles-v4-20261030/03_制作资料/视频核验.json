@@ -1,0 +1,32 @@
+[
+  {
+    "file": "01_独立镜头/00_complete_中国到贵阳面摊_牛肉面加料与20元.mp4",
+    "seconds": 26,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "decode": "pass",
+    "sha256": "61390e7a7402b01f93b046685eae28fd3f5ed0791c6fe3be8e1d0149797285ba"
+  },
+  {
+    "file": "01_独立镜头/01_map_stall_中国贵州贵阳_推进牛肉面摊.mp4",
+    "seconds": 12,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "decode": "pass",
+    "sha256": "7587f792aaec1dc0fb12b58df0fd43dc07be35a076fa5c191527418b05ef6336"
+  },
+  {
+    "file": "01_独立镜头/02_bowl_price_主体牛肉面_下排加面加蛋加肉_等于20元.mp4",
+    "seconds": 14,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "decode": "pass",
+    "sha256": "8f222a0889eefa2f4bac68b56a8bc4a6971cbe6bbd346eb400a95ebf3b901382"
+  }
+]

@@ -1,0 +1,23 @@
+[
+  {
+    "id": "00_complete",
+    "name": "中国到贵阳面摊_牛肉面加料与20元",
+    "duration": 26,
+    "poster": 24,
+    "offset": 0
+  },
+  {
+    "id": "01_map_stall",
+    "name": "中国贵州贵阳_推进牛肉面摊",
+    "duration": 12,
+    "poster": 11.5,
+    "offset": 0
+  },
+  {
+    "id": "02_bowl_price",
+    "name": "主体牛肉面_下排加面加蛋加肉_等于20元",
+    "duration": 14,
+    "poster": 12,
+    "offset": 12
+  }
+]

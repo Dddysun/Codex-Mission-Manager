@@ -1,0 +1,1 @@
+{"name":"tokenmax-guiyang-noodles-v4","version":"1.0.0","private":true,"scripts":{"render":"node src/render.cjs","stills":"node src/render.cjs --stills"},"dependencies":{"playwright":"1.62.1"}}

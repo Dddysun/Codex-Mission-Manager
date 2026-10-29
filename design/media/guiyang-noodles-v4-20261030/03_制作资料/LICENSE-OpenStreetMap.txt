@@ -1,0 +1,10 @@
+Guiyang street geometry is based on OpenStreetMap data.
+Copyright OpenStreetMap contributors.
+The cached source and derived street geometry are available under ODbL 1.0.
+
+Copyright and attribution: https://www.openstreetmap.org/copyright
+License: https://opendatacommons.org/licenses/odbl/1-0/
+Source: https://api.openstreetmap.org/api/0.6/map?bbox=106.70,26.57,106.72,26.59
+Retrieved: 2026-10-29
+
+Province and city data have a separate MIT license in LICENSE-China-GeoData.txt.
