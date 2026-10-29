@@ -152,7 +152,8 @@
       time+=duration+.29+rng()*.65;
       return event;
     });
-    return {seed,events,cycleSeconds:sceneId===null?Math.ceil((time+.24)*10)/10:2.4};
+    // Export loops end on a full two-second breathing cycle as well.
+    return {seed,events,cycleSeconds:sceneId===null?Math.ceil((time+.24)/2)*2:2};
   }
 
   function keyframes(name, stops, cycle) {
@@ -179,7 +180,7 @@
       ${selector} .twig .electric-edge{stroke-width:1.6}${selector} .twig .electric-hot{stroke-width:.86}
       ${selector} .small-twig .electric-edge{stroke-width:1.2}${selector} .small-twig .electric-hot{stroke-width:.62}
       ${selector} .source-light{fill:url(#${id}-source-light);opacity:.38}
-      ${selector} .bolt{filter:url(#${id}-bolt-light)}
+      ${selector} .bolt{filter:url(#${id}-bolt-light);opacity:1}
     `;
     const markup=events.map((event,index)=>{
       const burstName=`${id}-burst-${index}`, start=event.start, end=start+event.duration;
@@ -208,7 +209,9 @@
       return `<g data-layer="discharge-${event.id}" data-scene-id="${event.id}" class="discharge-motion discharge-event event-${index}">${roots}${paths}</g>`;
     }).join('');
     if(!staticOnly){
-      css+=`${selector}[data-animated="false"] .discharge-motion{animation-play-state:paused!important}
+      css+=`@keyframes ${id}-bolt-breathe{0%,100%{opacity:.58}50%{opacity:1}}
+        ${selector} .bolt-breathe{animation:${id}-bolt-breathe 2s ease-in-out infinite}
+        ${selector}[data-animated="false"] .discharge-motion{animation-play-state:paused!important}
         ${selector}[data-reduced="true"] .discharge-motion{animation:none!important}
         ${selector}[data-reduced="true"] .discharge-event{opacity:0}
         @media(prefers-reduced-motion:reduce){${selector} .discharge-motion{animation:none!important}${selector} .discharge-event{opacity:0}}
@@ -221,10 +224,11 @@
     </defs>`;
     svg=svg.replace('</style>','</style>'+defs+'<style>'+css+'</style>');
     svg=svg.replace('<g data-layer="status-symbol"',markup+'<g data-layer="status-symbol"');
+    svg=svg.replace('class="bolt"','class="bolt discharge-motion bolt-breathe"');
     return svg.replace('class="qj"',`class="qj" data-cycle="${cycle}" data-seed="${sequence.seed}"`);
   }
 
-  const api={renderSVG,buildSequence,instantiate,scenes,version:'1.3.0-proposal.2'};
+  const api={renderSVG,buildSequence,instantiate,scenes,version:'1.3.0-proposal.2.1',breathSeconds:2};
   if(typeof module!=='undefined'&&module.exports)module.exports=api;
   root.TokenMaxDischargePreview=api;
 })(typeof globalThis!=='undefined'?globalThis:this);

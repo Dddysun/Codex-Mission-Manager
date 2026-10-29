@@ -67,6 +67,18 @@ async function main(){
     async function setTime(time){await page.evaluate(seconds=>{
       for(const animation of document.getAnimations()){animation.pause();animation.currentTime=seconds*1000;}
     },time);}
+    assert.equal(await page.locator('#hero .bolt-breathe').evaluate(node=>node.getAnimations()[0].effect.getTiming().duration),2000);
+    const breath=[];
+    for(const time of [0,.5,1,1.5,2]){
+      await setTime(time);
+      breath.push(await page.locator('#hero .bolt-breathe').evaluate(node=>Number(getComputedStyle(node).opacity)));
+    }
+    for(const [i,value] of [.58,.79,1,.79,.58].entries())assert(Math.abs(breath[i]-value)<.015);
+    const hideArcs=await page.addStyleTag({content:'#hero .discharge-event{visibility:hidden!important}'});
+    await setTime(0);const dimBolt=await page.locator('#hero').screenshot();
+    await setTime(1);assert.notDeepEqual(dimBolt,await page.locator('#hero').screenshot());
+    await hideArcs.evaluate(node=>node.remove());
+    checks.push('center-bolt-breathes-every-two-seconds','gradual-dim-bright-dim-envelope','breathing-visible-in-rendered-frames');
     const first=sequence.events.find(event=>event.id===7), posterTime=first.start+Math.max(.12,first.rise+.04);
     await setTime(posterTime);
     const sample=await page.locator('#hero').screenshot();
@@ -84,9 +96,11 @@ async function main(){
     await page.locator('#pause').click();
     await page.emulateMedia({reducedMotion:'reduce'});
     assert(await page.locator('#hero .discharge-event').evaluateAll(nodes=>nodes.every(n=>Number(getComputedStyle(n).opacity)===0)));
+    assert.equal(await page.locator('#hero .bolt-breathe').evaluate(node=>getComputedStyle(node).animationName),'none');
     await page.emulateMedia({reducedMotion:'no-preference'});
     await page.locator('#reduce').check();
     assert(await page.locator('#hero .discharge-event').evaluateAll(nodes=>nodes.every(n=>Number(getComputedStyle(n).opacity)===0)));
+    assert.equal(await page.locator('#hero .bolt-breathe').evaluate(node=>Number(getComputedStyle(node).opacity)),1);
     await page.locator('#reduce').uncheck();
     for(const state of ['idle','waiting','disconnected','error']){
       await page.selectOption('#state',state);
@@ -101,8 +115,13 @@ async function main(){
     live.on('pageerror',error=>errors.push(error.message));
     await live.goto(address);
     const previous=await live.evaluate(()=>window.preview.seed);
+    await live.locator('#hero .bolt-breathe').evaluate(node=>{node.getAnimations()[0].currentTime=860;});
+    const breathBefore=await live.locator('#hero .bolt-breathe').evaluate(node=>node.getAnimations()[0].currentTime);
     await live.locator('#shuffle').click();
     assert.notEqual(previous,await live.evaluate(()=>window.preview.seed));
+    const breathAfter=await live.locator('#hero .bolt-breathe').evaluate(node=>node.getAnimations()[0].currentTime);
+    assert(breathAfter>=breathBefore&&breathAfter-breathBefore<500);
+    checks.push('breathing-phase-preserved-on-random-shuffle');
     const beforeCycle=await live.evaluate(()=>window.preview.seed);
     await live.evaluate(()=>{
       const clock=document.querySelector('#hero .discharge-event').getAnimations()[0];
@@ -141,7 +160,7 @@ async function main(){
           width:Math.round(rect.width),height:Math.round(rect.height)};
       });
     });
-    for(let frame=0;frame<48;frame++){
+    for(let frame=0;frame<Math.round(api.buildSequence(34097,1).cycleSeconds*20);frame++){
       await setTime(.3+frame/20);
       await page.locator('#gallery').screenshot({path:path.join(galleryFrames,`frame-${String(frame).padStart(4,'0')}.png`)});
     }
@@ -165,6 +184,9 @@ async function main(){
   const mainInput=path.join(mainFrames,'frame-%04d.png'), galleryInput=path.join(galleryFrames,'frame-%04d.png');
   gif(mainInput,30,path.join(__dirname,'core-discharge.gif'));
   encode(['-framerate','30','-i',mainInput,'-threads','2','-c:v','libx264','-crf','17','-preset','medium','-pix_fmt','yuv420p','-movflags','+faststart',path.join(__dirname,'core-discharge.mp4')]);
+  // Revision-specific names avoid reusing a viewer's cached earlier preview.
+  fs.copyFileSync(path.join(__dirname,'core-discharge.gif'),path.join(__dirname,'core-discharge-breathe.gif'));
+  fs.copyFileSync(path.join(__dirname,'core-discharge.mp4'),path.join(__dirname,'core-discharge-breathe.mp4'));
   gif(galleryInput,20,path.join(__dirname,'gallery.gif'));
   for(const box of boxes){
     const name=String(box.id).padStart(2,'0');
@@ -184,6 +206,7 @@ async function main(){
   fs.writeFileSync(path.join(__dirname,'verification.json'),JSON.stringify({proposal:api.version,result:'pass',checks,
     sequence:{seed:sequence.seed,cycle_seconds:sequence.cycleSeconds,events:sequence.events.map(e=>({id:e.id,start:e.start,duration:e.duration,rise:e.rise,length_scale:e.lengthScale}))},
     scenes:metrics,independent_gif_count:10,main_video_fps:30,gif_fps:20,
+    breath:{cycle_seconds:2,dim_opacity:.58,bright_opacity:1,seconds_to_bright:1,seconds_to_dim:1,phase_preserved_on_shuffle:true},
     production_assets_changed:false,live_backend_started:false,private_data_loaded:false},null,2)+'\n');
   console.log(JSON.stringify({result:'pass',checks,cycle_seconds:sequence.cycleSeconds,independent_gifs:10}));
 }

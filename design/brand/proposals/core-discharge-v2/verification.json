@@ -1,5 +1,5 @@
 {
-  "proposal": "1.3.0-proposal.2",
+  "proposal": "1.3.0-proposal.2.1",
   "result": "pass",
   "checks": [
     "ten-distinct-topologies",
@@ -10,10 +10,14 @@
     "unequal-event-durations",
     "all-trunks-originate-in-bolt",
     "no-orbit-or-rotation-transform",
+    "center-bolt-breathes-every-two-seconds",
+    "gradual-dim-bright-dim-envelope",
+    "breathing-visible-in-rendered-frames",
     "rendered-frames-actually-differ",
     "pause-freezes-rendered-frame",
     "reduced-motion-system-and-manual",
     "nonworking-states-static",
+    "breathing-phase-preserved-on-random-shuffle",
     "live-shuffle-button-changes-seed",
     "live-cycle-regenerates-sequence",
     "light-dark-rendered",
@@ -25,7 +29,7 @@
   ],
   "sequence": {
     "seed": 20261029,
-    "cycle_seconds": 11.2,
+    "cycle_seconds": 12,
     "events": [
       {
         "id": 6,
@@ -184,6 +188,14 @@
   "independent_gif_count": 10,
   "main_video_fps": 30,
   "gif_fps": 20,
+  "breath": {
+    "cycle_seconds": 2,
+    "dim_opacity": 0.58,
+    "bright_opacity": 1,
+    "seconds_to_bright": 1,
+    "seconds_to_dim": 1,
+    "phase_preserved_on_shuffle": true
+  },
   "production_assets_changed": false,
   "live_backend_started": false,
   "private_data_loaded": false

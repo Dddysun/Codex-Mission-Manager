@@ -1,13 +1,13 @@
 # TokenMax · 随机放电 02 / Irregular discharge 02
 
-品牌动效提案 `1.3.0-proposal.2`，保留 1.2.0 机身和杯内符号。针对上一版固定方向轮换、长短接近和旋转感的反馈，重新绘制十种独立放电结构。
+品牌动效提案 `1.3.0-proposal.2.1`，保留 1.2.0 机身和杯内符号。针对上一版固定方向轮换、长短接近和旋转感的反馈，重新绘制十种独立放电结构，并恢复中心闪电的 2 秒呼吸。
 
-Ten distinct branching structures replace the first proposal's alternating directional pairs. The existing 1.2.0 appliance silhouette and state symbols are reused.
+Ten distinct branching structures replace the first proposal's alternating directional pairs. The existing 1.2.0 silhouette and state symbols are reused. The central bolt now has its two-second breathing effect restored.
 
 ## 观看 / View
 
-- [十种交错动图 / Combined animation](core-discharge.gif)
-- [视频 / Video](core-discharge.mp4)
+- [十种交错与呼吸动图 / Combined animation with breathing](core-discharge-breathe.gif)
+- [视频 / Video](core-discharge-breathe.mp4)
 - [十种动态总览 / Animated gallery](gallery.gif)
 - [十种静帧总览 / Still contact sheet](contact-sheet.png)
 - [深色 / Dark](preview-dark.png) · [浅色 / Light](preview-light.png)
@@ -34,9 +34,12 @@ Ten distinct branching structures replace the first proposal's alternating direc
 - 粗路径有侧向折返和弯折，再叠加细碎电痕，不使用同一路径旋转生成形态。
 - 不等长、不同分支数、不同强弱与持续时间；连续预览每轮重新打乱顺序和停顿，轻微改变各条路径。
 - 多数电弧留在杯内，部分尖端短暂越过杯壁。没有外围环绕轨迹或杯内旋涡。
+- 中心金色闪电每 2 秒完成一次呼吸：1 秒渐强、1 秒渐弱，不透明度 0.58–1。换组延续呼吸相位；导出循环与 2 秒周期对齐。
 - 暂停冻结当前画面；非工作状态及减少动态保持静止。
 
 Main trunks originate within the bolt. Twigs attach to existing trunk or branch vertices. Bent macro paths and fine fractures form ten independently drawn topologies; none is made by rotating another. Length, brightness, branch count, timing and pauses vary. The live preview reshuffles and perturbs each cycle. GIF/video are fixed recordings and repeat when looped.
+
+The gold bolt breathes on a two-second cycle: one second to brighten, one second to dim, with opacity 0.58–1. Shuffling preserves its phase. Exported loops end on complete breathing cycles. Pause and reduced motion also apply to the bolt.
 
 本目录为独立视觉提案。未修改正式 SVG、Mac／Windows 原生 Logo、产品版本或已安装应用；不启动后台，不读取账号和聊天。参考素材没有复制到仓库。
 
