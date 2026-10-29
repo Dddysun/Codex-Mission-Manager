@@ -32,6 +32,9 @@ class SamplingAuditTests(unittest.TestCase):
         class Service:
             account_display = None
 
+            def __init__(self):
+                self.changed = asyncio.Event()
+
             async def start(self):
                 pass
 
@@ -49,7 +52,7 @@ class SamplingAuditTests(unittest.TestCase):
                           desktop_sessions_dir=str(Path(directory) / 'sessions'))
             with contextlib.closing(Store(directory)) as store:
                 store.put('supervisor_paused', True)
-            with mock.patch('guardian.Rpc', return_value=Service()), \
+            with mock.patch('guardian.Rpc', side_effect=lambda *args, **kwargs: Service()), \
                     mock.patch('guardian.identity_for', new=mock.AsyncMock(return_value='demo-scope')), \
                     mock.patch('guardian.deliver_notices', new=mock.AsyncMock()), \
                     contextlib.redirect_stdout(io.StringIO()):
