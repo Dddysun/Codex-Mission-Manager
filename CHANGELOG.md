@@ -1,5 +1,13 @@
 # Changelog / 版本记录
 
+## 0.4.5 — Fresh quota after long collection / 长采集后的额度复核
+
+- Conditionally reread quota after slow collection before the normal wait expires it. / 长采集结束前按需重读额度，避免下一次等待令缓存过期。
+- Keep real service timestamps, audit both samples and preserve failure gating and saved intervals. / 保留服务采样时间、额度审计、失败保护及用户保存的间隔。
+- Cover the freshness boundary and successful/failed closing reads after simulated 70-second collection. / 覆盖有效期边界及模拟 70 秒采集后的复核成功与失败。
+
+See [0.4.5 release notes](docs/releases/0.4.5.md). / 详见 [0.4.5 发行说明](docs/releases/0.4.5.md)。
+
 ## 0.4.4 — Long snapshot reception / 超长状态接收
 
 - Accept bounded snapshots up to 256 MiB after a live 197 MiB frame exceeded the prior cap. / 接收上限改为有界的 256 MiB，覆盖实际 197 MiB 状态帧。

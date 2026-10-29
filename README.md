@@ -4,9 +4,9 @@
 
 Pause when quota is low. Continue when it returns. A native Codex companion for macOS and Windows.
 
-**源码版本 V0.4.4 / Source version V0.4.4** · [下载 / Downloads](https://github.com/Dddysun/TokenMax-Zhazhiji/releases) · [使用指南 / User guide](docs/USER_GUIDE.md) · [更新说明 / Release notes](docs/releases/0.4.4.md)
+**源码版本 V0.4.5 / Source version V0.4.5** · [下载 / Downloads](https://github.com/Dddysun/TokenMax-Zhazhiji/releases) · [使用指南 / User guide](docs/USER_GUIDE.md) · [更新说明 / Release notes](docs/releases/0.4.5.md)
 
-0.4.4 修复超长聊天状态超过 128 MiB 后导致的连接中断，读取结束后释放本工具的状态订阅；保留五小时／周额度监控、Pro 默认周额度及十种内核放电 Logo。 / 0.4.4 accepts larger bounded chat snapshots and releases this tool’s subscription after each read, retaining monitoring-window selection and the core-discharge logo. [0.4.4 notes](docs/releases/0.4.4.md)
+0.4.5 在长采集轮结束前按需重新读取额度，避免随后的等待令缓存过期；保留 256 MiB 有界接收、订阅释放、五小时／周额度监控与原生动态 Logo。 / 0.4.5 conditionally rereads quota after long collection before the next wait, retaining bounded 256 MiB reception, subscription cleanup, monitoring-window choices and native motion. [0.4.5 notes](docs/releases/0.4.5.md)
 
 ## 中文
 
@@ -19,10 +19,10 @@ Pause when quota is low. Continue when it returns. A native Codex companion for 
 
 ### 安装
 
-从 [Releases](https://github.com/Dddysun/TokenMax-Zhazhiji/releases) 选择已发布的预览标签，并核对 0.4.4 对应的构建号：
+从 [Releases](https://github.com/Dddysun/TokenMax-Zhazhiji/releases) 选择已发布的预览标签，并核对 0.4.5 对应的构建号：
 
-- **Mac：**`TokenMax-0.4.4-arm64-preview.dmg`。Apple Silicon，macOS 14+。
-- **Windows：**`TokenMax-0.4.4-windows-x64-setup.exe`，另有便携 ZIP。Windows 10 build 19041+、x64、.NET Framework 4.8+。
+- **Mac：**`TokenMax-0.4.5-arm64-preview.dmg`。Apple Silicon，macOS 14+。
+- **Windows：**`TokenMax-0.4.5-windows-x64-setup.exe`，另有便携 ZIP。Windows 10 build 19041+、x64、.NET Framework 4.8+。
 
 安装包包含后端和 Python 环境。另需安装并登录兼容的官方 Codex 桌面客户端。首次使用先核对账号与聊天，再点击“开始榨汁”。关闭窗口后继续后台运行；“退出”停止应用。
 
@@ -30,7 +30,7 @@ Pause when quota is low. Continue when it returns. A native Codex companion for 
 
 ### 预览限制
 
-Mac 预览为临时签名、未公证；Windows 预览未签名。客户端控制依赖版本敏感的本机适配；未知版本暂停控制。无外屏合盖运行不作保证。真实发送、锁屏和电源行为需单独实测，详见[发行说明](docs/releases/0.4.4.md)。
+Mac 预览为临时签名、未公证；Windows 预览未签名。客户端控制依赖版本敏感的本机适配；未知版本暂停控制。无外屏合盖运行不作保证。真实发送、锁屏和电源行为需单独实测，详见[发行说明](docs/releases/0.4.5.md)。
 
 ## English
 
@@ -43,10 +43,10 @@ Mac 预览为临时签名、未公证；Windows 预览未签名。客户端控�
 
 ### Install
 
-Choose a published preview tag from [Releases](https://github.com/Dddysun/TokenMax-Zhazhiji/releases). Check the build number associated with 0.4.4:
+Choose a published preview tag from [Releases](https://github.com/Dddysun/TokenMax-Zhazhiji/releases). Check the build number associated with 0.4.5:
 
-- **Mac:** `TokenMax-0.4.4-arm64-preview.dmg`. Apple Silicon, macOS 14+.
-- **Windows:** `TokenMax-0.4.4-windows-x64-setup.exe`, or the portable ZIP. Windows 10 build 19041+, x64, .NET Framework 4.8+.
+- **Mac:** `TokenMax-0.4.5-arm64-preview.dmg`. Apple Silicon, macOS 14+.
+- **Windows:** `TokenMax-0.4.5-windows-x64-setup.exe`, or the portable ZIP. Windows 10 build 19041+, x64, .NET Framework 4.8+.
 
 The backend and Python runtime are bundled. Install a compatible official Codex desktop client and sign in separately. Verify the account and chats before selecting **Start Juicing**. Closing the window keeps the app running; **Quit** stops it.
 
@@ -54,7 +54,7 @@ Previously named Codex Mission Manager. Settings and history are retained. On Ma
 
 ### Preview limits
 
-Mac builds are ad-hoc signed and unnotarized; Windows builds are unsigned. Live control uses a version-sensitive local adapter; unknown versions block control. Closed-lid operation is not guaranteed. Live delivery, lock, and power behavior require separate testing; see [release notes](docs/releases/0.4.4.md).
+Mac builds are ad-hoc signed and unnotarized; Windows builds are unsigned. Live control uses a version-sensitive local adapter; unknown versions block control. Closed-lid operation is not guaranteed. Live delivery, lock, and power behavior require separate testing; see [release notes](docs/releases/0.4.5.md).
 
 ## Project / 项目
 
