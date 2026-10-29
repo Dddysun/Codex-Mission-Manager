@@ -1306,8 +1306,8 @@ namespace CodexMissionManager
             var editor = new StackPanel(); var heading = Text(T("控制参数", "Control parameters"), 15, true); heading.Margin = new Thickness(0, 0, 0, 18); editor.Children.Add(heading);
             var monitorHeading = Text(T("监控窗口", "Monitoring window"), 13, true); monitorHeading.Margin = new Thickness(0, 0, 0, 10); editor.Children.Add(monitorHeading);
             var windowChoices = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
-            monitorFive = new RadioButton { Content = T("五小时额度", "Five-hour quota"), GroupName = "MonitorWindow", Margin = new Thickness(0, 0, 24, 0) };
-            monitorWeekly = new RadioButton { Content = T("周额度", "Weekly quota"), GroupName = "MonitorWindow" };
+            monitorFive = new RadioButton { Content = T("五小时额度", "Five-hour quota"), GroupName = "MonitorWindow", Foreground = foreground, Margin = new Thickness(0, 0, 24, 0) };
+            monitorWeekly = new RadioButton { Content = T("周额度", "Weekly quota"), GroupName = "MonitorWindow", Foreground = foreground };
             monitorFive.Checked += delegate { ChooseMonitorWindow("five_hour"); }; monitorWeekly.Checked += delegate { ChooseMonitorWindow("weekly"); };
             windowChoices.Children.Add(monitorFive); windowChoices.Children.Add(monitorWeekly); editor.Children.Add(windowChoices);
             var monitorHelp = Text(T("暂停和恢复阈值用于所选窗口；其他窗口用尽或服务禁止使用时仍会暂停。", "Pause and resume thresholds apply to the selected window. An exhausted other window or a service block still pauses work."), 11);
@@ -1356,6 +1356,8 @@ namespace CodexMissionManager
             } finally { rulesUpdating = false; }
             monitorFive.IsEnabled = available && !rulesSaving && CanMonitorWindow("five_hour");
             monitorWeekly.IsEnabled = available && !rulesSaving && CanMonitorWindow("weekly");
+            monitorFive.Opacity = CanMonitorWindow("five_hour") ? 1 : 0.42;
+            monitorWeekly.Opacity = CanMonitorWindow("weekly") ? 1 : 0.42;
             monitorFive.ToolTip = CanMonitorWindow("five_hour") ? T("五小时额度", "Five-hour quota") : T("该账号未提供此额度窗口。", "This account does not provide this quota window.");
             monitorWeekly.ToolTip = CanMonitorWindow("weekly") ? T("周额度", "Weekly quota") : T("该账号未提供此额度窗口。", "This account does not provide this quota window.");
             string monitorState = Json.Text(Json.Child(Json.Child(snapshot, "usage"), "monitoring"), "state");
@@ -1990,11 +1992,16 @@ namespace CodexMissionManager
                 "monitoring", Json.Values("effective_window", "weekly", "five_hour_available", false, "weekly_available", true, "state", "ready"));
             LoadRulesDraft(); RefreshRulesPresentation();
             bool proWeekly = !monitorFive.IsEnabled && monitorWeekly.IsEnabled && monitorWeekly.IsChecked == true;
+            Func<byte, double> channel = value => value / 255.0 <= 0.04045 ? value / 255.0 / 12.92 : Math.Pow((value / 255.0 + 0.055) / 1.055, 2.4);
+            Func<Color, double> luminance = color => 0.2126 * channel(color.R) + 0.7152 * channel(color.G) + 0.0722 * channel(color.B);
+            double labelLight = luminance(((SolidColorBrush)monitorWeekly.Foreground).Color);
+            double surfaceLight = luminance(((SolidColorBrush)surface).Color);
+            bool windowTextContrast = (Math.Max(labelLight, surfaceLight) + 0.05) / (Math.Min(labelLight, surfaceLight) + 0.05) >= 4.5;
             snapshot["usage"] = originalUsage; LoadRulesDraft(); RefreshRulesPresentation();
-            bool passed = editingCaptured && pollingPreserved && appearancePreserved && reloadApplied && plusChoices && windowDraft && windowPreserved && proWeekly;
+            bool passed = editingCaptured && pollingPreserved && appearancePreserved && reloadApplied && plusChoices && windowDraft && windowPreserved && proWeekly && windowTextContrast;
             return Json.Values("native", true, "ui", "WPF", "hostStarted", false, "messagesSent", 0, "privatePreferencesLoaded", false,
                 "draftCaptured", editingCaptured, "draftSurvivedPollingConflict", pollingPreserved, "draftSurvivedAppearanceChange", appearancePreserved, "explicitReloadApplied", reloadApplied, "plusWindowChoicesAvailable", plusChoices, "monitorWindowDraftCaptured", windowDraft,
-                "monitorWindowDraftSurvivedAppearance", windowPreserved, "proFiveHourDisabledWeeklySelected", proWeekly, "checksPassed", passed);
+                "monitorWindowDraftSurvivedAppearance", windowPreserved, "proFiveHourDisabledWeeklySelected", proWeekly, "darkMonitorWindowTextContrast", windowTextContrast, "checksPassed", passed);
         }
         static Button FindTaggedButton(DependencyObject parent, string tag)
         {
