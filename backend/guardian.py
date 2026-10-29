@@ -637,6 +637,24 @@ async def requests(controller):
                              (state, json.dumps(result), row["id"]))
 
 
+async def sample_account_quota(rpc, store, config, identity):
+    response = await rpc.call("account/rateLimits/read")
+    if getattr(rpc, "account_display", None) is not None:
+        store.put("account_display", rpc.account_display)
+    sample = parse_bucket(response, config["limit_id"], time.time())
+    if not sample.get("plan_type"):
+        sample["plan_type"] = ((store.get("account_display") or {}).get("account") or {}).get("plan_type")
+    sample["scope"] = identity
+    observe_quota(store, sample, config)
+    return sample
+
+
+def closing_quota_refresh_needed(sample, config, now):
+    # Leave the next normal wait inside the freshness budget. Only an actual
+    # service reply may advance observed_at; finishing collection is not a sample.
+    return now - sample["observed_at"] + config["poll_seconds"] >= config["max_sample_age_seconds"] - 2
+
+
 def publish_cycle_status(store, config, sample, phase, started, rpc, control_available, collecting=False):
     """Publish real quota freshness before slow chat collection, without faking a newer sample."""
     observed = sample['observed_at']
@@ -719,16 +737,7 @@ async def run(config, once=False):
                     store.put("supervisor_paused", True)
                 identity = new_identity
                 stage = "quota_read"
-                quota_response = await rpc.call("account/rateLimits/read")
-                if getattr(rpc, "account_display", None) is not None:
-                    store.put("account_display", rpc.account_display)
-                sample = parse_bucket(quota_response, config["limit_id"], time.time())
-                if not sample.get("plan_type"):
-                    sample["plan_type"] = ((store.get("account_display") or {}).get("account") or {}).get("plan_type")
-                sample["scope"] = identity
-                # Audit every successful service sample, even without managed
-                # tasks, pending plans, notifications, or control permission.
-                observe_quota(store, sample, config)
+                sample = await sample_account_quota(rpc, store, config, identity)
                 phase = classify(sample, config)
                 if hasattr(rpc, 'refresh_control'):
                     await rpc.refresh_control()
@@ -798,6 +807,10 @@ async def run(config, once=False):
                     from plans import PlanRunner
                     await PlanRunner(controller).tick(sample)
                     await controller.tick(sample)
+                if closing_quota_refresh_needed(sample, config, time.time()):
+                    stage = "quota_refresh"
+                    sample = await sample_account_quota(rpc, store, config, identity)
+                    phase = classify(sample, config)
                 # A transport can fail during collection after a healthy quota
                 # read. Report that failure now, then reconnect on the next pass.
                 if getattr(getattr(rpc, "ipc", None), "disconnected", False):

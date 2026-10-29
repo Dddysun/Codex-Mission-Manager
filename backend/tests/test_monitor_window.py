@@ -13,7 +13,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from catalog import entry
-from guardian import Store, Controller, publish_cycle_status, confirmation_delay, run
+from guardian import Store, Controller, publish_cycle_status, confirmation_delay, closing_quota_refresh_needed, run
 from plans import set_plan
 from quota import classify, pause_needed, quota_usable, monitoring_state, plan_window
 from rules import effective_rules, effective_config, update_rules
@@ -163,6 +163,54 @@ class CollectionHealthTests(unittest.TestCase):
             self.assertEqual(confirmation_delay(store, cfg, 30, now+10), 10)
             task = store.get_task('demo'); task['manual_hold'] = True; store.save_task(task)
             self.assertEqual(confirmation_delay(store, cfg, 30, now), 30)
+
+    def test_closing_refresh_boundary_keeps_the_normal_wait_inside_freshness(self):
+        cfg = dict(CONFIG, poll_seconds=30, max_sample_age_seconds=90)
+        self.assertFalse(closing_quota_refresh_needed({'observed_at': NOW}, cfg, NOW+57))
+        self.assertTrue(closing_quota_refresh_needed({'observed_at': NOW}, cfg, NOW+58))
+
+    def test_slow_collection_reads_real_quota_again_and_failures_stay_unknown(self):
+        for fail in (False, True):
+            with self.subTest(fail=fail), tempfile.TemporaryDirectory() as directory:
+                clock = [time.time()]
+                calls = []
+                class Service:
+                    account_display = None
+                    control_available = True
+                    available = []
+                    hosts = {}
+                    async def start(self): pass
+                    async def close(self): pass
+                    async def refresh_control(self): pass
+                    async def call(self, method, params=None):
+                        if method != 'account/rateLimits/read':
+                            raise AssertionError('Unexpected RPC: '+method)
+                        calls.append(method)
+                        if fail and len(calls) == 2: raise TimeoutError('synthetic closing quota failure')
+                        return limits(meter(300, 80, clock[0]+10000), meter(10080, 60, clock[0]+604800))
+                    async def discover(self):
+                        clock[0] += 70
+                        return []
+                cfg = dict(CONFIG, state_dir=directory, mode='notify', desktop_control_enabled=True,
+                           power_guard_enabled=False, quota_notifications=False, server_command=['unused'],
+                           max_sample_age_seconds=90, poll_seconds=30)
+                with mock.patch('guardian.Rpc', return_value=Service()), \
+                        mock.patch('desktop.DesktopAdapter', side_effect=lambda rpc, config: rpc), \
+                        mock.patch('guardian.identity_for', new=mock.AsyncMock(return_value='demo-scope')), \
+                        mock.patch('guardian.deliver_notices', new=mock.AsyncMock()), \
+                        mock.patch('catalog.refresh_catalog', new=mock.AsyncMock()), \
+                        mock.patch('guardian.time.time', side_effect=lambda: clock[0]), \
+                        contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(asyncio.run(run(cfg, once=True)), 1 if fail else 0)
+                self.assertEqual(len(calls), 2)
+                report = json.loads((Path(directory)/'status.json').read_text())
+                if fail:
+                    self.assertEqual((report['phase'], report['stage']), ('unknown', 'quota_refresh'))
+                else:
+                    self.assertEqual(report['observed_at'], clock[0])
+                    self.assertGreaterEqual(report['collection_seconds'], 70)
+                    self.assertEqual(report['quota']['scope'], 'demo-scope')
+                    self.assertFalse(report['collection_in_progress'])
 
     def test_sampling_publishes_before_chat_collection_and_discovers_only_once(self):
         now = time.time()
