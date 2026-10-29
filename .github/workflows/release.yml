@@ -87,7 +87,7 @@ jobs:
         run: python3 scripts/fetch_runtime.py --destination "$RUNNER_TEMP/mission-python"
       - name: Run full backend and packaging-host regressions
         run: |
-          "$RUNNER_TEMP/mission-python/python/bin/python3" -I windows/run_tests.py \
+          "$RUNNER_TEMP/mission-python/python/bin/python3" -B -I windows/run_tests.py \
             --scope full --output "$RUNNER_TEMP/macos-tests"
       - name: Verify native control and rules contracts
         run: |
@@ -114,6 +114,14 @@ jobs:
         run: |
           python3 scripts/build.py --python-runtime "$RUNNER_TEMP/mission-python/python" \
             --output "$RUNNER_TEMP/mission-macos"
+      - name: Verify native brand geometry and render motion samples
+        run: |
+          if pgrep -x WindowServer > /dev/null; then
+            "$RUNNER_TEMP/mission-macos/TokenMax.app/Contents/MacOS/CodexMissionManager" --logo-self-test "$RUNNER_TEMP/macos-motion"
+          else
+            "$RUNNER_TEMP/mission-macos/TokenMax.app/Contents/MacOS/CodexMissionManager" --logo-self-test "$RUNNER_TEMP/macos-motion" --data-only
+          fi
+          python3 scripts/verify_brand_motion.py "$RUNNER_TEMP/macos-motion/motion.json"
       - name: Verify native Chinese input composition
         run: |
           "$RUNNER_TEMP/mission-macos/TokenMax.app/Contents/MacOS/CodexMissionManager" \
@@ -155,7 +163,8 @@ jobs:
               executable = root / 'mission-macos/TokenMax.app/Contents/MacOS/CodexMissionManager'
               views = [(accent + '-' + theme, 'native-state', ['--accent', accent] + (['--dark', '--english'] if theme == 'dark' else []))
                        for accent in ('green', 'blue', 'purple', 'yellow') for theme in ('light', 'dark')]
-              views += [('rules-zh-light', 'native-state', ['--rules']),
+              views += [('brand-light', 'native-brand', []),
+                        ('rules-zh-light', 'native-state', ['--rules']),
                         ('settings-en-dark', 'native-state', ['--settings', '--dark', '--english']),
                         ('menu-en-dark', 'native-state', ['--menu-panel', '--dark', '--english']),
                         ('activity-zh-light', 'native-quota-restored', ['--activity', '--accent', 'blue']),
@@ -261,13 +270,20 @@ jobs:
           persist-credentials: false
       - name: Build native application and current-user EXE installer
         run: .\windows\build.ps1 -OutputDirectory "$env:RUNNER_TEMP\mission-windows"
-      - name: Run limited packaging-host and Windows platform checks
+      - name: Run full Windows backend and packaging-host regressions
         run: |
-          & "$env:RUNNER_TEMP\mission-windows\app\runtime\python\python.exe" -X utf8 -I .\windows\run_tests.py `
-            --scope smoke --output "$env:RUNNER_TEMP\windows-tests"
+          & "$env:RUNNER_TEMP\mission-windows\app\runtime\python\python.exe" -B -X utf8 -I .\windows\run_tests.py `
+            --scope full --output "$env:RUNNER_TEMP\windows-tests"
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $report = Get-Content -LiteralPath "$env:RUNNER_TEMP\windows-tests\windows-test-results.json" -Raw -Encoding UTF8 | ConvertFrom-Json
-          if ($report.scope -ne 'smoke' -or $report.full_backend_suite_run) { throw 'Windows checks must remain limited to smoke coverage.' }
+          if ($report.scope -ne 'full' -or !$report.full_backend_suite_run) { throw 'Windows full backend coverage is required.' }
+      - name: Verify native brand geometry and render motion samples
+        run: |
+          $directory = "$env:RUNNER_TEMP\windows-motion"
+          $process = Start-Process -FilePath "$env:RUNNER_TEMP\mission-windows\app\CodexMissionManager.exe" -ArgumentList @('--logo-self-test', ('"'+$directory+'"')) -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Native brand rendering failed.' }
+          python -B -X utf8 scripts/verify_brand_motion.py "$directory\motion.json"
+          if ($LASTEXITCODE -ne 0) { throw 'Native brand parity failed.' }
       - name: Verify isolated native editors and lifecycle
         run: |
           $exe = "$env:RUNNER_TEMP\mission-windows\app\CodexMissionManager.exe"
@@ -313,6 +329,7 @@ jobs:
               $views += ,@('home', $(if ($theme -eq 'dark') { 'en' } else { 'zh' }), $theme, 'native-state', $accent)
             }
           }
+          $views += ,@('home', 'zh', 'light', 'native-brand', 'green')
           $views += ,@('settings', 'zh', 'light', 'native-state', 'blue')
           $views += ,@('rules', 'zh', 'light', 'native-state', 'blue')
           $views += ,@('rules', 'en', 'dark', 'native-state', 'purple')
@@ -350,7 +367,7 @@ jobs:
           Copy-Item -LiteralPath $installers[0].FullName -Destination $destination
           Copy-Item -LiteralPath $portable[0].FullName -Destination $destination
           Copy-Item -LiteralPath "$build\build-manifest.json" -Destination "$destination\build-manifest-windows-x64.json"
-          Copy-Item -LiteralPath "$env:RUNNER_TEMP\windows-tests\windows-test-results.json" -Destination "$destination\windows-smoke-test-results.json"
+          Copy-Item -LiteralPath "$env:RUNNER_TEMP\windows-tests\windows-test-results.json" -Destination "$destination\windows-test-results.json"
           foreach ($name in @('native-self-test-windows-x64.json', 'native-editor-windows-x64.json', 'native-lifecycle-windows-x64.json', 'native-textbox-layout-windows-x64.json', 'native-ui-windows-x64.json')) {
             Copy-Item -LiteralPath (Join-Path $env:RUNNER_TEMP $name) -Destination $destination
           }
@@ -374,7 +391,7 @@ jobs:
           path: ${{ runner.temp }}/release-windows-assets/*
           if-no-files-found: error
           retention-days: 14
-      - name: Upload isolated Windows smoke evidence
+      - name: Upload isolated Windows test evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -428,7 +445,7 @@ jobs:
               'TokenMax-' + version + '-windows-x64-setup.exe',
               'TokenMax-' + version + '-windows-x64-preview.zip',
               'build-manifest-macos-arm64.json', 'build-manifest-windows-x64.json',
-              'verification-macos-arm64.json', 'native-lifecycle-macos-arm64.json', 'native-textbox-layout-windows-x64.json', 'windows-smoke-test-results.json',
+              'verification-macos-arm64.json', 'native-lifecycle-macos-arm64.json', 'native-textbox-layout-windows-x64.json', 'windows-test-results.json',
           ]
           if any(not (root / name).is_file() for name in expected):
               raise SystemExit('Both platform packages and verification reports are required')

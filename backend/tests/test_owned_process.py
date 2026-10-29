@@ -99,6 +99,24 @@ class OwnedProcessTests(unittest.TestCase):
         self.assertEqual(result.returncode, 2)
         self.assertFalse(self.marker.exists())
 
+    def test_owned_interpreter_preserves_writable_resource_tree(self):
+        module = self.root/'cold_module.py'
+        module.write_text('value=42\n')
+        script = self.root/'import_probe.py'
+        script.write_text('import sys\nfrom pathlib import Path\n'
+                          'sys.path.insert(0,str(Path(__file__).parent))\n'
+                          'import cold_module\nassert cold_module.value==42\n'
+                          'assert sys.dont_write_bytecode\n')
+        owner = OwnedProcess(script, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        try:
+            owner.process.wait(timeout=5)
+            error = owner.process.stderr.read()
+            self.assertEqual(owner.process.returncode, 0, error)
+            self.assertFalse(list(self.root.rglob('*.pyc')))
+        finally:
+            owner.process.stderr.close()
+            owner.stop(deadline=time.monotonic()+1, grace_seconds=0)
+
     def test_job_assignment_failure_never_releases_the_startup_gate(self):
         job = mock.Mock()
         job.assign.side_effect = PermissionError('isolated assignment denied')

@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import sqlite3
 import stat
+import subprocess
 import tempfile
 import time
 import unittest
@@ -193,8 +194,23 @@ class PlatformSafetyTests(unittest.TestCase):
 
     def test_python_child_explicitly_uses_utf8_and_isolation(self):
         command = python_command('worker.py','run',isolated=True)
-        self.assertEqual(command[1:4],['-X','utf8','-I'])
+        self.assertEqual(command[1:5],['-B','-X','utf8','-I'])
         self.assertEqual(command[-2:],['worker.py','run'])
+
+    def test_python_child_import_does_not_modify_writable_resources(self):
+        with tempfile.TemporaryDirectory() as root:
+            root = Path(root)
+            (root/'cold_module.py').write_text('value=42\n')
+            script = root/'worker.py'
+            script.write_text('import sys\nfrom pathlib import Path\n'
+                              'sys.path.insert(0,str(Path(__file__).parent))\n'
+                              'import cold_module\nassert cold_module.value==42\n'
+                              'assert sys.dont_write_bytecode\n')
+            for isolated in (False, True):
+                with self.subTest(isolated=isolated):
+                    subprocess.run(python_command(script, isolated=isolated), check=True,
+                                   capture_output=True, timeout=5)
+                    self.assertFalse(list(root.rglob('*.pyc')))
 
     def test_windows_profiles_do_not_inherit_mac_build_numbers(self):
         for version in ('20770','21828','future'):

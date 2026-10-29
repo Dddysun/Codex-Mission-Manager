@@ -8,6 +8,16 @@ import math
 from collections import Counter
 
 
+def finite_number(value):
+    """Reject booleans, non-numbers and integers too large for float consumers."""
+    if type(value) not in (int, float):
+        return False
+    try:
+        return math.isfinite(value)
+    except OverflowError:
+        return False
+
+
 def reset_credits(payload):
     """Public, bounded metadata only. This function never redeems a credit."""
     raw = payload.get('rateLimitResetCredits') if isinstance(payload, dict) else None
@@ -30,7 +40,7 @@ def reset_credits(payload):
                 credit[key] = None
         for key in ('grantedAt', 'expiresAt'):
             value = item.get(key)
-            if type(value) in (int, float) and math.isfinite(value) and value >= 0:
+            if finite_number(value) and value >= 0:
                 credit[key] = value
             elif value is None and key == 'expiresAt':
                 credit[key] = None
@@ -64,8 +74,7 @@ def parse_bucket(payload, limit_id, now, stale_grace=90):
         if not isinstance(raw, dict):
             raise ValueError("unknown quota window")
         used, minutes, reset = (raw.get(k) for k in ("usedPercent", "windowDurationMins", "resetsAt"))
-        if any(isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(x)
-               for x in (used, minutes, reset)):
+        if any(not finite_number(x) for x in (used, minutes, reset)):
             raise ValueError("unknown quota window")
         if (not 0 <= used <= 100 or minutes <= 0 or int(minutes) != minutes
                 or reset <= 0 or now > reset + stale_grace):

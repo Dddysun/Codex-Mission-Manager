@@ -274,7 +274,9 @@ def self_test():
     import hashlib
     import ssl
     import tempfile
-    import ui, desktop, immediate, plans, catalog, stages
+    import ui, desktop, immediate, plans, catalog, stages, manual, account_display, identity_scope
+    # Include the cold imports that previously appeared only after live use.
+    import encodings.idna, pkgutil, stringprep
     runtime = ROOT.parent / "python"
     if os.name == "nt":
         runtime = ROOT.parent / "runtime/python"
@@ -290,7 +292,8 @@ def self_test():
         store.close()
     print(json.dumps({"runtime": sys.version.split()[0], "sqlite": sqlite3.sqlite_version,
                       "ssl": ssl.OPENSSL_VERSION, "portable_config": True, "private_data_loaded": False,
-                      "all_backend_imports": True, "runtime_inside_bundle": runtime.is_dir()}))
+                      "all_backend_imports": True, "runtime_inside_bundle": runtime.is_dir(),
+                      "bytecode_disabled": sys.dont_write_bytecode}))
 
 
 if __name__ == "__main__":

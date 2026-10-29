@@ -1,0 +1,202 @@
+{
+  "proposal": "1.3.0-proposal.2.1",
+  "result": "pass",
+  "checks": [
+    "ten-distinct-topologies",
+    "varied-lengths-and-branch-counts",
+    "folded-macro-paths",
+    "connected-multilevel-branches",
+    "seed-changes-order-and-geometry",
+    "unequal-event-durations",
+    "all-trunks-originate-in-bolt",
+    "no-orbit-or-rotation-transform",
+    "center-bolt-breathes-every-two-seconds",
+    "gradual-dim-bright-dim-envelope",
+    "breathing-visible-in-rendered-frames",
+    "rendered-frames-actually-differ",
+    "pause-freezes-rendered-frame",
+    "reduced-motion-system-and-manual",
+    "nonworking-states-static",
+    "breathing-phase-preserved-on-random-shuffle",
+    "live-shuffle-button-changes-seed",
+    "live-cycle-regenerates-sequence",
+    "light-dark-rendered",
+    "ten-gallery-previews",
+    "mobile-no-overflow",
+    "browser-no-errors",
+    "ten-independent-gif-outputs-are-distinct",
+    "ten-gif-archive-integrity"
+  ],
+  "sequence": {
+    "seed": 20261029,
+    "cycle_seconds": 12,
+    "events": [
+      {
+        "id": 6,
+        "start": 0.17,
+        "duration": 0.5,
+        "rise": 0.08,
+        "length_scale": 0.921702687270008
+      },
+      {
+        "id": 7,
+        "start": 1.39,
+        "duration": 0.55,
+        "rise": 0.09,
+        "length_scale": 0.8658550016069785
+      },
+      {
+        "id": 8,
+        "start": 2.33,
+        "duration": 0.58,
+        "rise": 0.05,
+        "length_scale": 0.9005181409255602
+      },
+      {
+        "id": 4,
+        "start": 3.45,
+        "duration": 0.46,
+        "rise": 0.07,
+        "length_scale": 0.8311994234565645
+      },
+      {
+        "id": 1,
+        "start": 4.69,
+        "duration": 0.55,
+        "rise": 0.05,
+        "length_scale": 0.7995101767336018
+      },
+      {
+        "id": 3,
+        "start": 5.87,
+        "duration": 0.32,
+        "rise": 0.05,
+        "length_scale": 0.9976154511771165
+      },
+      {
+        "id": 10,
+        "start": 6.98,
+        "duration": 0.35,
+        "rise": 0.07,
+        "length_scale": 0.8294777563214302
+      },
+      {
+        "id": 2,
+        "start": 7.82,
+        "duration": 0.52,
+        "rise": 0.06,
+        "length_scale": 0.8702214772230945
+      },
+      {
+        "id": 5,
+        "start": 9.04,
+        "duration": 0.54,
+        "rise": 0.09,
+        "length_scale": 1.0114099817955866
+      },
+      {
+        "id": 9,
+        "start": 10.13,
+        "duration": 0.38,
+        "rise": 0.08,
+        "length_scale": 0.8173406220250763
+      }
+    ]
+  },
+  "scenes": [
+    {
+      "id": 1,
+      "name": "短枝碎闪",
+      "strokes": 5,
+      "root_count": 1,
+      "longest_stroke": 39.03250584751508,
+      "curve_ratio": 1.3647395627920202
+    },
+    {
+      "id": 2,
+      "name": "折返分叉",
+      "strokes": 5,
+      "root_count": 1,
+      "longest_stroke": 84.5309556599198,
+      "curve_ratio": 1.8038466367403505
+    },
+    {
+      "id": 3,
+      "name": "长短错落",
+      "strokes": 5,
+      "root_count": 2,
+      "longest_stroke": 82.97331745223057,
+      "curve_ratio": 1.518425724509937
+    },
+    {
+      "id": 4,
+      "name": "内核裂纹",
+      "strokes": 8,
+      "root_count": 3,
+      "longest_stroke": 30.747689631041364,
+      "curve_ratio": 2.0683134293044043
+    },
+    {
+      "id": 5,
+      "name": "侧向游走",
+      "strokes": 6,
+      "root_count": 1,
+      "longest_stroke": 92.56885390048126,
+      "curve_ratio": 1.9480626419307017
+    },
+    {
+      "id": 6,
+      "name": "下探裂枝",
+      "strokes": 6,
+      "root_count": 1,
+      "longest_stroke": 59.311615710667695,
+      "curve_ratio": 1.5734129338885396
+    },
+    {
+      "id": 7,
+      "name": "弯折越壁",
+      "strokes": 6,
+      "root_count": 1,
+      "longest_stroke": 110.89184605700179,
+      "curve_ratio": 1.613922265736826
+    },
+    {
+      "id": 8,
+      "name": "一长两短",
+      "strokes": 7,
+      "root_count": 3,
+      "longest_stroke": 93.38790952177118,
+      "curve_ratio": 1.5235968157879534
+    },
+    {
+      "id": 9,
+      "name": "偏侧树冠",
+      "strokes": 8,
+      "root_count": 2,
+      "longest_stroke": 59.266417526575424,
+      "curve_ratio": 1.8865653275652217
+    },
+    {
+      "id": 10,
+      "name": "散簇微爆",
+      "strokes": 7,
+      "root_count": 3,
+      "longest_stroke": 37.16005902625884,
+      "curve_ratio": 1.2723361878659094
+    }
+  ],
+  "independent_gif_count": 10,
+  "main_video_fps": 30,
+  "gif_fps": 20,
+  "breath": {
+    "cycle_seconds": 2,
+    "dim_opacity": 0.58,
+    "bright_opacity": 1,
+    "seconds_to_bright": 1,
+    "seconds_to_dim": 1,
+    "phase_preserved_on_shuffle": true
+  },
+  "production_assets_changed": false,
+  "live_backend_started": false,
+  "private_data_loaded": false
+}

@@ -1,0 +1,198 @@
+{
+  "observed_at": 1792785600,
+  "now": 1792785600,
+  "running": true,
+  "healthy": true,
+  "stale": false,
+  "control_paused": false,
+  "control_enabled": true,
+  "control_revision": 4,
+  "tasks": [
+    {
+      "id": "demo-chat-0",
+      "key": "codex:local:demo-chat-0",
+      "name": "整理项目的部署说明",
+      "state": "watching",
+      "auto_resume": true,
+      "manual_hold": false,
+      "revision": 3,
+      "can_control": true,
+      "category": "codex",
+      "source_label": "Codex · 本机",
+      "runtime": {
+        "type": "active"
+      },
+      "execution_stage": {
+        "text": "正在核对已完成的部署步骤，随后整理发布说明。",
+        "phase": "progress",
+        "updated_at": 1792785600
+      },
+      "plan": {
+        "state": "off",
+        "prompt": "继续任务",
+        "revision": 2
+      }
+    },
+    {
+      "id": "demo-chat-1",
+      "key": "codex:local:demo-chat-1",
+      "name": "检查发布清单与已有进度",
+      "state": "watching",
+      "auto_resume": false,
+      "manual_hold": false,
+      "revision": 3,
+      "can_control": true,
+      "category": "codex",
+      "source_label": "Codex · 本机",
+      "runtime": {
+        "type": "idle"
+      },
+      "execution_stage": {
+        "text": "上一轮检查已完成。等待你的下一条指令。",
+        "phase": "progress",
+        "updated_at": 1792785600
+      },
+      "plan": {
+        "state": "off",
+        "prompt": "继续任务",
+        "revision": 2
+      }
+    },
+    {
+      "id": "demo-chat-2",
+      "key": "codex:local:demo-chat-2",
+      "name": "示例离线聊天",
+      "state": "watching",
+      "auto_resume": false,
+      "manual_hold": false,
+      "revision": 3,
+      "can_control": false,
+      "category": "codex",
+      "source_label": "Codex · 本机",
+      "runtime": {
+        "type": "unknown"
+      },
+      "execution_stage": {
+        "text": "客户端未连接，执行阶段暂不可读。",
+        "phase": "progress",
+        "updated_at": 1792785600
+      },
+      "plan": {
+        "state": "off",
+        "prompt": "继续任务",
+        "revision": 2
+      },
+      "kind": "codex",
+      "host_id": "local"
+    }
+  ],
+  "events": [
+    {
+      "id": 1,
+      "created": 1792785600,
+      "state": "watching",
+      "name": "整理项目的部署说明",
+      "detail": {}
+    }
+  ],
+  "usage": {
+    "account": {
+      "id": "demo-account-preview",
+      "name": "示例账号",
+      "email": "preview@example.invalid",
+      "type": "chatgpt",
+      "plan_type": "plus"
+    },
+    "windows": {
+      "five_hour": {
+        "remaining": 72,
+        "reset": 1792792800
+      },
+      "weekly": {
+        "remaining": 47,
+        "reset": 1792958400
+      }
+    },
+    "observed_at": 1792785600,
+    "stale": false,
+    "reset_credits": {
+      "supported": true,
+      "available_count": 2,
+      "credits": [
+        {
+          "id": "demo-reset-credit",
+          "status": "available",
+          "title": "额度重置机会",
+          "description": "符合条件时可在官方客户端使用。",
+          "resetType": "codexRateLimits",
+          "grantedAt": 1792785600,
+          "expiresAt": 1793390400
+        }
+      ]
+    },
+    "quota_state": "metered"
+  },
+  "catalog": {
+    "observed_at": 1792785600
+  },
+  "policy": {
+    "pause": 10,
+    "resume": 20,
+    "confirm_seconds": 5
+  },
+  "poll_seconds": 30,
+  "rules": {
+    "revision": 0,
+    "values": {
+      "pause_remaining": 10,
+      "resume_remaining": 20,
+      "poll_seconds": 30,
+      "near_limit_poll_seconds": 10,
+      "recovery_confirm_seconds": 5,
+      "ui_poll_seconds": 5
+    },
+    "bounds": {
+      "pause_remaining": {
+        "min": 1,
+        "max": 50,
+        "default": 10
+      },
+      "resume_remaining": {
+        "min": 5,
+        "max": 95,
+        "default": 20
+      },
+      "poll_seconds": {
+        "min": 10,
+        "max": 300,
+        "default": 30
+      },
+      "near_limit_poll_seconds": {
+        "min": 5,
+        "max": 60,
+        "default": 10
+      },
+      "recovery_confirm_seconds": {
+        "min": 3,
+        "max": 60,
+        "default": 5
+      },
+      "ui_poll_seconds": {
+        "min": 2,
+        "max": 30,
+        "default": 5
+      }
+    },
+    "constraints": {
+      "resume_pause_gap": 5,
+      "near_limit_not_above_normal": true,
+      "early_balance_restoration_min_drop_percent": 20,
+      "server_reset_time_editable": false,
+      "reset_credits_auto_consume": false
+    }
+  },
+  "quota_state": "metered",
+  "usage_stale": false,
+  "service_error": "",
+  "control_available": true
+}

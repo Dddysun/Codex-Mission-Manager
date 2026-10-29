@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TokenMax · 随机放电 02</title>
+<style>
+  *{box-sizing:border-box}body{margin:0;background:#101b29;color:#e7ecf4;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  main{max-width:1256px;padding:24px;margin:auto}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;max-width:960px;margin:0 auto 20px;color:#aab7c8}
+  button,select{font:inherit;color:inherit;background:#1d2c40;border:1px solid #354459;border-radius:7px;padding:7px 10px;cursor:pointer}label{display:flex;align-items:center;gap:6px}.spacer{flex:1}
+  .stage{width:960px;height:384px;max-width:100%;background:#192a3e;display:flex;align-items:center;justify-content:center;gap:25px;overflow:hidden;border-radius:16px;margin:auto}
+  .hero-logo{width:300px;height:300px;flex-shrink:0}svg{display:block;width:100%;height:100%}.wordmark{padding-right:30px}.wordmark h1{font-size:43px;font-weight:730;margin:0 0 15px;letter-spacing:.3px;color:#e4e9f1}.wordmark p{font-size:17px;font-weight:600;letter-spacing:4px;color:#9aa6b7;margin:0}
+  .light{background:#f1f5fb!important}.stage.light h1{color:#23354d}.stage.light p{color:#697a91}.light .scene-name{color:#425670}
+  .caption{max-width:960px;display:flex;justify-content:space-between;gap:16px;color:#9eabbc;line-height:1.8;margin:16px auto 32px}.caption strong{color:#dfe6f0;font-weight:600}
+  h2{font-size:17px;margin:0 0 14px;font-weight:600}#gallery{display:grid;grid-template-columns:repeat(5,240px);width:1200px;max-width:100%;background:#192a3e}.scene{width:240px;height:270px;display:flex;flex-direction:column;align-items:center;border:1px solid #2a3b50}.scene-logo{width:220px;height:220px;margin-top:7px}.scene-name{font-size:13px;letter-spacing:.8px;color:#b7c4d5;padding:9px 0}.scene button{border:0;background:none;color:inherit;padding:0}
+  @media(max-width:1200px){#gallery{width:100%;grid-template-columns:repeat(auto-fit,minmax(210px,1fr))}.scene{width:100%}}
+  @media(max-width:700px){main{padding:14px}.stage{height:270px;gap:0}.hero-logo{width:180px;height:180px}.wordmark{padding-right:10px}.wordmark h1{font-size:24px}.wordmark p{font-size:10px;letter-spacing:1.8px}.caption{font-size:12px}.toolbar{font-size:12px}#gallery{grid-template-columns:repeat(2,minmax(0,1fr))}.scene{height:200px}.scene-logo{width:166px;height:166px;max-width:100%}.scene-name{font-size:11px;padding:5px 0}}
+</style>
+<main>
+  <div class="toolbar"><strong>随机放电 02</strong><span class="spacer"></span><select id="mode" aria-label="放电形态"><option value="all">十种随机交错</option></select><button id="shuffle">换一组</button><select id="theme" aria-label="外观"><option value="dark">深色</option><option value="light">浅色</option></select><select id="state" aria-label="状态"><option value="working">工作中</option><option value="idle">空闲</option><option value="waiting">等待额度</option><option value="disconnected">连接断开</option><option value="error">发生错误</option></select><button id="pause">暂停</button><label><input id="reduce" type="checkbox">减少动态</label></div>
+  <div id="capture" class="stage"><div id="hero" class="hero-logo"></div><div class="wordmark"><h1>TOKEN榨汁机</h1><p>TOKENMAX / LOCAL</p></div></div>
+  <div class="caption"><span><strong>长短错落，方向打散。</strong><br>2 秒呼吸，叠加十种随机放电</span><span id="sequence-note">10 种形态 · 2 秒呼吸</span></div>
+  <h2>十种放电形态</h2><div id="gallery"></div>
+</main>
+<script src="../../juicer-artwork.js"></script>
+<script src="core-discharge.js"></script>
+<script>
+  const api=TokenMaxDischargePreview;
+  const captureMode=new URLSearchParams(location.search).has('capture');
+  const randomSeed=()=>Math.floor(Math.random()*4294967296);
+  let seed=captureMode?20261029:randomSeed(),paused=false;
+  const breathTimes=new Map();
+  const mode=document.getElementById('mode');
+  for(const scene of api.scenes){const option=document.createElement('option');option.value=scene.id;option.textContent=String(scene.id).padStart(2,'0')+' '+scene.name;mode.appendChild(option);}
+  const gallery=document.getElementById('gallery');
+  gallery.innerHTML=api.scenes.map(scene=>`<div class="scene" id="scene-${scene.id}"><div class="scene-logo" id="logo-${scene.id}"></div><div class="scene-name"><button data-scene="${scene.id}">${String(scene.id).padStart(2,'0')} ${scene.name}</button></div></div>`).join('');
+  function options(){return {state:document.getElementById('state').value,theme:document.getElementById('theme').value,animated:!paused,reducedMotion:document.getElementById('reduce').checked};}
+  function renderInto(element,opts){
+    const previous=element.querySelector('.bolt-breathe')?.getAnimations()[0]?.currentTime;
+    if(previous!==undefined&&previous!==null)breathTimes.set(element.id,Number(previous));
+    element.innerHTML=api.renderSVG(opts);
+    const next=element.querySelector('.bolt-breathe')?.getAnimations()[0];
+    if(next&&breathTimes.has(element.id))next.currentTime=breathTimes.get(element.id);
+  }
+  function renderHero(){
+    const sceneId=mode.value==='all'?null:Number(mode.value);
+    renderInto(document.getElementById('hero'),{...options(),seed,sceneId,size:300});
+    document.getElementById('sequence-note').textContent=sceneId===null?'10 种形态 · 2 秒呼吸':api.scenes.find(scene=>scene.id===sceneId).name;
+  }
+  function render(){
+    const opts=options();
+    document.getElementById('capture').classList.toggle('light',opts.theme==='light');gallery.classList.toggle('light',opts.theme==='light');
+    renderHero();
+    for(const scene of api.scenes)renderInto(document.getElementById('logo-'+scene.id),{...opts,sceneId:scene.id,seed:34000+scene.id*97,size:220});
+  }
+  function renewAtBoundary(){
+    const svg=document.querySelector('#hero svg');
+    const timeline=svg?.querySelector('.discharge-event')?.getAnimations()[0];
+    if(timeline&&timeline.playState==='running'&&Number(timeline.currentTime)>=Number(svg.dataset.cycle)*1000){seed=randomSeed();renderHero();}
+    requestAnimationFrame(renewAtBoundary);
+  }
+  if(!captureMode)requestAnimationFrame(renewAtBoundary);
+  document.getElementById('pause').onclick=()=>{paused=!paused;document.getElementById('pause').textContent=paused?'播放':'暂停';document.querySelectorAll('svg').forEach(svg=>svg.dataset.animated=String(!paused));};
+  document.getElementById('shuffle').onclick=()=>{seed=randomSeed();renderHero();};
+  for(const id of ['mode','theme','state','reduce'])document.getElementById(id).onchange=render;
+  gallery.onclick=event=>{const button=event.target.closest('button[data-scene]');if(button){mode.value=button.dataset.scene;renderHero();document.getElementById('capture').scrollIntoView({behavior:'smooth',block:'center'});}};
+  window.preview={render,options,get seed(){return seed;},get sequence(){return api.buildSequence(seed,mode.value==='all'?null:Number(mode.value));}};
+  render();
+</script>
+</html>

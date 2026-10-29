@@ -87,14 +87,14 @@ $versionInfo = Join-Path $scratch 'VersionInfo.cs'
 $fileBuild = [Math]::Min(65534,[int]$buildNumber)
 $versionSource = '[assembly: System.Reflection.AssemblyVersion("'+$version+'.0")][assembly: System.Reflection.AssemblyFileVersion("'+$version+'.'+$fileBuild+'")][assembly: System.Reflection.AssemblyInformationalVersion("'+$version+'-'+$preview+'")][assembly: System.Reflection.AssemblyProduct("TokenMax")]'
 [IO.File]::WriteAllText($versionInfo,$versionSource,(New-Object Text.UTF8Encoding($false)))
-$appArgs = $common + @('/out:'+(Join-Path $app 'CodexMissionManager.exe')) + ($references | ForEach-Object { '/reference:'+$_ }) + @((Join-Path $PSScriptRoot 'MissionManager.cs'),(Join-Path $PSScriptRoot 'JuicerLogo.cs'),$versionInfo)
+$appArgs = $common + @('/out:'+(Join-Path $app 'CodexMissionManager.exe')) + ($references | ForEach-Object { '/reference:'+$_ }) + @((Join-Path $PSScriptRoot 'MissionManager.cs'),(Join-Path $PSScriptRoot 'JuicerMotionData.cs'), (Join-Path $PSScriptRoot 'JuicerMotion.cs'), (Join-Path $PSScriptRoot 'JuicerLogo.cs'),$versionInfo)
 Write-Output 'Compiling native Windows application'
 & $compiler @appArgs
 if ($LASTEXITCODE -ne 0) { throw 'Native application compilation failed.' }
 
 $python = Join-Path $runtime 'python.exe'
 Write-Output 'Checking embedded Python and isolated backend imports'
-& $python -X utf8 -I (Join-Path $backend 'app_host.py') --self-test
+& $python -B -X utf8 -I (Join-Path $backend 'app_host.py') --self-test
 if ($LASTEXITCODE -ne 0) { throw 'Embedded backend self-test failed.' }
 $nativeReceipt = Join-Path $scratch 'native-self-test.json'
 $nativeTest = Start-Process -FilePath (Join-Path $app 'CodexMissionManager.exe') -ArgumentList @('--self-test',('"'+$nativeReceipt+'"')) -Wait -PassThru
@@ -105,7 +105,7 @@ if (!$nativeResult.native -or $nativeResult.webView -or $nativeResult.hostStarte
 $manifest = [ordered]@{
     version=$version; preview=$preview; build_number=$buildNumber; platform='windows'; architecture='x64'
     minimum_windows='10.0.19041'; framework='.NET Framework 4.8 or later'; framework_bundled=$false
-    ui='WPF'; webview=$false; product='TokenMax'; product_zh=('TOKEN' + [char]0x69A8 + [char]0x6C41 + [char]0x673A); brand_identity_version='1.2.0'; python=$lock.version; python_distribution=$lock.distribution; python_sha256=$lock.sha256
+    ui='WPF'; webview=$false; product='TokenMax'; product_zh=('TOKEN' + [char]0x69A8 + [char]0x6C41 + [char]0x673A); brand_identity_version='1.3.0'; python=$lock.version; python_distribution=$lock.distribution; python_sha256=$lock.sha256
     python_bundled=$true; private_runtime_data_included=$false; signing='unsigned-preview'
     normal_poll_delay_seconds=30; near_limit_or_pending_plan_poll_delay_seconds=10; ui_poll_seconds=5
     configurable_rules=$true; theme_accents=@('green','blue','purple','yellow'); chat_sources=@('codex')

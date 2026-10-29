@@ -99,6 +99,17 @@ class InterfaceTests(unittest.TestCase):
         data = json.loads(self.request()[2])
         self.assertTrue(data["usage"]["stale"])
 
+    def test_catalog_order_uses_each_chats_timestamp_and_keeps_ties_stable(self):
+        self.prepare_catalog()
+        items = [entry("older", "Older", updated_at=1),
+                 entry("newer-first", "First", updated_at=8),
+                 entry("newer-second", "Second", updated_at=8),
+                 entry("undated", "Undated")]
+        self.store.put("chat_catalog", {"scope": "test", "items": items})
+        data = json.loads(self.request()[2])
+        self.assertEqual([task["id"] for task in data["tasks"]],
+                         ["newer-first", "newer-second", "older", "undated"])
+
     def test_mac_transport_failure_disables_controls_even_with_fresh_quota(self):
         self.store.put('supervisor_paused', False)
         report_path = self.store.directory / 'status.json'

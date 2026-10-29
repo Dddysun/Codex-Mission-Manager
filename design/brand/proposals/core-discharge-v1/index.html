@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TokenMax · 内核放电 01</title>
+<style>
+  *{box-sizing:border-box}body{margin:0;background:#101b29;color:#e7ecf4;font:14px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+  main{max-width:1008px;padding:24px;margin:auto}.toolbar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:20px;color:#aab7c8}
+  button,select{font:inherit;color:inherit;background:#1d2c40;border:1px solid #354459;border-radius:7px;padding:7px 12px;cursor:pointer}
+  label{display:flex;align-items:center;gap:6px}.spacer{flex:1}.stage{width:960px;height:320px;max-width:100%;background:#192a3e;display:flex;align-items:center;justify-content:center;gap:28px;overflow:hidden;border-radius:16px}
+  .logo{width:236px;height:236px;flex-shrink:0}.logo svg{width:100%;height:100%}.wordmark{padding-right:22px}.wordmark h1{font-size:45px;font-weight:730;margin:0 0 15px;letter-spacing:.3px;color:#e4e9f1}.wordmark p{font:600 18px -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:4px;color:#9aa6b7;margin:0}
+  .stage.light{background:#f1f5fb}.stage.light h1{color:#23354d}.stage.light p{color:#697a91}
+  .caption{display:flex;justify-content:space-between;gap:16px;color:#9eabbc;line-height:1.7;margin-top:16px}.caption strong{color:#dfe6f0;font-weight:600}.small-sizes{display:flex;align-items:center;gap:28px;margin-top:30px;padding-top:22px;border-top:1px solid #2a3a50}.small-label{color:#9eabbc;min-width:80px}
+  @media(max-width:700px){main{padding:14px}.stage{height:250px;gap:0}.logo{width:160px;height:160px}.wordmark{padding-right:10px}.wordmark h1{font-size:24px}.wordmark p{font-size:11px;letter-spacing:1.8px}.caption{font-size:12px}.small-sizes{gap:18px}.small-label{min-width:50px}}
+</style>
+<main>
+  <div class="toolbar"><strong>内核放电 01</strong><span class="spacer"></span><select id="theme" aria-label="外观"><option value="dark">深色</option><option value="light">浅色</option></select><select id="state" aria-label="状态"><option value="working">工作中</option><option value="idle">空闲</option><option value="waiting">等待额度</option><option value="disconnected">连接断开</option><option value="error">发生错误</option></select><button id="pause">暂停</button><label><input id="reduce" type="checkbox">减少动态</label></div>
+  <div id="capture" class="stage"><div id="hero" class="logo"></div><div class="wordmark"><h1>TOKEN榨汁机</h1><p>TOKENMAX / LOCAL</p></div></div>
+  <div class="caption"><span><strong>杯内起电，向外分叉。</strong><br>暖白亮芯 · 金色电弧 · 短促越界</span><span>动效提案 01<br>保留现有机身与闪电造型</span></div>
+  <div class="small-sizes"><span class="small-label">实际尺寸</span><div id="size96" style="width:96px;height:96px"></div><div id="size48" style="width:48px;height:48px"></div><div id="size24" style="width:24px;height:24px"></div></div>
+</main>
+<script src="../../juicer-artwork.js"></script>
+<script src="core-discharge.js"></script>
+<script>
+  let paused=false;
+  function render(){
+    const theme=document.querySelector('#theme').value,state=document.querySelector('#state').value;
+    const reduced=document.querySelector('#reduce').checked;
+    document.querySelector('#capture').classList.toggle('light',theme==='light');
+    for(const [id,size] of [['hero',236],['size96',96],['size48',48],['size24',24]]){
+      document.getElementById(id).innerHTML=TokenMaxDischargePreview.renderSVG({state,theme,size,reducedMotion:reduced,animated:!paused});
+    }
+  }
+  document.querySelector('#pause').onclick=()=>{paused=!paused;document.querySelector('#pause').textContent=paused?'播放':'暂停';document.querySelectorAll('svg').forEach(svg=>svg.dataset.animated=String(!paused))};
+  document.querySelector('#theme').onchange=render;document.querySelector('#state').onchange=render;document.querySelector('#reduce').onchange=render;
+  render();
+</script>
+</html>

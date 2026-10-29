@@ -1,0 +1,183 @@
+{
+  "review_date": "2026-10-29",
+  "timezone": "Asia/Dubai",
+  "release_baseline_commit": "67dd090b445a16b6c8c3e2e02e0ac85dfdd03da0",
+  "prior_review_commit": "5970ca1ba15113ec8af7a8fc0aa2e48351a5d362",
+  "source_version": "0.4.2",
+  "publication_status": "source-only additions to a development candidate; not installed or repackaged",
+  "coverage_claim": "feature mapping and selected boundaries; no claim of complete functional, line or branch coverage",
+  "new_test_methods": 26,
+  "findings": {
+    "total": 21,
+    "fixed_in_candidate_source": 7,
+    "remaining_architecture_security_product_or_maintenance": 14
+  },
+  "suites": {
+    "macos": {
+      "platform": "darwin",
+      "python": "3.12.15",
+      "scope": "full",
+      "full_backend_suite_run": true,
+      "results": {
+        "backend": {
+          "tests_run": 349,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 3,
+          "successful": true,
+          "selection": "test_*.py",
+          "skipped_cases": [
+            {
+              "test": "test_rejected_windows_pipe_identity_receives_no_protocol_frames (test_desktop.NativeProtocolTests.test_rejected_windows_pipe_identity_receives_no_protocol_frames)",
+              "reason": "Windows pipe server identity rejection"
+            },
+            {
+              "test": "test_closing_windows_job_handle_reaps_parent_and_rpc (test_owned_process.OwnedProcessTests.test_closing_windows_job_handle_reaps_parent_and_rpc)",
+              "reason": "Windows kill-on-job-close"
+            },
+            {
+              "test": "test_windows_private_directory_dacl_matches_default_inheritance (test_windows_platform.PrivateDirectoryTests.test_windows_private_directory_dacl_matches_default_inheritance)",
+              "reason": "Windows inherited DACL regression"
+            }
+          ]
+        },
+        "host": {
+          "tests_run": 31,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "successful": true,
+          "selection": "test_*.py",
+          "skipped_cases": []
+        }
+      }
+    },
+    "windows": {
+      "platform": "win32",
+      "python": "3.13.17",
+      "scope": "full",
+      "full_backend_suite_run": true,
+      "results": {
+        "backend": {
+          "tests_run": 349,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 5,
+          "successful": true,
+          "selection": "test_*.py",
+          "skipped_cases": [
+            {
+              "test": "test_current_metadata_is_rechecked_between_calls (test_compatibility.CompatibilityTests.test_current_metadata_is_rechecked_between_calls)",
+              "reason": "macOS plist compatibility profiles have separate Windows checks"
+            },
+            {
+              "test": "test_known_builds_share_explicit_protocol_profile_and_validation_level (test_compatibility.CompatibilityTests.test_known_builds_share_explicit_protocol_profile_and_validation_level)",
+              "reason": "macOS plist compatibility profiles have separate Windows checks"
+            },
+            {
+              "test": "test_missing_or_invalid_client_is_explicitly_unknown (test_compatibility.CompatibilityTests.test_missing_or_invalid_client_is_explicitly_unknown)",
+              "reason": "macOS plist compatibility profiles have separate Windows checks"
+            },
+            {
+              "test": "test_unknown_build_is_never_assumed_supported (test_compatibility.CompatibilityTests.test_unknown_build_is_never_assumed_supported)",
+              "reason": "macOS plist compatibility profiles have separate Windows checks"
+            },
+            {
+              "test": "test_posix_directory_and_file_modes_are_unchanged (test_windows_platform.PrivateDirectoryTests.test_posix_directory_and_file_modes_are_unchanged)",
+              "reason": "POSIX mode contract"
+            }
+          ]
+        },
+        "host": {
+          "tests_run": 31,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "successful": true,
+          "selection": "test_*.py",
+          "skipped_cases": []
+        }
+      }
+    }
+  },
+  "source_files_sha256": {
+    "backend/guardian.py": "59163f7ac8a6e642826528e8a82ed0494424ddd4241f1296a0b5d1e74fb828ae",
+    "backend/desktop.py": "bfefef7a64d2d1ac20540728b7a42a2d7f47267af71024cfaf74b714d2b0fcce",
+    "backend/ui.py": "83de521283a7e613f0bc4776fa2d72bf4a4b2c7d5a91149dff5d4c121576f79e",
+    "backend/quota.py": "2d2890435f5ace716c0b53c158099c294080d618aa0248117e228f3390e6b26a",
+    "backend/quota_audit.py": "e17f63b6fec1db998ace5b7d2552f070fd19089e0d8a2a18f00f94685ecea6d8"
+  },
+  "windows_core_source_hashes_match": true,
+  "windows_first_full_attempt": {
+    "tests_run": 347,
+    "failures": 1,
+    "errors": 4,
+    "skipped": 5,
+    "note": "A large-frame test recorded errors in both its body and cleanup. Product deadline/error-response fixes and fixture API/isolation corrections are retained."
+  },
+  "baseline_revocation_counterexample": {
+    "tests_run": 1,
+    "failures": 1,
+    "errors": 0,
+    "expected_old_code_failure": true,
+    "environment": "two temporary SQLite connections"
+  },
+  "state_function_benchmark": {
+    "environment": "temporary SQLite, synthetic catalog, compatibility lookup mocked; median of three state() calls; excludes native rendering and network",
+    "results": [
+      {
+        "chats": 100,
+        "before_seconds": 0.0006759589305147529,
+        "after_seconds": 0.000610582996159792
+      },
+      {
+        "chats": 1000,
+        "before_seconds": 0.014289750019088387,
+        "after_seconds": 0.003139332984574139
+      },
+      {
+        "chats": 3000,
+        "before_seconds": 0.11520950007252395,
+        "after_seconds": 0.009506542002782226
+      }
+    ]
+  },
+  "storage_probe": {
+    "synthetic_instruction_readable_in_database_bytes": true,
+    "application_encryption_implemented": false,
+    "operating_system_disk_encryption_checked": false
+  },
+  "local_http_identity_probe": {
+    "environment": "isolated server with synthetic application handlers",
+    "anonymous_bootstrap_obtained_session": true,
+    "state_http_status": 200,
+    "synthetic_action_http_status": 200,
+    "different_os_user_tested": false,
+    "real_actions_executed": 0
+  },
+  "deployment": {
+    "macos_installed_version": "0.4.1",
+    "macos_installed_build": "11",
+    "windows_installed_version": "0.3.1-preview.2",
+    "upgrades_performed": false,
+    "prior_candidate_packages_include_additional_fixes": false
+  },
+  "live_chat_messages_sent": 0,
+  "live_chats_interrupted": 0,
+  "canvas_check": "TypeScript 5.9.3 with installed Canvas SDK declarations; not a claim of interactive UI acceptance",
+  "privacy": {
+    "real_accounts_included": false,
+    "real_chat_content_included": false,
+    "runtime_databases_included": false,
+    "credentials_included": false
+  },
+  "still_unverified": [
+    "live low-quota pause/recovery/resume",
+    "official early restoration event",
+    "Windows production install upgrade and system-tray interaction",
+    "Mac menu-bar icon on actual light/dark backgrounds",
+    "closed-lid, manual sleep and locked delivery",
+    "cross-user local HTTP access",
+    "long-running memory and database-growth profiles"
+  ]
+}

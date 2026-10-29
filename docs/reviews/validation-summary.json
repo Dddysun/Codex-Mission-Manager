@@ -1,0 +1,260 @@
+{
+  "review_date": "2026-10-29",
+  "timezone": "Asia/Dubai",
+  "baseline_commit": "67dd090b445a16b6c8c3e2e02e0ac85dfdd03da0",
+  "fix_commit": "7e5b0b11a763b83b52e84a745cf5f14dffc66645",
+  "candidate_version": "0.4.2",
+  "publication_status": "development candidate; not a published release",
+  "macos": {
+    "platform": "darwin",
+    "python": "3.12.15",
+    "environment": "isolated test fixtures",
+    "live_chat_messages_sent": 0,
+    "scope": "full",
+    "full_backend_suite_run": true,
+    "results": {
+      "backend": {
+        "tests_run": 323,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 3,
+        "successful": true,
+        "selection": "test_*.py",
+        "skipped_cases": [
+          {
+            "test": "test_rejected_windows_pipe_identity_receives_no_protocol_frames (test_desktop.NativeProtocolTests.test_rejected_windows_pipe_identity_receives_no_protocol_frames)",
+            "reason": "Windows pipe server identity rejection"
+          },
+          {
+            "test": "test_closing_windows_job_handle_reaps_parent_and_rpc (test_owned_process.OwnedProcessTests.test_closing_windows_job_handle_reaps_parent_and_rpc)",
+            "reason": "Windows kill-on-job-close"
+          },
+          {
+            "test": "test_windows_private_directory_dacl_matches_default_inheritance (test_windows_platform.PrivateDirectoryTests.test_windows_private_directory_dacl_matches_default_inheritance)",
+            "reason": "Windows inherited DACL regression"
+          }
+        ],
+        "failure_details": []
+      },
+      "host": {
+        "tests_run": 31,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "successful": true,
+        "selection": "test_*.py",
+        "skipped_cases": [],
+        "failure_details": []
+      }
+    }
+  },
+  "dmg": {
+    "dmg_sha256": "6479571ecb221b086844c5ee7bfa3754df3ca788f9fbbb8efb0ae889d46cb220",
+    "live_chat_messages_sent": 0,
+    "administrator_service_installed": false,
+    "system_power_settings_changed": false,
+    "webkit_linked": false,
+    "readonly_mount": true,
+    "signature_integrity": true,
+    "native_self_test": {
+      "architecture": "arm64",
+      "hardwareReadOnly": true,
+      "helperPreviewFailsClosed": true,
+      "native": true,
+      "privateDataLoaded": false,
+      "releaseSigned": false,
+      "ui": "SwiftUI-AppKit",
+      "version": "0.4.2",
+      "webView": false
+    },
+    "embedded_runtime_self_test": {
+      "runtime": "3.12.15",
+      "sqlite": "3.53.1",
+      "ssl": "OpenSSL 3.5.9 29 Sep 2026",
+      "portable_config": true,
+      "private_data_loaded": false,
+      "all_backend_imports": true,
+      "runtime_inside_bundle": true,
+      "bytecode_disabled": true
+    },
+    "unsigned_preview_helper_rejected": true,
+    "writable_runtime_check": {
+      "writable_copy": true,
+      "cold_imports": true,
+      "owned_child_imports": true,
+      "resources_unchanged": true,
+      "signature_integrity_after_imports": true,
+      "bytecode_disabled": true,
+      "private_data_loaded": false,
+      "live_chat_messages_sent": 0
+    },
+    "graphical_ui_verified": false,
+    "login_autostart_verified": false,
+    "locked_delivery_verified": false,
+    "display_off_delivery_verified": false,
+    "closed_lid_delivery_verified": false,
+    "notarized": false
+  },
+  "transport_backpressure": {
+    "environment": "isolated blocked writer; no live connection",
+    "results": {
+      "desktop": {
+        "configured_seconds": 0.03,
+        "external_watchdog_seconds": 0.8,
+        "baseline_elapsed_seconds": 0.801,
+        "fixed_elapsed_seconds": 0.031
+      },
+      "quota_rpc": {
+        "configured_seconds": 0.03,
+        "external_watchdog_seconds": 0.3,
+        "baseline_elapsed_seconds": 0.301,
+        "fixed_elapsed_seconds": 0.032
+      }
+    }
+  },
+  "brand": {
+    "result": "pass",
+    "checks": [
+      "working-motion-changes",
+      "pause-freezes-frame",
+      "state-change-retains-pause",
+      "only-working-animates",
+      "system-reduced-motion",
+      "manual-reduced-motion",
+      "auto-dark-light-theme",
+      "muted-dark-blue-and-gold",
+      "independent-inline-colors",
+      "unique-clip-ids",
+      "static-svg-no-keyframes",
+      "accessible-label-escaping",
+      "mobile-no-horizontal-overflow",
+      "browser-no-errors"
+    ],
+    "states": 5,
+    "staticAssets": 10,
+    "animatedAssets": 3
+  },
+  "live_chat_messages_sent": 0,
+  "live_tasks_interrupted": 0,
+  "windows_installed_upgrade_verified": false,
+  "real_system_tray_interaction_verified": false,
+  "macos_real_menu_bar_light_dark_verified": false,
+  "live_quota_pause_recovery_resume_verified": false,
+  "official_early_reset_event_observed": false,
+  "windows_read_only_protocol_check": {
+    "quota_read": true,
+    "control_handshake": true,
+    "snapshot_read": true,
+    "reconnected": true,
+    "installed_upgrade": false
+  },
+  "native_fixture_checks": {
+    "macos_contract": true,
+    "macos_editor": true,
+    "macos_lifecycle": true,
+    "windows_editor": true,
+    "windows_lifecycle": true,
+    "production_hosts_started": false
+  },
+  "privacy": {
+    "real_accounts_included": false,
+    "real_chat_content_included": false,
+    "runtime_database_included": false,
+    "credentials_included": false
+  },
+  "windows": {
+    "platform": "win32",
+    "python": "3.13.17",
+    "environment": "isolated test fixtures",
+    "live_chat_messages_sent": 0,
+    "scope": "smoke",
+    "full_backend_suite_run": false,
+    "results": {
+      "backend": {
+        "tests_run": 34,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 1,
+        "successful": true,
+        "selection": "test_windows_platform.py",
+        "skipped_cases": [
+          {
+            "test": "test_posix_directory_and_file_modes_are_unchanged (test_windows_platform.PrivateDirectoryTests.test_posix_directory_and_file_modes_are_unchanged)",
+            "reason": "POSIX mode contract"
+          }
+        ],
+        "failure_details": []
+      },
+      "host": {
+        "tests_run": 31,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "successful": true,
+        "selection": "test_*.py",
+        "skipped_cases": [],
+        "failure_details": []
+      },
+      "owned_process": {
+        "tests_run": 7,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "successful": true,
+        "selection": "test_owned_process.py",
+        "skipped_cases": [],
+        "failure_details": []
+      },
+      "quota_audit": {
+        "tests_run": 40,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "successful": true,
+        "selection": "test_quota_audit.py",
+        "skipped_cases": [],
+        "failure_details": []
+      },
+      "event_origin": {
+        "tests_run": 17,
+        "failures": 0,
+        "errors": 0,
+        "skipped": 0,
+        "successful": true,
+        "selection": "test_event_origin.py",
+        "skipped_cases": [],
+        "failure_details": []
+      }
+    }
+  },
+  "windows_transport_deadline_tests": {
+    "tests_run": 5,
+    "failures": 0,
+    "errors": 0,
+    "successful": true
+  },
+  "canvas_typescript_check": "passed using TypeScript 5.9.3 and installed Canvas SDK declarations",
+  "preview_timestamps": "synthetic current-schema fixture; timestamps rebased, no real quota data",
+  "windows_writable_runtime": {
+    "version": "0.4.2",
+    "resources_unchanged": true,
+    "messages_sent": 0,
+    "assets": [
+      {
+        "sha256": "8235c56e33758a866e957f9a000488c0f11736fb9be96d12e0b001f59d38549f",
+        "name": "TokenMax-0.4.2-windows-x64-preview.zip",
+        "bytes": 11665524
+      },
+      {
+        "sha256": "6821e444a90485137ca131372f04cbc265e577d33601cb17a9dda579cad6f1b8",
+        "name": "TokenMax-0.4.2-windows-x64-setup.exe",
+        "bytes": 11721356
+      }
+    ],
+    "bytecode_disabled": true,
+    "private_data_loaded": false,
+    "production_host_started": false
+  },
+  "additional_source_review": "deep-review-summary.json",
+  "candidate_packages_include_additional_review_fixes": false
+}

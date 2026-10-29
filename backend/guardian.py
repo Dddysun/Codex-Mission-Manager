@@ -102,9 +102,15 @@ class Store:
     def tasks(self):
         return [json.loads(row[0]) for row in self.db.execute("SELECT value FROM tasks")]
 
-    def save_task(self, task, origin=None):
+    def save_task(self, task, origin=None, *, respect_auto_preference=False):
         with self.db:
+            # Acquire the write lock before reading the revision. A deferred
+            # transaction lets a UI revocation commit between this read and
+            # the write, which would otherwise restore the stale permission.
+            self.db.execute("BEGIN IMMEDIATE")
             old = self.db.execute("SELECT value FROM tasks WHERE id=?", (task["id"],)).fetchone()
+            if respect_auto_preference and self.get("auto_preferences", {}).get(task["id"]) is False:
+                return False
             if old and task.get("control_revision", 0) != json.loads(old[0]).get("control_revision", 0):
                 return False
             if old and json.loads(old[0])["state"] == "disabled" and task["state"] != "disabled":
@@ -121,19 +127,73 @@ class Store:
     def permission(self, thread_id, enabled, expected_revision=None):
         with self.db:
             self.db.execute("BEGIN IMMEDIATE")
+            self._permission(thread_id, enabled, expected_revision)
+            preferences = self.get("auto_preferences", {})
+            preferences[thread_id] = bool(enabled)
+            self.db.execute("INSERT OR REPLACE INTO kv VALUES(?,?)",
+                            ("auto_preferences", json.dumps(preferences)))
+
+    def _permission(self, thread_id, enabled, expected_revision=None):
+        """Update permission inside an already acquired write transaction."""
+        task = self.get_task(thread_id)
+        if task is None:
+            raise ValueError("task is not registered")
+        if expected_revision is not None and expected_revision != task.get("control_revision", 0):
+            raise ValueError("任务状态已变化，请刷新后重试")
+        task.update(auto_resume=bool(enabled), manual_hold=not enabled)
+        task["control_revision"] = task.get("control_revision", 0) + 1
+        if enabled and task["state"] in ("disabled", "held", "needs_review"):
+            task.update(state="watching", reason=None, recovery_first_seen=None)
+        self.db.execute("UPDATE tasks SET value=? WHERE id=?", (json.dumps(task), thread_id))
+        self.db.execute("INSERT INTO events(created,thread_id,state,detail) VALUES(?,?,?,?)",
+            (time.time(), thread_id, task["state"], json.dumps(origin_detail(task['state'],
+                {"automatic_control_allowed": bool(enabled)}, 'user'))))
+
+    def configure_auto(self, thread_id, enabled, revision, scope):
+        """Commit a UI toggle, its preference and adoption intent together."""
+        with self.db:
+            self.db.execute("BEGIN IMMEDIATE")
             task = self.get_task(thread_id)
-            if task is None:
-                raise ValueError("task is not registered")
-            if expected_revision is not None and expected_revision != task.get("control_revision", 0):
-                raise ValueError("任务状态已变化，请刷新后重试")
-            task.update(auto_resume=bool(enabled), manual_hold=not enabled)
-            task["control_revision"] = task.get("control_revision", 0) + 1
-            if enabled and task["state"] in ("disabled", "held", "needs_review"):
-                task.update(state="watching", reason=None, recovery_first_seen=None)
-            self.db.execute("UPDATE tasks SET value=? WHERE id=?", (json.dumps(task), thread_id))
-            self.db.execute("INSERT INTO events(created,thread_id,state,detail) VALUES(?,?,?,?)",
-                (time.time(), thread_id, task["state"], json.dumps(origin_detail(task['state'],
-                    {"automatic_control_allowed": bool(enabled)}, 'user'))))
+            if task:
+                if task.get("scope") != scope:
+                    raise ValueError("该任务的登录账号已变化，请先核对")
+                self._permission(thread_id, enabled, revision)
+            elif revision != 0:
+                raise ValueError("聊天状态已变化，请刷新后重试")
+            preferences = self.get("auto_preferences", {})
+            preferences[thread_id] = enabled
+            self.db.execute("INSERT OR REPLACE INTO kv VALUES(?,?)",
+                            ("auto_preferences", json.dumps(preferences)))
+            pending = [row for row in self.db.execute(
+                "SELECT id,value FROM requests WHERE kind='adopt' AND state IN ('pending','processing')")
+                if json.loads(row['value']).get('thread_id') == thread_id]
+            if enabled and not task and not pending:
+                self.db.execute("INSERT INTO requests VALUES(?,?,?,?,NULL)", (str(uuid.uuid4()), "adopt",
+                    json.dumps({"thread_id": thread_id, "queued_at": time.time()}), "pending"))
+            if not enabled:
+                for row in pending:
+                    self.db.execute("UPDATE requests SET state='cancelled',result=? WHERE id=? AND state='pending'",
+                                    (json.dumps({'error': 'Cancelled by user'}), row['id']))
+            return bool(task)
+
+    def suppress_unmanaged_auto_discovery(self, thread_id):
+        """A plan alone does not opt an unmanaged chat into automatic control."""
+        with self.db:
+            self.db.execute("BEGIN IMMEDIATE")
+            if self.get_task(thread_id):
+                return
+            preferences = self.get("auto_preferences", {})
+            preferences.setdefault(thread_id, False)
+            self.db.execute("INSERT OR REPLACE INTO kv VALUES(?,?)",
+                            ("auto_preferences", json.dumps(preferences)))
+
+    def permit_adoption(self, thread_id):
+        """Recheck cancellation under the same lock as an existing task update."""
+        with self.db:
+            self.db.execute("BEGIN IMMEDIATE")
+            if self.get("auto_preferences", {}).get(thread_id) is False:
+                raise ValueError("用户已撤销此聊天的自动控制")
+            self._permission(thread_id, True)
 
     def get_task(self, thread_id):
         row = self.db.execute("SELECT value FROM tasks WHERE id=?", (thread_id,)).fetchone()
@@ -204,7 +264,8 @@ class Controller:
                 "scope": self.identity, "host_id": 'local', "state": "watching", "auto_resume": True, "priority": int(priority)}
         if self.store.get("auto_preferences", {}).get(thread_id) is False:
             raise ValueError("用户已撤销此聊天的自动控制")
-        self.store.save_task(task, origin=origin)
+        if not self.store.save_task(task, origin=origin, respect_auto_preference=True):
+            raise ValueError("聊天控制状态已变化，请刷新后重试")
         return {"id": thread_id, "state": "watching"}
 
     def review(self, task, reason, origin='automatic'):
@@ -548,7 +609,7 @@ async def requests(controller):
                 raise ValueError("用户已撤销此聊天的自动控制")
             existing = store.get_task(value["thread_id"])
             if existing:
-                store.permission(value["thread_id"], True)
+                store.permit_adoption(value["thread_id"])
                 result = {"id": value["thread_id"], "state": "watching"}
             else:
                 result = await controller.adopt(value["thread_id"], value.get("priority", 100), origin='user')
@@ -766,7 +827,7 @@ def make_launch_agent(config, python):
     import plistlib
     execution_root = Path(config.get("runtime_root", ROOT))
     execution_config = config["_path"]
-    value = {"Label": "local.usage-guardian", "ProgramArguments": [str(Path(python).resolve()),
+    value = {"Label": "local.usage-guardian", "ProgramArguments": [str(Path(python).resolve()), "-B",
               str(execution_root / "guardian.py"), "--config", execution_config, "run"],
              "WorkingDirectory": str(execution_root), "RunAtLoad": True, "KeepAlive": True,
              "ThrottleInterval": 30, "ProcessType": "Background",

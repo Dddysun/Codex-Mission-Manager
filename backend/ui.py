@@ -10,6 +10,7 @@ import secrets
 import signal
 import subprocess
 import sys
+import threading
 import time
 
 from platform_support import lock_file, open_lock, lock_held, python_command
@@ -139,7 +140,7 @@ class Application:
                 result["plan"] = ({k: plan.get(k) for k in ("state", "prompt", "revision", "armed_at", "armed_window_reset", "armed_window_minutes", "armed_window_key", "reason", "finished_at")}
                     if plan and (not scope or plan["scope"] == scope) else {"state": "off", "prompt": "继续任务", "revision": (plan or {}).get("revision", 0)})
                 tasks.append(result)
-            tasks.sort(key=lambda t: next((x.get("updated_at") or 0 for x in chats.values() if x["key"] == t["key"]), 0), reverse=True)
+            tasks.sort(key=lambda task: chats[task["key"]].get("updated_at") or 0, reverse=True)
             names = {task["id"]: task["name"] for task in tasks}
             events = []
             for row in store.db.execute("SELECT * FROM events ORDER BY id DESC LIMIT 200"):
@@ -281,29 +282,9 @@ class Application:
                         # dispatch path receives this copy.
                         plan_chat = dict(chat, can_control=True)
                     set_plan(store, plan_chat, enabled, payload.get("prompt", "继续任务"), revision, sample)
-                    if not store.get_task(chat["id"]):
-                        preferences = store.get("auto_preferences", {})
-                        preferences.setdefault(chat["id"], False)
-                        store.put("auto_preferences", preferences)
+                    store.suppress_unmanaged_auto_discovery(chat["id"])
                     return {"message": "已预约，额度恢复后执行一次" if enabled else "已取消预约", "message_en": "Scheduled once after quota recovery." if enabled else "Schedule cancelled."}
-                task = store.get_task(chat["id"])
-                if task:
-                    if task.get("scope") != sample.get("scope"):
-                        raise ValueError("该任务的登录账号已变化，请先核对")
-                    store.permission(chat["id"], enabled, expected_revision=revision)
-                elif revision != 0:
-                    raise ValueError("聊天状态已变化，请刷新后重试")
-                preferences = store.get("auto_preferences", {})
-                preferences[chat["id"]] = enabled
-                store.put("auto_preferences", preferences)
-                pending_rows = store.db.execute("SELECT id,value FROM requests WHERE kind='adopt' AND state IN ('pending','processing')").fetchall()
-                same = [r for r in pending_rows if json.loads(r['value']).get('thread_id') == chat['id']]
-                if enabled and not task and not same:
-                    store.enqueue("adopt", {"thread_id": chat["id"], "queued_at":time.time()})
-                if not enabled:
-                    with store.db:
-                        for record in same:
-                            store.db.execute("UPDATE requests SET state='cancelled',result=? WHERE id=? AND state='pending'",(json.dumps({'error':'Cancelled by user'}),record['id']))
+                task = store.configure_auto(chat["id"], enabled, revision, sample.get("scope"))
                 if enabled and not task and store.get('supervisor_paused',False):
                     return {'message':'已登记，请点击开始榨汁','message_en':'Saved. Select Start Juicing to begin.'}
                 return {"message": "已开启榨汁，正在连接" if enabled else "已关闭榨汁，预约保留", "message_en": "Juicing enabled. Connecting…" if enabled else "Juicing off. Schedule retained."}
@@ -330,6 +311,12 @@ class Application:
 
 
 class Handler(BaseHTTPRequestHandler):
+    def handle(self):
+        try:
+            super().handle()
+        except (ConnectionError, TimeoutError):
+            self.close_connection = True  # A disconnected caller needs no traceback.
+
     def log_message(self, *args):
         pass
 
@@ -381,9 +368,9 @@ class Handler(BaseHTTPRequestHandler):
         if (not self.allowed_host() or not self.authenticated()
                 or origin not in ("http://127.0.0.1:%s" % port, "http://localhost:%s" % port)
                 or self.headers.get("X-Guardian-UI") != "1"):
-            return self.reply(403, {"error": "请从本机控制界面操作"})
+            return self.reject_post(403, {"error": "请从本机控制界面操作"})
         if self.path != "/api/action":
-            return self.reply(404, {"error": "操作不存在"})
+            return self.reject_post(404, {"error": "操作不存在"})
         try:
             size = int(self.headers.get("Content-Length", "0"))
             if not 0 < size <= 32768 or self.headers.get_content_type() != "application/json":
@@ -397,9 +384,53 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             self.reply(503, {"error": "操作未完成，请刷新状态后核对"})
 
+    def reject_post(self, status, content):
+        # Drain only a bounded, declared body. Closing with unread POST data can
+        # make Windows reset the socket before the client receives the error.
+        # No parsing or action runs, and the socket idle deadline still applies.
+        try:
+            size = int(self.headers.get("Content-Length", "0"))
+            if 0 < size <= 32768:
+                self.rfile.read(size)
+        except (ValueError, OSError):
+            pass
+        self.close_connection = True
+        return self.reply(status, content)
+
+
+class LocalHTTPServer(ThreadingHTTPServer):
+    """Bound idle sockets and concurrent workers on the local control boundary."""
+    socket_timeout_seconds = 5
+    worker_limit = 16
+
+    def __init__(self, *args, **kwargs):
+        self.workers = threading.BoundedSemaphore(self.worker_limit)
+        super().__init__(*args, **kwargs)
+
+    def get_request(self):
+        request, address = super().get_request()
+        request.settimeout(self.socket_timeout_seconds)
+        return request, address
+
+    def process_request(self, request, address):
+        if not self.workers.acquire(blocking=False):
+            self.shutdown_request(request)
+            return
+        try:
+            super().process_request(request, address)
+        except BaseException:
+            self.workers.release()
+            raise
+
+    def process_request_thread(self, request, address):
+        try:
+            super().process_request_thread(request, address)
+        finally:
+            self.workers.release()
+
 
 def make_server(config_path, port):
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
+    server = LocalHTTPServer(("127.0.0.1", port), Handler)
     server.session = secrets.token_urlsafe(32)
     server.application = Application(config_path)
     return server

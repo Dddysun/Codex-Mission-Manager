@@ -1,4 +1,19 @@
 # Changelog / 版本记录
+
+## 0.4.2 — Runtime fixes and core discharge / 运行修复与内核放电
+
+- Brand 1.3.0: ten irregular core-origin discharges and independent two-second bolt breathing in native Mac, Windows and SVG. / 品牌 1.3.0：两端原生及 SVG 同步十种随机内核放电，保留独立 2 秒呼吸。
+
+- Disable Python bytecode writes explicitly in both native launchers and owned subprocesses. / 两平台原生启动器和后台子进程显式禁止生成 Python 字节码缓存。
+- Verify cold imports on a writable application copy, then recheck unchanged resources and the Mac signature. / 在可写应用副本中验证冷导入，再核对资源未变及 Mac 签名完整性。
+- Bound transport writes, full request exchanges and desktop connection shutdown. / 为通信写入、完整请求与桌面连接关闭设置超时边界。
+- Keep user revocations, task revisions, preferences and adoption intents consistent in one write transaction. / 用写事务保护用户撤销、任务修订号、偏好与接管意图的一致性。
+- Use direct catalog lookups for sorting, reject overflowing quota numbers, and bound local HTTP workers and idle sockets. / 排序直接查询目录字典，拒绝额度数值溢出，并限制本机 HTTP 工作线程及空闲连接。
+- Honor the configured snapshot budget for large frames and preserve rejected-request errors on Windows. / 大帧快照采用配置的等待预算，Windows 拒绝请求时保留可读错误回执。
+- Preserve native interfaces, existing settings, tasks, and history. / 保留原生界面、已有设置、任务和记录。
+
+See [0.4.2 release notes](docs/releases/0.4.2.md). / 详见 [0.4.2 发行说明](docs/releases/0.4.2.md)。
+
 ## 0.4.1
 
 - 修复大型会话快照导致状态同步断开的问题，并补上 Mac 自动重连与断线状态报告。

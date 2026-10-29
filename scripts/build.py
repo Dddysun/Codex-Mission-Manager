@@ -22,7 +22,7 @@ def run(args, **kwargs):
 
 def runtime(source, target):
     source = Path(source).resolve()
-    info = subprocess.check_output([str(source / "bin/python3"), "-I", "-c",
+    info = subprocess.check_output([str(source / "bin/python3"), "-B", "-I", "-c",
         "import sys,json;print(json.dumps({'version':sys.version_info[:2]}))"], text=True)
     version = ".".join(map(str, json.loads(info)["version"]))
     (target / "bin").mkdir(parents=True)
@@ -79,7 +79,7 @@ def build(args):
     sdk = subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
     common = ["swiftc", "-swift-version", "5", "-O", "-target", "arm64-apple-macos14.0", "-sdk", sdk,
               "-module-cache-path", module_cache, "-parse-as-library", shared_path]
-    run(common + [ROOT / "native/Localization.swift", ROOT / "native/NativeState.swift", ROOT / "native/JuicerLogo.swift", ROOT / "native/NativeViews.swift", ROOT / "native/NativeSettings.swift", ROOT / "native/MenuPanel.swift", ROOT / "native/App.swift", "-o", contents / "MacOS/CodexMissionManager"])
+    run(common + [ROOT / "native/Localization.swift", ROOT / "native/NativeState.swift", ROOT / "native/JuicerMotionData.swift", ROOT / "native/JuicerMotion.swift", ROOT / "native/JuicerLogo.swift", ROOT / "native/JuicerPreview.swift", ROOT / "native/NativeViews.swift", ROOT / "native/NativeSettings.swift", ROOT / "native/MenuPanel.swift", ROOT / "native/App.swift", "-o", contents / "MacOS/CodexMissionManager"])
     run(common + [ROOT / "native/PowerHelper.swift", "-o", contents / "Library/HelperTools/PowerHelper"])
     icon = scratch / "draw-icon"
     run(["swiftc", "-module-cache-path", module_cache, ROOT / "scripts/Icon.swift", "-o", icon])
@@ -114,7 +114,7 @@ def build(args):
     shutil.copytree(ROOT / "third-party", resources / "third-party")
     shutil.copyfile(ROOT / "docs/USER_GUIDE.md", resources / "USER_GUIDE.md")
     shutil.copyfile(ROOT / "VERSION", resources / "VERSION")
-    run([resources / "python/bin/python3", "-I", backend / "app_host.py", "--self-test"])
+    run([resources / "python/bin/python3", "-B", "-I", backend / "app_host.py", "--self-test"])
     run([contents / "MacOS/CodexMissionManager", "--self-test"])
     run([contents / "Library/HelperTools/PowerHelper", "--self-test"])
     # Remove only build metadata that invalidates a code seal. Never remove
@@ -142,7 +142,7 @@ def build(args):
         "source_commit": os.environ.get("GITHUB_SHA"), "architecture": "arm64", "minimum_macos": "14.0",
         "python": pyversion, "signing": "developer-id" if team else "ad-hoc-local-preview",
         "notarized": False, "privileged_helper_enabled": bool(team), "live_closed_lid_verified": False,
-        "ui": "SwiftUI-AppKit", "webview": False, "private_runtime_data_included": False,
+        "brand_identity_version": "1.3.0", "ui": "SwiftUI-AppKit", "webview": False, "private_runtime_data_included": False,
         "configurable_rules": True, "default_rules": default_rules,
         "theme_accents": ["green", "blue", "purple", "yellow"], "chat_sources": ["codex"],
         "external_dependency": "Compatible installed Codex desktop client"}

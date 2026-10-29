@@ -125,7 +125,7 @@ class DesktopIPC:
             raise DesktopError(self.last_error or "desktop connection unavailable")
         data = json.dumps(value, ensure_ascii=False).encode()
         self.writer.write(struct.pack("<I", len(data)) + data)
-        await self.writer.drain()
+        await asyncio.wait_for(self.writer.drain(), self.timeout)
 
     async def _read(self):
         try:
@@ -196,8 +196,10 @@ class DesktopIPC:
         if host != "local" and method.startswith("thread-follower-"):
             value["hostId"] = host
         try:
-            await self.send(value)
-            result = await asyncio.wait_for(future, request_timeout + .5)
+            async def exchange():
+                await self.send(value)
+                return await future
+            result = await asyncio.wait_for(exchange(), request_timeout + .5)
             if result.get("resultType") != "success":
                 # Known local protocol diagnostics only; never log conversation content.
                 raise DesktopError(method + ": " + str(result.get("error", "unknown"))[:180])
@@ -218,7 +220,10 @@ class DesktopIPC:
         await self.send({"type": "broadcast", "method": "thread-stream-following-changed", "version": 1,
             "sourceClientId": self.client_id, "targetClientIds": [owner],
             "params": {"conversationId": thread_id, "hostId": host, "following": True}})
-        deadline = time.monotonic() + 5
+        # Large valid frames can take more than five seconds on a named pipe.
+        # Honor the configured transport budget while keeping a finite minimum
+        # for the snapshot burst used by short diagnostic connections.
+        deadline = time.monotonic() + max(5, self.timeout)
         first_seen = None
         while time.monotonic() < deadline:
             if self.disconnected:
@@ -266,7 +271,7 @@ class DesktopIPC:
         if self.writer:
             self.writer.close()
             with contextlib.suppress(Exception):
-                await self.writer.wait_closed()
+                await asyncio.wait_for(self.writer.wait_closed(), 1)
         if self.task:
             self.task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
@@ -278,7 +283,7 @@ class DesktopAdapter:
     def __init__(self, quota_rpc, config):
         self.quota = quota_rpc
         self.config = config
-        self.ipc = DesktopIPC(config.get("desktop_socket"))
+        self.ipc = DesktopIPC(config.get("desktop_socket"), timeout=config.get("rpc_timeout_seconds", 30))
         self.hosts = {x["id"]: x.get("host_id", "local") for x in config.get("desktop_targets", [])}
         self.changed = quota_rpc.changed
         self.views, self.available = {}, []
