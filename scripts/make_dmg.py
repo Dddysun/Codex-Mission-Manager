@@ -24,7 +24,7 @@ def main():
     shutil.copytree(app, stage / app.name, symlinks=True)
     (stage / "Applications").symlink_to("/Applications")
     (stage / "安装说明.txt").write_text(
-        "榨汁机 / TokenMax V" + version + " 预览版\n\n"
+        "TOKEN榨汁机 / TokenMax V" + version + " 预览版\n\n"
         "将 TokenMax.app 拖入 Applications。关闭窗口后仍在后台运行。\n"
         "升级前请退出旧版；配置与记录保留。旧版名称为 Codex Mission Manager.app，可在退出后移到废纸篓，勿同时运行两个版本。\n"
         "首次安装请核对账号与聊天，再点“开始榨汁”。需要已登录的兼容 Codex 桌面客户端。\n"

@@ -138,7 +138,7 @@ def build(args):
     run(["codesign", "--verify", "--deep", "--strict", app])
     defaults = json.loads((ROOT / "backend/config.example.json").read_text(encoding="utf-8"))
     default_rules = {key: defaults[key] for key in ("pause_remaining", "resume_remaining", "poll_seconds", "near_limit_poll_seconds", "recovery_confirm_seconds", "ui_poll_seconds")}
-    manifest = {"product_name": "TokenMax", "localized_name": "榨汁机", "version": version, "preview": "preview." + build_number, "build_number": build_number,
+    manifest = {"product_name": "TokenMax", "localized_name": "TOKEN榨汁机", "version": version, "preview": "preview." + build_number, "build_number": build_number,
         "source_commit": os.environ.get("GITHUB_SHA"), "architecture": "arm64", "minimum_macos": "14.0",
         "python": pyversion, "signing": "developer-id" if team else "ad-hoc-local-preview",
         "notarized": False, "privileged_helper_enabled": bool(team), "live_closed_lid_verified": False,

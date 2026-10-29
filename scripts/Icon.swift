@@ -54,7 +54,7 @@ for size in [16,32,64,128,256,512,1024] {
     base.line(to:NSPoint(x:67,y:199));base.curve(to:NSPoint(x:88,y:182),controlPoint1:NSPoint(x:70,y:188),controlPoint2:NSPoint(x:77,y:182));base.close();blue.setFill();base.fill()
     glass.setFill();NSBezierPath(ovalIn:NSRect(x:117,y:192,width:20,height:20)).fill()
     let tick = NSBezierPath();tick.move(to:NSPoint(x:127,y:196));tick.line(to:NSPoint(x:127,y:201));blue.setStroke();tick.lineWidth=3;tick.lineCapStyle = .round;tick.stroke()
-    color(0x8795A8).setFill();path([(129,83),(151,83),(133,108),(153,108),(113,145),(124,118),(104,118)]).fill()
+    color(0x8795A8).setFill();path([(129,91),(151,91),(133,116),(153,116),(113,153),(124,126),(104,126)]).fill()
     NSGraphicsContext.restoreGraphicsState()
     let data=bitmap.representation(using:.png,properties:[:])!
     let names: [String]

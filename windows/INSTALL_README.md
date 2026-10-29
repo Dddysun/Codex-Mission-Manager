@@ -6,9 +6,9 @@ The setup EXE installs the native WPF application, its Python backend and the pi
 
 ## Install / 安装
 
-Run `TokenMax-0.4.0-windows-x64-setup.exe`, select **Install**, then open **榨汁机** from the desktop or Start menu. The default application directory is `%LOCALAPPDATA%\Programs\CodexMissionManager`.
+Run `TokenMax-0.4.1-windows-x64-setup.exe`, select **Install**, then open **TOKEN榨汁机** from the desktop or Start menu. The default application directory is `%LOCALAPPDATA%\Programs\CodexMissionManager`.
 
-运行安装 EXE，点击“安装”，然后从桌面或开始菜单打开“榨汁机”。默认程序目录为 `%LOCALAPPDATA%\Programs\CodexMissionManager`。
+运行安装 EXE，点击“安装”，然后从桌面或开始菜单打开“TOKEN榨汁机”。默认程序目录为 `%LOCALAPPDATA%\Programs\CodexMissionManager`。
 
 Install and open the application normally with your Windows account. **Run as administrator** is not required. The backend checks that its data folder is writable before starting; it does not request elevation or automatically change folder permissions. If access is denied, check the current user's access to the displayed application data folder.
 
@@ -22,7 +22,7 @@ The application requires a compatible official Codex desktop client and the user
 
 Closing the main window keeps the app in the system tray. Use **Quit** in the tray menu to stop the app-owned background process. Quitting TokenMax does not intentionally interrupt chats in the official client.
 
-关闭主窗口后应用继续在托盘运行。通过托盘菜单“退出”停止应用自己的后台；退出榨汁机不主动中断官方客户端中的聊天。
+关闭主窗口后应用继续在托盘运行。通过托盘菜单“退出”停止应用自己的后台；退出TOKEN榨汁机不主动中断官方客户端中的聊天。
 
 By default, the UI reads cached state every 5 seconds. Normal collection waits 30 seconds after each round; near-limit or pending-plan collection waits 10 seconds. These intervals and the pause/resume thresholds are editable in Operating Rules. Processing time is additional.
 
@@ -32,13 +32,13 @@ By default, the UI reads cached state every 5 seconds. Normal collection waits 3
 
 Private configuration, ledger and native preferences live separately at `%LOCALAPPDATA%\CodexMissionManager`. The installer preserves this directory and retains the preceding application directory when updating. Quit TokenMax before installing an update. The portable ZIP contains the same program files and runtime; extract it to a dedicated application folder before opening `CodexMissionManager.exe`.
 
-私人配置、账本及界面偏好独立保存在 `%LOCALAPPDATA%\CodexMissionManager`。安装器保留此目录；更新时也保留上一版程序目录。更新前请先退出榨汁机。便携 ZIP 包含相同程序及运行环境，解压到专用目录后打开 `CodexMissionManager.exe`。
+私人配置、账本及界面偏好独立保存在 `%LOCALAPPDATA%\CodexMissionManager`。安装器保留此目录；更新时也保留上一版程序目录。更新前请先退出TOKEN榨汁机。便携 ZIP 包含相同程序及运行环境，解压到专用目录后打开 `CodexMissionManager.exe`。
 
 ## Uninstall / 卸载
 
-Quit TokenMax from its tray menu, then find **榨汁机 · TokenMax** in Windows **Apps & features / Installed apps** and select **Uninstall**. The per-user uninstaller removes this installation and its matching shortcuts/startup entry. It preserves `%LOCALAPPDATA%\CodexMissionManager`, official Codex sign-in data, other applications and preceding application backups. A small cleanup program may remain in the Windows temporary folder after self-removal.
+Quit TokenMax from its tray menu, then find **TOKEN榨汁机 · TokenMax** in Windows **Apps & features / Installed apps** and select **Uninstall**. The per-user uninstaller removes this installation and its matching shortcuts/startup entry. It preserves `%LOCALAPPDATA%\CodexMissionManager`, official Codex sign-in data, other applications and preceding application backups. A small cleanup program may remain in the Windows temporary folder after self-removal.
 
-先从托盘菜单退出榨汁机，再在 Windows“应用和功能／已安装的应用”中找到“榨汁机 · TokenMax”并卸载。每用户卸载器仅移除此程序及目标匹配的快捷方式、启动项，保留 `%LOCALAPPDATA%\CodexMissionManager` 数据、官方 Codex 登录数据、其他应用和之前保留的程序备份。自删除后，Windows 临时目录中可能保留一个小型清理程序。
+先从托盘菜单退出TOKEN榨汁机，再在 Windows“应用和功能／已安装的应用”中找到“TOKEN榨汁机 · TokenMax”并卸载。每用户卸载器仅移除此程序及目标匹配的快捷方式、启动项，保留 `%LOCALAPPDATA%\CodexMissionManager` 数据、官方 Codex 登录数据、其他应用和之前保留的程序备份。自删除后，Windows 临时目录中可能保留一个小型清理程序。
 
 This is an unsigned preview. No installer step changes firewall rules, antivirus, execution policy, system PATH or system power settings. Refer to `USER_GUIDE.md`, when included, for verified capabilities and remaining limitations.
 

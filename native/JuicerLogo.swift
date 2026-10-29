@@ -7,16 +7,17 @@ struct JuicerLogo: View {
     var state: MissionLogoState
     var darkSurface = false
     var animated = true
+    var compact = false
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    private var animating: Bool { state == .working && animated && !reduceMotion }
+    private var animating: Bool { state == .working && animated && !reduceMotion && !compact }
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !animating)) { timeline in
             JuicerArtwork(state:state,dark:darkSurface || scheme == .dark,
-                          time:animating ? timeline.date.timeIntervalSinceReferenceDate : nil)
+                          time:animating ? timeline.date.timeIntervalSinceReferenceDate : nil,compact:compact)
         }
         .accessibilityElement(children:.ignore)
-        .accessibilityLabel(L("榨汁机"))
+        .accessibilityLabel(L("TOKEN榨汁机"))
         .accessibilityValue(state.title)
     }
 }
@@ -25,31 +26,30 @@ private struct JuicerArtwork: View {
     let state: MissionLogoState
     let dark: Bool
     let time: TimeInterval?
+    var compact = false
     func color(_ light:String,_ darkValue:String) -> Color { Color(nsColor:MissionPalette.color(dark ? darkValue : light)) }
-    func energy(_ path:Path,context:GraphicsContext,gold:Color) {
-        var layer=context
-        layer.opacity=0.16
-        layer.stroke(path,with:.color(gold),style:StrokeStyle(lineWidth:1.2,lineCap:.round,lineJoin:.round))
-        layer.opacity=0.8
-        let phase=time.map { -312 * $0.truncatingRemainder(dividingBy:2.8)/2.8 } ?? 0
-        layer.stroke(path,with:.color(gold),style:StrokeStyle(lineWidth:2.2,lineCap:.round,lineJoin:.round,dash:[38,150,12,112],dashPhase:phase))
+    func electricPath(_ points:[CGPoint]) -> Path { var p=Path();p.addLines(points);return p }
+    func energy(_ path:Path,context:GraphicsContext,gold:Color,offset:Double=0,branch:Bool=false) {
+        // Broad amber trail, saturated filament, and a warm bright core.
+        // Continuous flow, with no flashes or rotating circular outline.
+        let phase=time.map { -130 * ($0/1.8+offset).truncatingRemainder(dividingBy:1) } ?? -20
+        let dash: [CGFloat] = branch ? [18,10,5,22] : [62,18,14,36]
+        for (width,alpha,ink) in [(9.0,0.12,gold),(4.5,0.28,gold),(2.4,0.92,gold),(0.85,0.95,color("FFF2C9","FFE6A8"))] {
+            var layer=context; layer.opacity=branch ? alpha*0.65 : alpha
+            layer.stroke(path,with:.color(ink),style:StrokeStyle(lineWidth:width,lineCap:.round,lineJoin:.round,dash:dash,dashPhase:phase))
+        }
     }
     var body: some View {
         Canvas { context,size in
-            context.scaleBy(x:size.width/256,y:size.height/256)
+            context.scaleBy(x:size.width/(compact ? 208 : 256),y:size.height/(compact ? 208 : 256))
+            if compact { context.translateBy(x:-35,y:-23) }
             let muted=state == .idle || state == .disconnected
-            let blue=muted ? color("758598","637285") : color("2168D5","4878AF")
-            let glass=state == .idle ? color("EFF1F4","202A38") : color("EAF3FF","172638")
-            let gray=color("8795A8","7F8C9C"), gold=color("E7AA16","E7B43C")
-            if state == .working {
-                var back=Path()
-                back.move(to:CGPoint(x:48,y:181))
-                back.addCurve(to:CGPoint(x:41,y:88),control1:CGPoint(x:17,y:161),control2:CGPoint(x:18,y:119))
-                back.addLine(to:CGPoint(x:35,y:78));back.addLine(to:CGPoint(x:51,y:77))
-                back.addCurve(to:CGPoint(x:149,y:25),control1:CGPoint(x:66,y:47),control2:CGPoint(x:109,y:26))
-                back.addLine(to:CGPoint(x:158,y:18));back.addLine(to:CGPoint(x:164,y:28))
-                back.addCurve(to:CGPoint(x:236,y:91),control1:CGPoint(x:201,y:31),control2:CGPoint(x:231,y:60))
-                energy(back,context:context,gold:gold)
+            let blue=compact ? Color(nsColor:MissionPalette.color(muted ? "889EB8" : "4599F5")) : (muted ? color("758598","637285") : color("2168D5","5386BF"))
+            let glass=compact ? Color(nsColor:MissionPalette.color("DFEEFF")) : (state == .idle ? color("EFF1F4","202A38") : color("EAF3FF","20344C"))
+            let gray=color("8795A8","7F8C9C"), gold=color("F5B82E","F2BA42")
+            if state == .working && !compact {
+                energy(electricPath([CGPoint(x:74,y:214),CGPoint(x:57,y:197),CGPoint(x:61,y:184),CGPoint(x:43,y:169),CGPoint(x:49,y:154),CGPoint(x:33,y:137),CGPoint(x:42,y:123),CGPoint(x:35,y:103),CGPoint(x:51,y:89),CGPoint(x:46,y:73),CGPoint(x:64,y:61)]),context:context,gold:gold,offset:0.35)
+                energy(electricPath([CGPoint(x:49,y:154),CGPoint(x:62,y:144),CGPoint(x:58,y:131)]),context:context,gold:gold,offset:0.35,branch:true)
             }
             var handle=Path()
             handle.move(to:CGPoint(x:180,y:78));handle.addLine(to:CGPoint(x:199,y:78))
@@ -102,19 +102,17 @@ private struct JuicerArtwork: View {
             case .idle,.working:
                 if state == .working, let time {
                     let pulse=(1-cos(time*2*Double.pi/2.4))/2
-                    let scale=0.97+0.06*pulse
-                    symbol.opacity=0.62+0.38*pulse
-                    symbol.translateBy(x:128,y:114);symbol.scaleBy(x:scale,y:scale);symbol.translateBy(x:-128,y:-114)
+                    let scale=0.985+0.03*pulse
+                    symbol.opacity=0.78+0.22*pulse
+                    symbol.translateBy(x:128,y:122);symbol.scaleBy(x:scale,y:scale);symbol.translateBy(x:-128,y:-122)
                 }
-                var bolt=Path();bolt.addLines([CGPoint(x:129,y:83),CGPoint(x:151,y:83),CGPoint(x:133,y:108),CGPoint(x:153,y:108),CGPoint(x:113,y:145),CGPoint(x:124,y:118),CGPoint(x:104,y:118)]);bolt.closeSubpath()
+                var bolt=Path();bolt.addLines([CGPoint(x:129,y:91),CGPoint(x:151,y:91),CGPoint(x:133,y:116),CGPoint(x:153,y:116),CGPoint(x:113,y:153),CGPoint(x:124,y:126),CGPoint(x:104,y:126)]);bolt.closeSubpath()
                 symbol.fill(bolt,with:.color(state == .working ? gold : gray))
             }
-            if state == .working {
-                var front=Path();front.move(to:CGPoint(x:223,y:90));front.addLine(to:CGPoint(x:234,y:99));front.addLine(to:CGPoint(x:226,y:109))
-                front.addCurve(to:CGPoint(x:199,y:198),control1:CGPoint(x:244,y:143),control2:CGPoint(x:229,y:180));front.addLine(to:CGPoint(x:208,y:203));front.addLine(to:CGPoint(x:190,y:205))
-                front.addCurve(to:CGPoint(x:76,y:225),control1:CGPoint(x:162,y:225),control2:CGPoint(x:114,y:239));front.addLine(to:CGPoint(x:66,y:232));front.addLine(to:CGPoint(x:63,y:221))
-                front.addCurve(to:CGPoint(x:26,y:174),control1:CGPoint(x:38,y:211),control2:CGPoint(x:22,y:191))
-                energy(front,context:context,gold:gold)
+            if state == .working && !compact {
+                energy(electricPath([CGPoint(x:153,y:38),CGPoint(x:177,y:46),CGPoint(x:174,y:55),CGPoint(x:203,y:66),CGPoint(x:213,y:83),CGPoint(x:205,y:96),CGPoint(x:229,y:113),CGPoint(x:220,y:127),CGPoint(x:230,y:143),CGPoint(x:216,y:157),CGPoint(x:221,y:175),CGPoint(x:199,y:187),CGPoint(x:202,y:199),CGPoint(x:178,y:208),CGPoint(x:153,y:215),CGPoint(x:137,y:207),CGPoint(x:109,y:221),CGPoint(x:90,y:214)]),context:context,gold:gold)
+                energy(electricPath([CGPoint(x:213,y:83),CGPoint(x:232,y:78),CGPoint(x:237,y:59)]),context:context,gold:gold,branch:true)
+                energy(electricPath([CGPoint(x:199,y:187),CGPoint(x:215,y:199),CGPoint(x:226,y:195)]),context:context,gold:gold,offset:0.6,branch:true)
             }
         }.aspectRatio(1,contentMode:.fit)
     }
@@ -122,7 +120,7 @@ private struct JuicerArtwork: View {
 
 struct JuicerStatusIcon: View {
     @ObservedObject var model: MissionModel
-    var body: some View { JuicerLogo(state:model.logoState).padding(1).preferredColorScheme(model.colorScheme) }
+    var body: some View { JuicerLogo(state:model.logoState,animated:false,compact:true).padding(1).preferredColorScheme(.light) }
 }
 
 // The native status button remains responsible for left/right clicks.

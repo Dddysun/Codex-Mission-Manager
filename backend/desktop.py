@@ -20,6 +20,9 @@ import uuid
 from stages import from_turn
 from platform_support import sqlite_ro_uri
 IS_WINDOWS = os.name == "nt"
+# Long desktop conversations can include image-heavy history in a snapshot.
+# Keep a bounded allocation while accepting valid frames above the old 64 MiB cap.
+MAX_DESKTOP_FRAME_BYTES = 128 * 1024 * 1024
 
 
 VERSIONS = {"initialize": 0, "thread-owner-discovery": 1,
@@ -82,6 +85,7 @@ class DesktopIPC:
         self.changed = asyncio.Event()
         self.disconnected = False
         self.server_identity = None
+        self.last_error = None
 
     async def start(self):
         if IS_WINDOWS:
@@ -91,7 +95,7 @@ class DesktopIPC:
             if not info:
                 raise DesktopError('installed Windows desktop package is unavailable')
             loop = asyncio.get_running_loop()
-            reader = asyncio.StreamReader(limit=64*1024*1024)
+            reader = asyncio.StreamReader(limit=MAX_DESKTOP_FRAME_BYTES)
             protocol = asyncio.StreamReaderProtocol(reader)
             transport, _ = await loop.create_pipe_connection(lambda:protocol, self.pipe_address)
             self.reader, self.writer = reader, asyncio.StreamWriter(transport, protocol, reader, loop)
@@ -111,11 +115,14 @@ class DesktopIPC:
                 raise DesktopError("desktop socket is not private to this user")
             self.reader, self.writer = await asyncio.open_unix_connection(str(self.path))
         self.disconnected = False
+        self.last_error = None
         self.task = asyncio.create_task(self._read())
         result = await self.call("initialize", {"clientType": "usage-guardian"})
         self.client_id = result["result"]["clientId"]
 
     async def send(self, value):
+        if self.disconnected or self.writer is None or self.writer.is_closing():
+            raise DesktopError(self.last_error or "desktop connection unavailable")
         data = json.dumps(value, ensure_ascii=False).encode()
         self.writer.write(struct.pack("<I", len(data)) + data)
         await self.writer.drain()
@@ -124,8 +131,8 @@ class DesktopIPC:
         try:
             while True:
                 size = struct.unpack("<I", await self.reader.readexactly(4))[0]
-                if not 0 < size <= 64 * 1024 * 1024:
-                    raise DesktopError("unexpected desktop frame size")
+                if not 0 < size <= MAX_DESKTOP_FRAME_BYTES:
+                    raise DesktopError("desktop frame exceeds supported limit (%d bytes)" % size)
                 value = json.loads(await self.reader.readexactly(size))
                 kind = value.get("type")
                 if kind == "response":
@@ -157,11 +164,21 @@ class DesktopIPC:
                         self.owners = {k: v for k, v in self.owners.items() if v != departed}
         except (asyncio.CancelledError, Exception) as exc:
             self.disconnected = True
+            self.last_error = str(exc) if isinstance(exc, DesktopError) else type(exc).__name__
+            self.owners.clear()
+            self.states.clear()
+            self.snapshots.clear()
+            self.sequences.clear()
+            self.changed.set()
+            if self.writer:
+                self.writer.close()
             for future in list(self.pending.values()):
                 if not future.done():
                     future.set_exception(DesktopError(type(exc).__name__))
 
     async def call(self, method, params, host="local", target=None, timeout=None, version_override=None):
+        if self.disconnected:
+            raise DesktopError(self.last_error or "desktop connection unavailable")
         if method not in VERSIONS:
             raise DesktopError("desktop operation not allowed")
         request_id = str(uuid.uuid4())
@@ -204,6 +221,8 @@ class DesktopIPC:
         deadline = time.monotonic() + 5
         first_seen = None
         while time.monotonic() < deadline:
+            if self.disconnected:
+                raise DesktopError(self.last_error or "desktop connection unavailable")
             batch = [entry for entry in self.snapshots.get(thread_id, []) if entry[0] > before]
             if batch:
                 now = time.monotonic()
@@ -280,14 +299,15 @@ class DesktopAdapter:
         require_supported()
         await self.quota.start()
         await self.ipc.start()
+        self.control_available = True
 
     async def refresh_control(self):
-        if not IS_WINDOWS:
-            return self.control_available
         if self.control_available and not self.ipc.disconnected:
             return True
         self.control_available = False
         self.available = []
+        self.views.clear()
+        self.discovery_signatures.clear()
         if not self.config.get('desktop_control_enabled'):
             self.control_error = 'desktop_control_disabled'
             return False
@@ -302,12 +322,13 @@ class DesktopAdapter:
             self.control_available = True
             self.control_error = None
         except Exception as exc:
-            self.control_error = type(exc).__name__
+            self.control_error = str(exc) if isinstance(exc, DesktopError) else type(exc).__name__
             await self.ipc.close()
         return self.control_available
 
     async def discover(self):
-        if IS_WINDOWS and not self.control_available:
+        if not self.control_available or self.ipc.disconnected:
+            self.available = []
             return []
         candidates = dict(self.hosts)
         candidates.update(self.ipc.known)
@@ -350,8 +371,8 @@ class DesktopAdapter:
         if method in ("turn/start", "turn/interrupt", "thread/goal/set"):
             from compatibility import require_supported
             require_supported()  # Recheck after client updates while the service is running.
-            if IS_WINDOWS and (not self.control_available or self.ipc.disconnected):
-                raise DesktopError('Windows desktop control connection has not been verified')
+            if not self.control_available or self.ipc.disconnected:
+                raise DesktopError('desktop control connection has not been verified')
         if method.startswith("account/"):
             if method == "account/rateLimits/read" and self.config.get("fresh_quota_reads"):
                 from rpc import Rpc

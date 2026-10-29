@@ -191,9 +191,9 @@ namespace CodexMissionManager
         public static string Title(string value, bool english)
         {
             string title = value ?? "";
-            foreach (string prefix in new[] { "榨汁机：", "任务管家：", "额度管家：" })
+            foreach (string prefix in new[] { "TOKEN榨汁机：", "榨汁机：", "任务管家：", "额度管家：" })
                 if (title.StartsWith(prefix, StringComparison.Ordinal)) { title = title.Substring(prefix.Length); break; }
-            if (!english) return "榨汁机：" + (title.Length == 0 ? "状态更新" : title);
+            if (!english) return "TOKEN榨汁机：" + (title.Length == 0 ? "状态更新" : title);
             var names = new Dictionary<string, string> {
                 {"任务需要检查", "Review needed"}, {"已暂停任务", "Tasks paused"}, {"已登记额度中断", "Quota interruption recorded"},
                 {"已恢复任务", "Tasks resumed"}, {"防睡眠保护未启动", "Keep-awake unavailable"}, {"额度不足", "Low quota"},
@@ -203,8 +203,8 @@ namespace CodexMissionManager
         }
         public static bool SelfTest()
         { return Title("额度管家：额度已恢复", true) == "TokenMax: Quota restored"
-            && Title("任务管家：已暂停任务", false) == "榨汁机：已暂停任务"
-            && Title("榨汁机：即时发送需要处理", true) == "TokenMax: Delivery needs attention"
+            && Title("任务管家：已暂停任务", false) == "TOKEN榨汁机：已暂停任务"
+            && Title("TOKEN榨汁机：即时发送需要处理", true) == "TokenMax: Delivery needs attention"
             && Title("unknown", true) == "TokenMax"; }
     }
 
@@ -556,7 +556,7 @@ namespace CodexMissionManager
             Width = 1380; Height = 900; MinWidth = 1080; MinHeight = 660;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI"); FontSize = 13;
-            Title = T("榨汁机", "TokenMax");
+            Title = T("TOKEN榨汁机", "TokenMax");
             Closing += OnClosing;
             ApplyTheme(); BuildShell(); RenderSnapshot();
             if (!fixtureMode)
@@ -771,7 +771,7 @@ namespace CodexMissionManager
         }
         void BuildShell()
         {
-            Title = T("榨汁机", "TokenMax"); navButtons.Clear();
+            Title = T("TOKEN榨汁机", "TokenMax"); navButtons.Clear();
             root = new Grid { Background = background }; root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(290) });
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); Content = root;
             var side = new Grid { Background = sideBackground }; side.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); side.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); root.Children.Add(side);
@@ -779,7 +779,7 @@ namespace CodexMissionManager
             var brand = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 38) };
             sidebarLogo = new JuicerLogo { Width = 52, Height = 52 }; sidebarLogo.SetPresentation(LogoState, true); brand.Children.Add(sidebarLogo);
             var brandText = new StackPanel { Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-            brandText.Children.Add(SideText(T("榨汁机", "TokenMax"), 17, true));
+            brandText.Children.Add(SideText(T("TOKEN榨汁机", "TokenMax"), 17, true));
             var signature = SideText("T O K E N M A X", 9); signature.FontFamily = new FontFamily("Consolas"); signature.Margin = new Thickness(0, 5, 0, 0); brandText.Children.Add(signature); brand.Children.Add(brandText); sidebar.Children.Add(brand);
             var workspace = SideText(T("工作空间", "Workspace"), 10); workspace.Margin = new Thickness(0, 0, 0, 22); sidebar.Children.Add(workspace);
             sidebar.Children.Add(Navigation(T("来一杯", "Juice Bar"), "grid", "tasks"));
@@ -953,7 +953,7 @@ namespace CodexMissionManager
             if (quitting) return;
             ApplyUiPollInterval(); RenderQuota(); UpdateNavigation(); UpdateNotices();
             if (sidebarLogo != null) sidebarLogo.SetPresentation(LogoState, true);
-            if (tray != null) tray.Text = T("榨汁机", "TokenMax");
+            if (tray != null) tray.Text = T("TOKEN榨汁机", "TokenMax");
             if (lastSync != null) lastSync.Text = T("最近同步 ", "Last updated ") + FormatTime(Json.Number(snapshot, "observed_at"));
             if (currentView == "tasks") { RenderHeader(); RenderChats(); }
             else if (currentView == "events" && !busy) RenderEvents();
@@ -1285,7 +1285,7 @@ namespace CodexMissionManager
             Rule(T("订阅与额度", "Subscription and quota"), T("额度未知时等待核验；无固定窗口时须获得服务许可。重置权益仅供查看。", "Unknown quota awaits verification. No fixed window requires service permission. Reset credits are read-only."));
             Rule(T("立刻执行", "Run now"), T("立即发送当前指令，须通过状态与额度核验。结果不明确时不重复发送。", "Send now after status and quota checks. Unconfirmed deliveries are not retried."));
             Rule(T("手动操作优先", "Manual actions take priority"), T("用户指令和审批优先。任务完成后等待新指令。", "User instructions and approvals take priority. Completed chats await new instructions."));
-            Rule(T("后台运行", "Background operation"), T("关窗后继续运行；退出仅停止榨汁机，不中断客户端聊天。", "Closing the window keeps running. Quitting stops TokenMax, not client chats."));
+            Rule(T("后台运行", "Background operation"), T("关窗后继续运行；退出仅停止TOKEN榨汁机，不中断客户端聊天。", "Closing the window keeps running. Quitting stops TokenMax, not client chats."));
             var settings = MakeButton(T("后台运行与系统权限…", "Background operation and permissions…"), ShowSettingsWindow); settings.HorizontalAlignment = HorizontalAlignment.Left; content.Children.Add(settings); RefreshRulesPresentation();
         }
         void RefreshRulesPresentation()
@@ -1393,7 +1393,7 @@ namespace CodexMissionManager
             if (state == "client_missing") return T("尚未检测到客户端", "Client not detected");
             if (value.Count == 0) return T("正在检查客户端兼容性", "Checking client compatibility");
             string version = Json.Text(value, "version", Json.Text(value, "build"));
-            string label = state == "supported" ? T("已适配", "Compatible") : state == "update_required" ? T("需要更新榨汁机", "TokenMax update required") : T("正在检查客户端兼容性", "Checking client compatibility");
+            string label = state == "supported" ? T("已适配", "Compatible") : state == "update_required" ? T("需要更新TOKEN榨汁机", "TokenMax update required") : T("正在检查客户端兼容性", "Checking client compatibility");
             return version.Length > 0 ? version + " · " + label : label;
         }
         string[] AccentLabels() { return new[] { T("森林绿", "Forest"), T("蓝色", "Blue"), T("紫色", "Purple"), T("鹅蛋黄", "Egg yellow") }; }
@@ -1702,7 +1702,7 @@ namespace CodexMissionManager
         {
             var body = new StackPanel { Margin = new Thickness(20) };
             var heading = new DockPanel(); var plan = Text(Subscription(Json.Child(Json.Child(snapshot, "usage"), "account")), 10); plan.Foreground = secondary; plan.Margin = new Thickness(0); plan.VerticalAlignment = VerticalAlignment.Center; DockPanel.SetDock(plan, Dock.Right); heading.Children.Add(plan);
-            var brand = new StackPanel { Orientation = Orientation.Horizontal }; var brandLogo = new JuicerLogo { Width = 32, Height = 32, Margin = new Thickness(0, 0, 8, 0) }; brandLogo.SetPresentation(LogoState, dark); brand.Children.Add(brandLogo); var title = Text(T("榨汁机", "TokenMax"), 13, true); title.Margin = new Thickness(0); brand.Children.Add(title); heading.Children.Add(brand); body.Children.Add(heading);
+            var brand = new StackPanel { Orientation = Orientation.Horizontal }; var brandLogo = new JuicerLogo { Width = 32, Height = 32, Margin = new Thickness(0, 0, 8, 0) }; brandLogo.SetPresentation(LogoState, dark); brand.Children.Add(brandLogo); var title = Text(T("TOKEN榨汁机", "TokenMax"), 13, true); title.Margin = new Thickness(0); brand.Children.Add(title); heading.Children.Add(brand); body.Children.Add(heading);
             var usage = Json.Child(snapshot, "usage"); var windows = VisibleWindows(usage);
             foreach (var window in windows)
             {
@@ -1737,7 +1737,7 @@ namespace CodexMissionManager
             if (notice.Length > 0) { var message = Text(notice, 10); message.Foreground = secondary; message.Margin = new Thickness(0, 12, 0, 0); body.Children.Add(message); }
             if (connectionError.Length > 0) { var error = Text(ConnectionErrorText(), 10); error.Foreground = Brushes.DarkOrange; error.Margin = new Thickness(0, 12, 0, 0); body.Children.Add(error); }
             body.Children.Add(DividerLine(border, new Thickness(0, 16, 0, 16)));
-            body.Children.Add(TrayAction(T("打开榨汁机", "Open TokenMax"), "window", ShowMain));
+            body.Children.Add(TrayAction(T("打开TOKEN榨汁机", "Open TokenMax"), "window", ShowMain));
             body.Children.Add(TrayAction(T("设置", "Settings"), "settings", delegate { CloseTrayPanel(); ShowSettingsWindow(); }));
             var language = Choice(new[] { "简体中文", "English" }); language.SelectedIndex = preferences.Language == "en" ? 1 : 0;
             language.SelectionChanged += delegate { preferences.Language = language.SelectedIndex == 1 ? "en" : "zh"; SavePreferences(); RebuildPresentation(); }; body.Children.Add(SettingsChoiceRow(T("语言", "Language"), language, 180));
@@ -2438,7 +2438,7 @@ namespace CodexMissionManager
             }
             bool created; using (var mutex = new Mutex(true, @"Local\CodexMissionManager-Windows", out created))
             {
-                if (!created) { MessageBox.Show("榨汁机已在运行，请从系统托盘打开。\nTokenMax is already running. Open it from the system tray.", "TokenMax"); return 0; }
+                if (!created) { MessageBox.Show("TOKEN榨汁机已在运行，请从系统托盘打开。\nTokenMax is already running. Open it from the system tray.", "TokenMax"); return 0; }
                 var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
                 var window = new MissionWindow(false, null); app.MainWindow = window;
                 app.Startup += delegate { if (args.Contains("--background")) window.EnsureHostStarted(); else window.Show(); };

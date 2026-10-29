@@ -11,13 +11,14 @@ for(const theme of ['light','dark']) for(const state of states) {
   // Figma import needs presentation attributes instead of CSS variables.
   const p = {...palettes[theme]};if(state==='disconnected'||state==='idle')p.blue=p.muted;
   const fill = {blue:p.blue,glass:p.glass,bolt:state==='working'?p.gold:p.gray,'error-mark':p.red};
-  const stroke = {handle:p.blue,arcs:p.gold,'pause-mark':p.gold,'disconnect-mark':p.gray};
+  const stroke = {handle:p.blue,arcs:p.gold,'pause-mark':p.gold,'disconnect-mark':p.gray,'energy-core':p.core};
   let figma = svg.replace(/<style>[\s\S]*?<\/style>/,'').replace(/var\(--qj-(\w+)\)/g,(_,k)=>p[k]);
   figma = figma.replace(/class="([^"]+)"/g,(all,classes)=>{
     const cl=classes.split(' ');let attributes='';
     for(const c of cl){if(fill[c])attributes+=` fill="${fill[c]}"`;if(stroke[c])attributes+=` stroke="${stroke[c]}"`;}
-    if(cl.includes('energy-base'))attributes+=' opacity=".16"';
-    if(cl.includes('energy-trace'))attributes+=' opacity=".8" stroke-dasharray="38 150 12 112"';
+    const opacity={'energy-glow':'.12','energy-halo':'.28','energy-filament':'.92','energy-core':'.95','branches':'.65'};
+    for(const c of cl)if(opacity[c])attributes+=` opacity="${opacity[c]}"`;
+    if(cl.includes('energy-trace'))attributes+=' stroke-dasharray="62 18 14 36"';
     return attributes;
   }).replace(/data-layer=/g,'id=');
   // Imported layers stay editable; the runtime file remains the animation source of truth.

@@ -99,6 +99,18 @@ class InterfaceTests(unittest.TestCase):
         data = json.loads(self.request()[2])
         self.assertTrue(data["usage"]["stale"])
 
+    def test_mac_transport_failure_disables_controls_even_with_fresh_quota(self):
+        self.store.put('supervisor_paused', False)
+        report_path = self.store.directory / 'status.json'
+        report = json.loads(report_path.read_text())
+        with mock.patch('ui.desktop_compatibility', return_value={'supported': True}):
+            for available in (False, True):
+                report['control_available'] = available
+                report_path.write_text(json.dumps(report))
+                data = json.loads(self.request()[2])
+                self.assertTrue(data['healthy'])
+                self.assertEqual(data['control_enabled'], available)
+
     def test_profile_not_sampled_is_unknown(self):
         data = json.loads(self.request()[2])
         self.assertIsNone(data["usage"]["account"])
@@ -162,7 +174,7 @@ class InterfaceTests(unittest.TestCase):
         self.assertIn("SameSite=Strict", headers["Set-Cookie"])
         self.assertIn("HttpOnly", headers["Set-Cookie"])
         self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"])
-        self.assertEqual(json.loads(body)["name"], "榨汁机")
+        self.assertEqual(json.loads(body)["name"], "TOKEN榨汁机")
         self.assertEqual(json.loads(body)["service"], "TokenMax")
         self.assertEqual(json.loads(body)['interface'], 'native')
         for asset in ('/app.js', '/style.css', '/favicon.svg'):

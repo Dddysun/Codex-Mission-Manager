@@ -1,16 +1,17 @@
 <svg xmlns="http://www.w3.org/2000/svg" id="qj-3" class="qj" data-state="waiting" data-animated="false" data-reduced="false" width="256" height="256" viewBox="0 0 256 256" focusable="false" role="img" aria-labelledby="qj-3-title">
-      <title id="qj-3-title">榨汁机 · 等待额度</title>
-      <style>#qj-3{--qj-blue:#2168D5;--qj-glass:#EAF3FF;--qj-gray:#8795A8;--qj-gold:#E7AA16;--qj-swirl:#74A0D9;--qj-muted:#758598;--qj-badge:#F5F7FA;--qj-red:#CD5058;display:block;overflow:visible}
-      
+      <title id="qj-3-title">TOKEN榨汁机 · 等待额度</title>
+      <style>#qj-3{--qj-blue:#2168D5;--qj-glass:#EAF3FF;--qj-gray:#8795A8;--qj-gold:#F5B82E;--qj-core:#FFF2C9;--qj-swirl:#74A0D9;--qj-muted:#758598;--qj-badge:#F5F7FA;--qj-red:#CD5058;display:block;overflow:visible}
+
       #qj-3 .blue{fill:var(--qj-blue)}#qj-3 .glass{fill:var(--qj-glass)}
       #qj-3 .handle{stroke:var(--qj-blue)}#qj-3 .bolt{fill:var(--qj-gray)}
       #qj-3[data-state="working"] .bolt{fill:var(--qj-gold)}
       #qj-3[data-state="disconnected"],#qj-3[data-state="idle"]{--qj-blue:var(--qj-muted)}
-      #qj-3 .arcs{stroke:var(--qj-gold)}#qj-3 .energy-base{opacity:.16}#qj-3 .energy-trace{opacity:.8;stroke-dasharray:38 150 12 112}
+      #qj-3 .arcs{stroke:var(--qj-gold)}#qj-3 .energy-trace{stroke-dasharray:62 18 14 36}#qj-3 .energy-glow{opacity:.12}#qj-3 .energy-halo{opacity:.28}#qj-3 .energy-filament{opacity:.92}#qj-3 .energy-core{stroke:var(--qj-core);opacity:.95}#qj-3 .branches{opacity:.65}#qj-3 .branches .energy-trace{stroke-dasharray:18 10 5 22}
       #qj-3 .pause-mark{stroke:var(--qj-gold)}
       #qj-3 .disconnect-mark{stroke:var(--qj-gray)}#qj-3 .error-mark{fill:var(--qj-red)}
       </style>
-      
+
+
       <g data-layer="handle"><path class="handle" d="M180 78H199Q229 78 226 110L223 128Q220 156 176 153" fill="none" stroke-width="15" stroke-linejoin="round"/></g>
       <g data-layer="cup"><path class="blue" d="M62 63H193L181 158Q179 177 160 177H94Q75 177 73 158Z"/><path class="glass" d="M78 76H177L166 155Q165 163 155 163H99Q89 163 88 155Z"/></g>
       <g data-layer="lid"><rect class="blue" x="57" y="48" width="142" height="22" rx="11"/></g>
@@ -18,5 +19,7 @@
       <g data-layer="base"><path class="blue" d="M88 182H166Q183 182 187 199L190 212Q192 222 180 222H74Q62 222 64 212L67 199Q71 182 88 182Z"/></g>
       <g data-layer="control"><circle class="glass" cx="127" cy="202" r="10"/><path d="M127 196V201" stroke="var(--qj-blue)" stroke-width="3" stroke-linecap="round"/></g>
       <g data-layer="status-symbol" class="motion symbol-motion"><path class="pause-mark" d="M115 94V135M139 94V135" stroke-width="10" stroke-linecap="round"/></g>
-      
+
+
+
     </svg>

@@ -612,11 +612,11 @@ async def run(config, once=False):
                 # tasks, pending plans, notifications, or control permission.
                 observe_quota(store, sample, config)
                 phase = classify(sample, config)
-                if os.name == 'nt' and hasattr(rpc, 'refresh_control'):
+                if hasattr(rpc, 'refresh_control'):
                     await rpc.refresh_control()
                 control_available = (config.get('desktop_control_enabled', False) and getattr(rpc, 'control_available', False)
-                                     if os.name == 'nt' else True)
-                if os.name == 'nt' and control_available:
+                                     if hasattr(rpc, 'refresh_control') else os.name != 'nt')
+                if control_available and hasattr(rpc, 'discover'):
                     # Showing current status is independent of permission to
                     # interrupt or resume a conversation.
                     try:
@@ -677,6 +677,12 @@ async def run(config, once=False):
                     from plans import PlanRunner
                     await PlanRunner(controller).tick(sample)
                     await controller.tick(sample)
+                # A transport can fail during collection after a healthy quota
+                # read. Report that failure now, then reconnect on the next pass.
+                if getattr(getattr(rpc, "ipc", None), "disconnected", False):
+                    control_available = False
+                    rpc.control_available = False
+                    rpc.control_error = rpc.ipc.last_error or "desktop connection unavailable"
                 report = {"version": VERSION, "pid": os.getpid(), "observed_at": started,
                           "observed_at_dubai": local_time(started), "mode": config["mode"],
                           "phase": phase, "supervisor_paused": supervisor_paused, "quota": sample,

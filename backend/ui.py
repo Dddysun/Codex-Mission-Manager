@@ -54,7 +54,7 @@ class Application:
             now = time.time()
             compatibility = desktop_compatibility()
             control_available = (bool(report.get('control_available')) and compatibility['supported']
-                                 if IS_WINDOWS else compatibility['supported'])
+                                 if IS_WINDOWS else compatibility['supported'] and report.get('control_available', True))
             running = lock_held(store.directory / "daemon.lock")
             observed = report.get("observed_at")
             fresh = observed is not None and now - observed <= cfg["max_sample_age_seconds"]
@@ -372,7 +372,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(503, {"error": "暂时无法读取服务状态，请稍后刷新"})
         if self.path != '/':
             return self.reply(404, {"error": "页面不存在"})
-        return self.reply(200, {'service': 'TokenMax', 'name': '榨汁机',
+        return self.reply(200, {'service': 'TokenMax', 'name': 'TOKEN榨汁机',
                                'interface': 'native'}, session=True)
 
     def do_POST(self):
@@ -439,7 +439,7 @@ def main():
     elif args.command == "stop":
         if running:
             stop_path.touch(mode=0o600)
-        print("已关闭界面，榨汁机仍在后台运行")
+        print("已关闭界面，TOKEN榨汁机仍在后台运行")
     elif running:
         print(info.get("url", "界面正在启动"))
     else:

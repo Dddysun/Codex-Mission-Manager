@@ -25,8 +25,8 @@ const {chromium} = require('playwright');
   for(const s of states){await page.selectOption('#state',s);const names=await page.locator('#hero').evaluate(el=>[...el.shadowRoot.querySelectorAll('.motion')].map(n=>getComputedStyle(n).animationName));if(s!=='working')assert(names.every(n=>n==='none'));}
   await page.selectOption('#state','working');await page.selectOption('#theme','auto');
   await page.emulateMedia({colorScheme:'dark'});
-  assert.equal(await page.locator('#hero').evaluate(el=>getComputedStyle(el.shadowRoot.querySelector('.blue')).fill),'rgb(72, 120, 175)');
-  assert.equal(await page.locator('#hero').evaluate(el=>getComputedStyle(el.shadowRoot.querySelector('.bolt')).fill),'rgb(231, 180, 60)');
+  assert.equal(await page.locator('#hero').evaluate(el=>getComputedStyle(el.shadowRoot.querySelector('.blue')).fill),'rgb(83, 134, 191)');
+  assert.equal(await page.locator('#hero').evaluate(el=>getComputedStyle(el.shadowRoot.querySelector('.bolt')).fill),'rgb(242, 186, 66)');
   await page.emulateMedia({colorScheme:'light'});assert.equal(await page.locator('#hero').evaluate(el=>getComputedStyle(el.shadowRoot.querySelector('.blue')).fill),'rgb(33, 104, 213)');
   await page.selectOption('#theme','dark');await page.emulateMedia({colorScheme:'dark'});
   await page.screenshot({path:path.join(__dirname,'preview-dark.png'),fullPage:true});
@@ -37,7 +37,10 @@ const {chromium} = require('playwright');
   await page.setViewportSize({width:390,height:844});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   const one=renderSVG({state:'working',theme:'light'}),two=renderSVG({state:'working',theme:'dark'});
   await page.setContent(one+two);
-  const fills=await page.locator('svg').evaluateAll(nodes=>nodes.map(n=>getComputedStyle(n.querySelector('.blue')).fill));assert.deepEqual(fills,['rgb(33, 104, 213)','rgb(72, 120, 175)']);
+  const fills=await page.locator('svg').evaluateAll(nodes=>nodes.map(n=>getComputedStyle(n.querySelector('.blue')).fill));assert.deepEqual(fills,['rgb(33, 104, 213)','rgb(83, 134, 191)']);
+  const boltBounds=await page.locator('svg').first().locator('.bolt').evaluate(n=>{const b=n.getBBox();return {top:b.y,bottom:b.y+b.height};});
+  assert(boltBounds.top>=90&&boltBounds.bottom<=154, 'Bolt has clear cup-lid and bottom margins');
+  assert.equal(await page.locator('svg').first().locator('.energy-core').count(),5);
   const ids=await page.locator('[id]').evaluateAll(nodes=>nodes.map(n=>n.id));assert.equal(new Set(ids).size,ids.length);
   for(const theme of ['light','dark'])for(const state of states){const source=fs.readFileSync(path.join(__dirname,'svg',`${theme}-${state}.svg`),'utf8');assert(!source.includes('@keyframes'));assert(!source.includes('vortex'));assert(!source.includes('status-badge'));if(['waiting','disconnected','error'].includes(state))assert(!source.includes('class="bolt"'));assert(source.includes(`data-state="${state}"`));}
   assert(renderSVG({label:'<script>bad</script>'}).includes('&lt;script&gt;bad&lt;/script&gt;'));

@@ -11,7 +11,7 @@ struct MissionMenuPanel: View {
         ScrollView {
         VStack(alignment:.leading,spacing:16) {
             HStack {
-                HStack(spacing:8) { JuicerLogo(state:model.logoState).frame(width:32,height:32); Text(L("榨汁机")).font(.headline) }
+                HStack(spacing:8) { JuicerLogo(state:model.logoState).frame(width:32,height:32); Text(L("TOKEN榨汁机")).font(.headline) }
                 Spacer()
                 Text(model.snapshot?.usage?.account?.subscription ?? L("待识别")).font(.caption).foregroundStyle(.secondary)
             }

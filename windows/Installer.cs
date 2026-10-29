@@ -146,10 +146,10 @@ namespace CodexMissionManagerSetup
                     catch (System.ComponentModel.Win32Exception)
                     {
                         if (process.ProcessName == "python") continue;
-                        throw new InvalidOperationException(T("请先退出榨汁机，再继续安装。", "Quit TokenMax before continuing."));
+                        throw new InvalidOperationException(T("请先退出TOKEN榨汁机，再继续安装。", "Quit TokenMax before continuing."));
                     }
                     if (String.Equals(Path.GetFullPath(path), expected, StringComparison.OrdinalIgnoreCase) || String.Equals(Path.GetFullPath(path), python, StringComparison.OrdinalIgnoreCase))
-                        throw new InvalidOperationException(T("请从托盘菜单退出榨汁机后继续。", "Quit TokenMax from its tray menu before continuing."));
+                        throw new InvalidOperationException(T("请从托盘菜单退出TOKEN榨汁机后继续。", "Quit TokenMax from its tray menu before continuing."));
                 }
             }
         }
@@ -193,7 +193,7 @@ namespace CodexMissionManagerSetup
                 var shortcut = (IShellLinkW)instance;
                 shortcut.SetPath(executable);
                 shortcut.SetWorkingDirectory(Path.GetDirectoryName(executable));
-                shortcut.SetDescription(T("榨汁机", "TokenMax"));
+                shortcut.SetDescription(T("TOKEN榨汁机", "TokenMax"));
                 shortcut.SetIconLocation(executable, 0);
                 var file = (System.Runtime.InteropServices.ComTypes.IPersistFile)instance;
                 file.Save(path, true);
@@ -215,12 +215,12 @@ namespace CodexMissionManagerSetup
             }
             finally { if (instance != null && Marshal.IsComObject(instance)) Marshal.FinalReleaseComObject(instance); }
         }
-        static string ShortcutName { get { return T("榨汁机.lnk", "TokenMax.lnk"); } }
+        static string ShortcutName { get { return T("TOKEN榨汁机.lnk", "TokenMax.lnk"); } }
         static IEnumerable<string> KnownShortcutPaths()
         {
             string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
             string programs = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
-            foreach (string name in new[] { "任务管家.lnk", "榨汁机.lnk", "TokenMax.lnk" })
+            foreach (string name in new[] { "任务管家.lnk", "榨汁机.lnk", "TOKEN榨汁机.lnk", "TokenMax.lnk" })
             {
                 yield return Path.Combine(desktop, name);
                 foreach (string folder in new[] { "Codex Mission Manager", "TokenMax" }) yield return Path.Combine(programs, folder, name);
@@ -263,7 +263,7 @@ namespace CodexMissionManagerSetup
             try
             {
                 string executable = Path.Combine(root, "CodexMissionManager.exe"), other = Path.Combine(root, "Other.exe");
-                string legacy = Path.Combine(root, "任务管家.lnk"), current = Path.Combine(root, "TokenMax.lnk"), foreign = Path.Combine(root, "榨汁机.lnk");
+                string legacy = Path.Combine(root, "任务管家.lnk"), current = Path.Combine(root, "TokenMax.lnk"), foreign = Path.Combine(root, "TOKEN榨汁机.lnk");
                 // Existing inert files avoid shell resolution of dangling targets; never execute them.
                 File.WriteAllBytes(executable, new byte[0]); File.WriteAllBytes(other, new byte[0]);
                 selfTestEvidence["target_files_exist"] = File.Exists(executable) && File.Exists(other);
@@ -315,7 +315,7 @@ namespace CodexMissionManagerSetup
             foreach (string path in Directory.GetFiles(target, "*", SearchOption.AllDirectories)) size += new FileInfo(path).Length;
             using (RegistryKey key = Registry.CurrentUser.CreateSubKey(UninstallRegistryKey))
             {
-                key.SetValue("DisplayName", T("榨汁机 · TokenMax", "TokenMax"));
+                key.SetValue("DisplayName", T("TOKEN榨汁机 · TokenMax", "TokenMax"));
                 key.SetValue("DisplayVersion", ProductVersion + "-" + ProductPreview);
                 key.SetValue("Publisher", "TokenMax contributors");
                 key.SetValue("InstallLocation", target);
@@ -368,7 +368,7 @@ namespace CodexMissionManagerSetup
             Payload(); // Authenticate the installed uninstaller before starting cleanup.
             var marker = InstalledMarker();
             EnsureStopped(InstallationDirectory);
-            if (!quiet && MessageBox.Show(T("卸载榨汁机？账号和任务数据将保留。", "Uninstall TokenMax? Account and task data will be kept."), T("卸载榨汁机", "Uninstall TokenMax"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 2;
+            if (!quiet && MessageBox.Show(T("卸载TOKEN榨汁机？账号和任务数据将保留。", "Uninstall TokenMax? Account and task data will be kept."), T("卸载TOKEN榨汁机", "Uninstall TokenMax"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 2;
             string cleanup = Path.Combine(Path.GetTempPath(), "CodexMissionManager-Cleanup-" + Guid.NewGuid().ToString("N") + ".exe");
             CopyCleanupStub(cleanup);
             string arguments = "--complete-uninstall --parent-pid " + Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + " --installation-id " + (string)marker["installation_id"];
@@ -415,7 +415,7 @@ namespace CodexMissionManagerSetup
                 }
             }
             Report(args, new Dictionary<string, object> { { "uninstalled", true }, { "private_data_directory_preserved", true }, { "other_applications_modified", false }, { "cleanup_stub_retained_in_temp", true } });
-            if (!quiet) MessageBox.Show(T("榨汁机已卸载，私人数据已保留。", "TokenMax was removed. Private data was preserved."), T("榨汁机", "TokenMax"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (!quiet) MessageBox.Show(T("TOKEN榨汁机已卸载，私人数据已保留。", "TokenMax was removed. Private data was preserved."), T("TOKEN榨汁机", "TokenMax"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 0;
         }
         static Dictionary<string, object> Install(byte[] payload, bool launch, Action<string> progress)
@@ -483,11 +483,11 @@ namespace CodexMissionManagerSetup
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            var form = new Form { Text = T("榨汁机安装", "TokenMax Setup"), ClientSize = new Size(560, 305), StartPosition = FormStartPosition.CenterScreen, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, Font = new Font("Segoe UI", 10F), BackColor = Color.White };
-            var title = new Label { Text = T("安装榨汁机", "Install TokenMax"), Location = new Point(28, 24), AutoSize = true, Font = new Font("Segoe UI", 19F, FontStyle.Bold) };
+            var form = new Form { Text = T("TOKEN榨汁机安装", "TokenMax Setup"), ClientSize = new Size(560, 305), StartPosition = FormStartPosition.CenterScreen, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, Font = new Font("Segoe UI", 10F), BackColor = Color.White };
+            var title = new Label { Text = T("安装TOKEN榨汁机", "Install TokenMax"), Location = new Point(28, 24), AutoSize = true, Font = new Font("Segoe UI", 19F, FontStyle.Bold) };
             var description = new Label { Text = T("V" + ProductVersion + " · Windows 预览版\n包含所需运行环境；保留账号和任务数据。", "V" + ProductVersion + " · Windows preview\nIncludes required runtime. Keeps account and task data."), Location = new Point(30, 76), Size = new Size(500, 62) };
             var pathLabel = new Label { Text = InstallationDirectory, Location = new Point(30, 148), Size = new Size(500, 42), ForeColor = Color.DimGray };
-            var launch = new CheckBox { Text = T("安装后打开榨汁机", "Open TokenMax after installation"), Location = new Point(30, 195), AutoSize = true, Checked = Array.IndexOf(args, "--no-launch") < 0 };
+            var launch = new CheckBox { Text = T("安装后打开TOKEN榨汁机", "Open TokenMax after installation"), Location = new Point(30, 195), AutoSize = true, Checked = Array.IndexOf(args, "--no-launch") < 0 };
             var status = new Label { Text = "", Location = new Point(30, 231), Size = new Size(340, 50) };
             var install = new Button { Text = T("安装", "Install"), Location = new Point(408, 235), Size = new Size(120, 37), FlatStyle = FlatStyle.System };
             bool busy = false, success = false;
@@ -547,7 +547,7 @@ namespace CodexMissionManagerSetup
             catch (Exception error)
             {
                 Console.Error.WriteLine(error.Message);
-                if (!quiet) MessageBox.Show(error.Message, T("榨汁机安装", "TokenMax Setup"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                if (!quiet) MessageBox.Show(error.Message, T("TOKEN榨汁机安装", "TokenMax Setup"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 try
                 {
                     var failure = new Dictionary<string, object> { { "installed", false }, { "error", error.Message } };

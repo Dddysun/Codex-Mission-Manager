@@ -424,8 +424,8 @@ final class MissionModel: ObservableObject {
             guard let key = record["key"] as? String else { continue }
             if notificationDelivery, notificationsEnabled, !notificationKeys.contains(key), !firstNoticeRead {
                 let content = UNMutableNotificationContent()
-                content.title = NativeLocalization.notificationTitle(record["title"] as? String ?? "榨汁机")
-                content.body = NativeLocalization.language == "en" ? ((record["body_en"] as? String) ?? L("打开榨汁机查看详情。")) : L(record["body"] as? String ?? "")
+                content.title = NativeLocalization.notificationTitle(record["title"] as? String ?? "TOKEN榨汁机")
+                content.body = NativeLocalization.language == "en" ? ((record["body_en"] as? String) ?? L("打开TOKEN榨汁机查看详情。")) : L(record["body"] as? String ?? "")
                 UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: key, content: content, trigger: nil))
             }
             notificationKeys.insert(key)
@@ -522,7 +522,7 @@ final class MissionApp: NSObject, NSApplicationDelegate {
             artwork.frame=button.bounds
             artwork.autoresizingMask=[.width,.height]
             button.addSubview(artwork)
-            button.setAccessibilityLabel(L("榨汁机"))
+            button.setAccessibilityLabel(L("TOKEN榨汁机"))
         }
         statusItem.button?.toolTip = L("任务管家")
         statusItem.button?.target = self
@@ -564,7 +564,7 @@ final class MissionApp: NSObject, NSApplicationDelegate {
         window?.title = L("任务管家")
         settingsWindow?.title = L("设置")
         statusItem?.button?.toolTip = L("任务管家")
-        statusItem?.button?.setAccessibilityLabel(L("榨汁机"))
+        statusItem?.button?.setAccessibilityLabel(L("TOKEN榨汁机"))
     }
     @objc func togglePanel() {
         guard termination.phase == .running else { return }

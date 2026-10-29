@@ -239,7 +239,7 @@ import Foundation
         precondition(MissionActivityFilter.all.title == "全部记录" && MissionActivityFilter.user.title == "用户操作" && MissionActivityFilter.automatic.title == "自动进程")
         precondition(globalEvents.map(\.label) == ["用户恢复（推断）","周期重置（推断）","额外重置（推断）","额度恢复"])
         precondition(globalEvents[0].scopeTitle == "全局额度事件" && globalEvents[0].restorationLines.contains("依据权益变化判定"))
-        precondition(L("任务管家") == "榨汁机" && L("任务控制") == "来一杯")
+        precondition(L("任务管家") == "TOKEN榨汁机" && L("任务控制") == "来一杯")
         precondition(L("启用自动控制") == "开始榨汁" && L("恢复自动控制") == "开始榨汁")
         precondition(L("暂停自动控制") == "暂停榨汁" && L("自动控制") == "榨汁状态")
         precondition(L(L("关闭窗口后，任务管家继续在菜单栏运行。")) == "关闭窗口后仍在后台运行。")
@@ -248,7 +248,7 @@ import Foundation
         precondition(L("任务管家") == "TokenMax" && L("来一杯") == "Juice Bar")
         precondition(L("开始榨汁") == "Start Juicing" && L("暂停榨汁") == "Pause Juicing")
         precondition(L("%@：榨汁状态","Test task") == "Test task: juicing")
-        precondition(NativeLocalization.notificationTitle("榨汁机：已暂停任务") == "Tasks paused")
+        precondition(NativeLocalization.notificationTitle("TOKEN榨汁机：已暂停任务") == "Tasks paused")
         precondition(NativeLocalization.notificationTitle("额度管家：额度已恢复") == "Quota restored")
         precondition(!NativeLocalization.english.values.contains { $0.contains("Mission Manager") })
         var logo=state

@@ -105,7 +105,7 @@ if (!$nativeResult.native -or $nativeResult.webView -or $nativeResult.hostStarte
 $manifest = [ordered]@{
     version=$version; preview=$preview; build_number=$buildNumber; platform='windows'; architecture='x64'
     minimum_windows='10.0.19041'; framework='.NET Framework 4.8 or later'; framework_bundled=$false
-    ui='WPF'; webview=$false; product='TokenMax'; product_zh='榨汁机'; brand_identity_version='1.1.0'; python=$lock.version; python_distribution=$lock.distribution; python_sha256=$lock.sha256
+    ui='WPF'; webview=$false; product='TokenMax'; product_zh=('TOKEN' + [char]0x69A8 + [char]0x6C41 + [char]0x673A); brand_identity_version='1.2.0'; python=$lock.version; python_distribution=$lock.distribution; python_sha256=$lock.sha256
     python_bundled=$true; private_runtime_data_included=$false; signing='unsigned-preview'
     normal_poll_delay_seconds=30; near_limit_or_pending_plan_poll_delay_seconds=10; ui_poll_seconds=5
     configurable_rules=$true; theme_accents=@('green','blue','purple','yellow'); chat_sources=@('codex')

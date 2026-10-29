@@ -200,6 +200,46 @@
           "highlight": false, "caption": {"zh": "榨汁机菜单与额度概览", "en": "TokenMax menu and quota overview"}
         }
       ]
+    },
+    "0.4.1": {
+      "images": [
+        {
+          "id": "tokenmax-home", "platform": "macos", "kind": "home", "view": "home",
+          "file": "green-light.png", "receipt": "green-light.json",
+          "dimensions": [[1380, 900], [2760, 1800]], "accent": "green", "theme": "light", "language": "zh",
+          "highlight": true, "caption": {"zh": "TOKEN榨汁机 · 下移闪电与分叉电流", "en": "TokenMax · centered bolt and branching electric trails"}
+        },
+        {
+          "id": "tokenmax-home", "platform": "windows", "kind": "home", "view": "home",
+          "file": "home-zh-light-native-state-green.png", "receipt": "home-zh-light-native-state-green.png.json",
+          "dimensions": [[2760, 1800]], "accent": "green", "theme": "light", "language": "zh",
+          "highlight": true, "caption": {"zh": "TOKEN榨汁机 · 下移闪电与分叉电流", "en": "TokenMax · centered bolt and branching electric trails"}
+        },
+        {
+          "id": "compact-activity", "platform": "macos", "kind": "activity", "view": "activity",
+          "file": "activity-zh-light.png", "receipt": "activity-zh-light.json",
+          "dimensions": [[1380, 900], [2760, 1800]], "accent": "blue", "theme": "light", "language": "zh",
+          "highlight": true, "caption": {"zh": "额度恢复摘要与可展开详情", "en": "Compact quota recovery with expandable evidence"}
+        },
+        {
+          "id": "compact-activity", "platform": "windows", "kind": "activity", "view": "activity",
+          "file": "activity-en-dark-native-quota-restored-purple.png", "receipt": "activity-en-dark-native-quota-restored-purple.png.json",
+          "dimensions": [[2760, 1800]], "accent": "purple", "theme": "dark", "language": "en",
+          "highlight": true, "caption": {"zh": "额度恢复摘要与可展开详情", "en": "Compact quota recovery with expandable evidence"}
+        },
+        {
+          "id": "settings", "platform": "windows", "kind": "settings", "view": "settings",
+          "file": "settings-zh-light-native-state-blue.png", "receipt": "settings-zh-light-native-state-blue.png.json",
+          "dimensions": [[1600, 2200]], "accent": "blue", "theme": "light", "language": "zh",
+          "highlight": false, "caption": {"zh": "精简设置说明", "en": "Concise settings and permissions"}
+        },
+        {
+          "id": "menu", "platform": "macos", "kind": "menu", "view": "menu",
+          "file": "menu-en-dark.png", "receipt": "menu-en-dark.json",
+          "dimensions": [[400, 570], [800, 1140]], "accent": "green", "theme": "dark", "language": "en",
+          "highlight": false, "caption": {"zh": "新品牌菜单与额度概览", "en": "TokenMax menu and quota overview"}
+        }
+      ]
     }
   }
 }

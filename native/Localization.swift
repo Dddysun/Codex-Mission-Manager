@@ -494,11 +494,11 @@ enum NativeLocalization {
   "重置权益次数未提供。": "Reset-credit counts unavailable.",
   "未提供可核实的额度窗口变化。": "Quota-change details unavailable.",
   "额度窗口未提供": "Quota window not provided",
-  "榨汁机": "TokenMax",
-  "打开榨汁机查看详情。": "Open TokenMax for details.",
+  "TOKEN榨汁机": "TokenMax",
+  "打开TOKEN榨汁机查看详情。": "Open TokenMax for details.",
   "来一杯": "Juice Bar",
-  "打开榨汁机": "Open TokenMax",
-  "退出榨汁机": "Quit TokenMax",
+  "打开TOKEN榨汁机": "Open TokenMax",
+  "退出TOKEN榨汁机": "Quit TokenMax",
   "榨汁状态": "Juicing",
   "开始榨汁": "Start Juicing",
   "暂停榨汁": "Pause Juicing",
@@ -541,7 +541,7 @@ enum NativeLocalization {
   "预约在额度恢复后执行一次；暂停榨汁时不发送。": "Schedules run once after quota recovery, while juicing is enabled.",
   "采集间隔不含处理耗时；界面刷新读取缓存。": "Collection time is additional. UI refresh reads cached data.",
   "正在核对账号、额度和任务。": "Verifying account, quota and tasks.",
-  "客户端 %@ 暂不支持，请更新榨汁机。": "Client %@ is unsupported. Update TokenMax.",
+  "客户端 %@ 暂不支持，请更新TOKEN榨汁机。": "Client %@ is unsupported. Update TokenMax.",
   "后台已停止，记录已保留。": "Service stopped. Records saved.",
   "核验后立即发送；结果不明确时不重发。": "Send after verification. Uncertain delivery is not retried.",
   "服务暂不可用，等待核验。": "Service unavailable. Awaiting verification.",
@@ -590,10 +590,10 @@ enum NativeLocalization {
     static let conciseChinese: [String:String] = {
         let data = #"""
 {
-  "任务管家": "榨汁机",
+  "任务管家": "TOKEN榨汁机",
   "任务控制": "来一杯",
-  "打开任务管家": "打开榨汁机",
-  "退出任务管家": "退出榨汁机",
+  "打开任务管家": "打开TOKEN榨汁机",
+  "退出任务管家": "退出TOKEN榨汁机",
   "自动控制": "榨汁状态",
   "启用自动控制": "开始榨汁",
   "恢复自动控制": "开始榨汁",
@@ -638,7 +638,7 @@ enum NativeLocalization {
   "预约在核验额度恢复后执行一次。关闭全局自动控制会停止预约发送；保存指令不会立即执行。": "预约在额度恢复后执行一次；暂停榨汁时不发送。",
   "采集间隔从每轮完成后计算；处理耗时另计。界面刷新只读取后台缓存。": "采集间隔不含处理耗时；界面刷新读取缓存。",
   "正在核对账号、额度和聊天状态；取得可靠状态后才能自动续接。": "正在核对账号、额度和任务。",
-  "客户端 %@ 尚未支持，请检查任务管家更新。": "客户端 %@ 暂不支持，请更新榨汁机。",
+  "客户端 %@ 尚未支持，请检查任务管家更新。": "客户端 %@ 暂不支持，请更新TOKEN榨汁机。",
   "后台已退出；已有记录保留": "后台已停止，记录已保留。",
   "发送当前指令框内容，不等待刷新。发送后等待真实回执，不把提交成功当作已执行。执行中、等待审批、额度或账号异常时，后台会拒绝发送。结果不明确时不会自动重复发送。": "核验后立即发送；结果不明确时不重发。",
   "服务暂不允许使用，等待重新核验": "服务暂不可用，等待核验。",
@@ -671,10 +671,10 @@ enum NativeLocalization {
             if let value=conciseChinese[key] { return value }
             if let value=chinese[key] { return value }
         }
-        return key.replacingOccurrences(of:"Codex Mission Manager",with:"TokenMax").replacingOccurrences(of:"Mission Manager",with:"TokenMax").replacingOccurrences(of:"任务管家",with:language == "en" ? "TokenMax" : "榨汁机").replacingOccurrences(of:"额度管家",with:language == "en" ? "TokenMax" : "榨汁机")
+        return key.replacingOccurrences(of:"Codex Mission Manager",with:"TokenMax").replacingOccurrences(of:"Mission Manager",with:"TokenMax").replacingOccurrences(of:"任务管家",with:language == "en" ? "TokenMax" : "TOKEN榨汁机").replacingOccurrences(of:"额度管家",with:language == "en" ? "TokenMax" : "TOKEN榨汁机")
     }
     static func notificationTitle(_ raw:String) -> String {
-        let prefixes=["榨汁机：","任务管家：","额度管家：","TokenMax: ","Mission Manager: "]
+        let prefixes=["TOKEN榨汁机：","榨汁机：","任务管家：","额度管家：","TokenMax: ","Mission Manager: "]
         let body=prefixes.first(where:{raw.hasPrefix($0)}).map { String(raw.dropFirst($0.count)) } ?? raw
         return translated(body)
     }

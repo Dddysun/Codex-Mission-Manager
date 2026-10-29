@@ -27,7 +27,7 @@ Use new output directories for each build. / 每次构建使用新的输出目�
 python3 scripts/fetch_runtime.py --destination /tmp/tokenmax-python-040
 python3 scripts/build.py --python-runtime /tmp/tokenmax-python-040/python --output /tmp/tokenmax-macos-040
 python3 scripts/make_dmg.py --build /tmp/tokenmax-macos-040
-python3 scripts/verify_dmg.py /tmp/tokenmax-macos-040/TokenMax-0.4.0-arm64-preview.dmg --report /tmp/tokenmax-macos-040/verification.json
+python3 scripts/verify_dmg.py /tmp/tokenmax-macos-040/TokenMax-0.4.1-arm64-preview.dmg --report /tmp/tokenmax-macos-040/verification.json
 ```
 
 The build produces `TokenMax.app`, the arm64 preview DMG, `build-manifest.json`, and `SHA256SUMS`. The interface is compiled from SwiftUI/AppKit sources. The runtime is copied into the application; global Python, user packages, and private runtime configuration are not included. The DMG check mounts read-only and runs isolated self-tests without installing the application or controlling live chats.
@@ -81,6 +81,6 @@ The first two commands are portable; the Swift contract check requires macOS. On
 & .\dist\windows-040\app\runtime\python\python.exe -X utf8 -I .\windows\run_tests.py --scope smoke --output .\dist\windows-040-checks
 ```
 
-Native self-tests and fixture-render options are exercised by [the release workflow](../.github/workflows/release.yml). Fixture renders and editor/lifecycle checks start no live backend and send no chat messages. GUI rendering depends on an available desktop/window server; unavailable checks must be recorded as skipped. See [release validation](releases/0.4.0.md) for the distinction between offline checks and live acceptance.
+Native self-tests and fixture-render options are exercised by [the release workflow](../.github/workflows/release.yml). Fixture renders and editor/lifecycle checks start no live backend and send no chat messages. GUI rendering depends on an available desktop/window server; unavailable checks must be recorded as skipped. See [release validation](releases/0.4.1.md) for the distinction between offline checks and live acceptance.
 
-原生自检、界面渲染和编辑器／窗口生命周期检查由 [发行工作流](../.github/workflows/release.yml) 执行。示例渲染不启动真实后台、不发送聊天消息。图形渲染依赖可用桌面或窗口服务，无法执行时须记录为跳过。离线检查与实机验收的区别见 [发行说明](releases/0.4.0.md)。
+原生自检、界面渲染和编辑器／窗口生命周期检查由 [发行工作流](../.github/workflows/release.yml) 执行。示例渲染不启动真实后台、不发送聊天消息。图形渲染依赖可用桌面或窗口服务，无法执行时须记录为跳过。离线检查与实机验收的区别见 [发行说明](releases/0.4.1.md)。

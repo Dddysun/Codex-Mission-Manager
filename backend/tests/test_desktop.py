@@ -12,7 +12,7 @@ import uuid
 from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from desktop import DesktopAdapter, DesktopIPC, DesktopError, normalize_state, windows_pipe_address
+from desktop import DesktopAdapter, DesktopIPC, DesktopError, MAX_DESKTOP_FRAME_BYTES, normalize_state, windows_pipe_address
 from guardian import Controller, Store
 from test_guardian import CONFIG, NOW, payload, sample
 
@@ -322,6 +322,58 @@ class NativeProtocolTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaises(DesktopError):
             await self.adapter.call("turn/start",{"threadId":"one","_guardian_expected_turn_id":"older-turn", "input":[]})
         self.assertFalse(any(v["method"]=="thread-follower-start-turn" for v in self.requests))
+
+    async def test_large_history_snapshot_does_not_disconnect_other_chats(self):
+        # A long real conversation crossed 64 MiB. Exercise the framed stream,
+        # parser and subsequent request, rather than only checking the constant.
+        self.state["fixturePadding"] = "x" * (64 * 1024 * 1024)
+        view = await self.adapter.ipc.snapshot("one")
+        self.assertEqual(view["thread"]["status"]["type"], "active")
+        self.assertNotIn("fixturePadding", json.dumps(view))
+        self.assertFalse(self.adapter.ipc.disconnected)
+        self.assertEqual(await self.adapter.ipc.owner("another"), "desktop-owner")
+
+    async def test_closed_transport_fails_immediately_then_reconnects_on_mac(self):
+        ipc = self.adapter.ipc
+        await ipc.close()
+        self.assertTrue(ipc.disconnected)
+        with self.assertRaises(DesktopError):
+            await asyncio.wait_for(ipc.owner("one"), .25)
+        self.adapter.config.update(desktop_control_enabled=True, desktop_socket=self.socket)
+        self.adapter.discovery_signatures["one"] = (1, 1)
+        with mock.patch("desktop.IS_WINDOWS", False), mock.patch("compatibility.desktop_compatibility", return_value={"supported": True}):
+            # The transport remains platform-native on Windows CI; only the
+            # adapter's formerly Mac-skipped reconnection branch is exercised.
+            if os.name == 'nt':
+                replacement = mock.Mock()
+                replacement.disconnected = False
+                replacement.start = mock.AsyncMock()
+                replacement.close = mock.AsyncMock()
+                with mock.patch("desktop.DesktopIPC", return_value=replacement):
+                    self.assertTrue(await self.adapter.refresh_control())
+            else:
+                self.assertTrue(await self.adapter.refresh_control())
+                self.assertEqual((await self.adapter.ipc.snapshot("one"))["thread"]["status"]["type"], "active")
+        self.assertEqual(self.adapter.discovery_signatures, {})
+        self.assertIsNone(self.adapter.control_error)
+
+
+class FrameLimitTests(unittest.IsolatedAsyncioTestCase):
+    async def test_oversized_header_is_rejected_without_allocating_its_body(self):
+        ipc = DesktopIPC()
+        ipc.reader = asyncio.StreamReader()
+        ipc.reader.feed_data(struct.pack("<I", MAX_DESKTOP_FRAME_BYTES + 1))
+        ipc.writer = mock.Mock()
+        ipc.owners['old'] = 'owner'
+        ipc.states['old'] = {'thread': {'status': {'type': 'active'}}}
+        await asyncio.wait_for(ipc._read(), .25)
+        self.assertTrue(ipc.disconnected)
+        self.assertIn('exceeds supported limit', ipc.last_error)
+        self.assertEqual(ipc.owners, {})
+        self.assertEqual(ipc.states, {})
+        ipc.writer.close.assert_called_once()
+        with self.assertRaises(DesktopError):
+            await asyncio.wait_for(ipc.owner('old'), .25)
 
 
 if __name__ == "__main__":
