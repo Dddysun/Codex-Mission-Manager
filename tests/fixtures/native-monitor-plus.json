@@ -160,7 +160,9 @@
       "minutes": 10080,
       "remaining": 47,
       "reset": 1792958400
-    }
+    },
+    "service_allowed": true,
+    "blocked": false
   },
   "catalog": {
     "observed_at": 1792785600
@@ -225,5 +227,6 @@
   "quota_state": "metered",
   "usage_stale": false,
   "service_error": "",
-  "control_available": true
+  "control_available": true,
+  "quota_phase": "normal"
 }

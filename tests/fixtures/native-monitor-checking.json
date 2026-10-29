@@ -136,7 +136,9 @@
       "five_hour_available": true,
       "weekly_available": true,
       "state": "ready"
-    }
+    },
+    "service_allowed": true,
+    "blocked": false
   },
   "catalog": {
     "observed_at": 1792785600
@@ -203,5 +205,6 @@
   "control_available": true,
   "collection_in_progress": true,
   "collection_seconds": 18.4,
-  "phase": "normal"
+  "phase": "normal",
+  "quota_phase": "normal"
 }
