@@ -28,6 +28,8 @@ namespace CodexMissionManagerSetup
         const string ProductMarker = "CodexMissionManager.Windows.PerUser";
         const string UninstallRegistryKey = @"Software\Microsoft\Windows\CurrentVersion\Uninstall\CodexMissionManager";
         const string RunRegistryKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
+        static string selfTestStage = "not_started";
+        static readonly Dictionary<string, object> selfTestEvidence = new Dictionary<string, object>();
         static readonly bool Chinese = CultureInfo.CurrentUICulture.Name.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
 
         static string T(string zh, string en) { return Chinese ? zh : en; }
@@ -241,10 +243,25 @@ namespace CodexMissionManagerSetup
             {
                 string executable = Path.Combine(root, "CodexMissionManager.exe"), other = Path.Combine(root, "Other.exe");
                 string legacy = Path.Combine(root, "任务管家.lnk"), current = Path.Combine(root, "TokenMax.lnk"), foreign = Path.Combine(root, "榨汁机.lnk");
-                Shortcut(legacy, executable); Shortcut(current, executable); Shortcut(foreign, other);
-                if (!MatchesShortcut(legacy, executable) || MatchesShortcut(foreign, executable)) return false;
+                // Existing inert files avoid shell resolution of dangling targets; never execute them.
+                File.WriteAllBytes(executable, new byte[0]); File.WriteAllBytes(other, new byte[0]);
+                selfTestEvidence["target_files_exist"] = File.Exists(executable) && File.Exists(other);
+                selfTestStage = "shortcut_create_legacy"; Shortcut(legacy, executable);
+                selfTestStage = "shortcut_create_current"; Shortcut(current, executable);
+                selfTestStage = "shortcut_create_foreign"; Shortcut(foreign, other);
+                selfTestStage = "shortcut_read_targets";
+                selfTestEvidence["expected_target"] = executable;
+                selfTestEvidence["legacy_target"] = ShortcutTarget(legacy);
+                selfTestEvidence["current_target"] = ShortcutTarget(current);
+                selfTestEvidence["foreign_target"] = ShortcutTarget(foreign);
+                if (!MatchesShortcut(legacy, executable)) throw new InvalidOperationException("The legacy shortcut target did not match its fixture executable.");
+                if (MatchesShortcut(foreign, executable)) throw new InvalidOperationException("A foreign shortcut incorrectly matched the fixture executable.");
+                selfTestStage = "shortcut_migration";
                 RemoveMatchingShortcuts(new[] { legacy, current, foreign }, executable, current, Path.Combine(root, "Menu.lnk"));
-                return !File.Exists(legacy) && File.Exists(current) && MatchesShortcut(current, executable) && File.Exists(foreign) && MatchesShortcut(foreign, other);
+                selfTestEvidence["legacy_removed"] = !File.Exists(legacy);
+                selfTestEvidence["current_preserved"] = File.Exists(current) && MatchesShortcut(current, executable);
+                selfTestEvidence["foreign_preserved"] = File.Exists(foreign) && MatchesShortcut(foreign, other);
+                return (bool)selfTestEvidence["legacy_removed"] && (bool)selfTestEvidence["current_preserved"] && (bool)selfTestEvidence["foreign_preserved"];
             }
             finally { Directory.Delete(root, true); }
         }
@@ -488,13 +505,17 @@ namespace CodexMissionManagerSetup
             {
                 if (Array.IndexOf(args, "--complete-uninstall") >= 0) return CompleteUninstall(args, quiet);
                 if (Array.IndexOf(args, "--uninstall") >= 0) return BeginUninstall(args, quiet);
+                if (selfTest) selfTestStage = "payload_verification";
                 byte[] payload = Payload();
                 if (selfTest)
                 {
+                    selfTestStage = "archive_validation";
                     int count = ValidateArchive(payload, Path.Combine(Path.GetTempPath(), "MissionManagerValidation-" + Guid.NewGuid().ToString("N")), false);
+                    selfTestStage = "shortcut_fixture_setup";
                     bool shortcutChecks = ShortcutMigrationSelfTest();
                     if (!shortcutChecks) throw new InvalidOperationException("Shortcut migration safety checks failed.");
-                    Report(args, new Dictionary<string, object> { { "shortcut_migration_checks", shortcutChecks }, { "version", ProductVersion }, { "preview", ProductPreview }, { "native_installer", true }, { "payload_verified", true }, { "payload_sha256", ExpectedSha256 }, { "payload_bytes", payload.Length }, { "files", count }, { "installed", false }, { "host_started", false }, { "private_data_loaded", false }, { "per_user_uninstaller_available", true } });
+                    selfTestStage = "complete";
+                    Report(args, new Dictionary<string, object> { { "self_test_stage", selfTestStage }, { "shortcut_migration_checks", shortcutChecks }, { "version", ProductVersion }, { "preview", ProductPreview }, { "native_installer", true }, { "payload_verified", true }, { "payload_sha256", ExpectedSha256 }, { "payload_bytes", payload.Length }, { "files", count }, { "installed", false }, { "host_started", false }, { "private_data_loaded", false }, { "per_user_uninstaller_available", true } });
                     return 0;
                 }
                 if (!quiet) return ShowInstaller(payload, args);
@@ -505,7 +526,19 @@ namespace CodexMissionManagerSetup
             {
                 Console.Error.WriteLine(error.Message);
                 if (!quiet) MessageBox.Show(error.Message, T("榨汁机安装", "TokenMax Setup"), MessageBoxButtons.OK, MessageBoxIcon.Error);
-                try { Report(args, new Dictionary<string, object> { { "installed", false }, { "error", error.Message } }); } catch { }
+                try
+                {
+                    var failure = new Dictionary<string, object> { { "installed", false }, { "error", error.Message } };
+                    if (selfTest)
+                    {
+                        var chain = new List<Dictionary<string, object>>();
+                        for (Exception current = error; current != null; current = current.InnerException)
+                            chain.Add(new Dictionary<string, object> { { "type", current.GetType().FullName }, { "message", current.Message }, { "hresult", current.HResult.ToString("X8", CultureInfo.InvariantCulture) } });
+                        failure["self_test_stage"] = selfTestStage; failure["exceptions"] = chain; failure["fixture_evidence"] = selfTestEvidence;
+                    }
+                    Report(args, failure);
+                }
+                catch { }
                 return 1;
             }
         }

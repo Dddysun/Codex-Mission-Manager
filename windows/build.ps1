@@ -144,8 +144,19 @@ try {
     $target.Write($magic,0,$magic.Length)
 } finally { $target.Dispose() }
 $installerReceipt = Join-Path $scratch 'installer-self-test.json'
-$installerTest = Start-Process -FilePath $setup -ArgumentList @('--self-test',('"'+$installerReceipt+'"')) -Wait -PassThru
-if ($installerTest.ExitCode -ne 0 -or !(Test-Path -LiteralPath $installerReceipt)) { throw 'Appended installer integrity self-test failed.' }
+$installerStdout = Join-Path $scratch 'installer-self-test.stdout.log'
+$installerStderr = Join-Path $scratch 'installer-self-test.stderr.log'
+$installerTest = Start-Process -FilePath $setup -ArgumentList @('--self-test',('"'+$installerReceipt+'"')) -RedirectStandardOutput $installerStdout -RedirectStandardError $installerStderr -Wait -PassThru
+if ($installerTest.ExitCode -ne 0 -or !(Test-Path -LiteralPath $installerReceipt)) {
+    Write-Output ('Installer self-test exit code: '+$installerTest.ExitCode)
+    foreach ($diagnosticPath in @($installerReceipt,$installerStdout,$installerStderr)) {
+        if (Test-Path -LiteralPath $diagnosticPath) {
+            Write-Output ('Installer diagnostic: '+[IO.Path]::GetFileName($diagnosticPath))
+            Get-Content -LiteralPath $diagnosticPath -Raw -Encoding UTF8 | Write-Output
+        }
+    }
+    throw 'Appended installer integrity self-test failed. See isolated fixture diagnostics above.'
+}
 $installerResult = Get-Content -LiteralPath $installerReceipt -Raw -Encoding UTF8 | ConvertFrom-Json
 if ($installerResult.version -ne $version -or $installerResult.preview -ne $preview -or !$installerResult.payload_verified -or !$installerResult.shortcut_migration_checks -or $installerResult.installed -or $installerResult.host_started) { throw 'Installer self-test attempted installation or failed payload validation.' }
 
