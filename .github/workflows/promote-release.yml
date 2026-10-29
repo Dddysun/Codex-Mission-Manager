@@ -1,0 +1,118 @@
+name: Promote verified release to Latest
+
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/promote-release.yml']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing verified release tag
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-latest-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' || contains(github.event.head_commit.message, '[promote-latest]'))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_REPOSITORY: ${{ github.repository }}
+      RELEASE_TAG: ${{ inputs.tag || 'v0.4.2-preview.13' }}
+    steps:
+      - name: Verify published identity and assets, then set Latest
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          repository = os.environ['RELEASE_REPOSITORY']
+          tag = os.environ['RELEASE_TAG']
+          if not re.fullmatch(r'v\d+\.\d+\.\d+-preview\.\d+', tag):
+              raise SystemExit('Select an existing preview release tag')
+          api = 'https://api.github.com/repos/' + repository
+          def request(path, body=None):
+              headers = {'Accept': 'application/vnd.github+json',
+                         'Authorization': 'Bearer ' + os.environ['GH_TOKEN'],
+                         'X-GitHub-Api-Version': '2026-03-10'}
+              data = None if body is None else json.dumps(body).encode()
+              req = urllib.request.Request(api + path, data=data, headers=headers,
+                                           method='GET' if body is None else 'PATCH')
+              with urllib.request.urlopen(req, timeout=30) as response:
+                  return json.load(response)
+          release = request('/releases/tags/' + urllib.parse.quote(tag, safe=''))
+          assert not release['draft'], 'Drafts must complete normal publishing first'
+          newest = next(item for item in request('/releases?per_page=100') if not item['draft'])
+          assert newest['id'] == release['id'], 'Refusing to promote an older release'
+          ref = request('/git/ref/tags/' + urllib.parse.quote(tag, safe=''))['object']
+          if ref['type'] == 'tag':
+              ref = request('/git/tags/' + ref['sha'])['object']
+          assert ref['type'] == 'commit'
+          source = ref['sha']
+          if os.environ['GITHUB_EVENT_NAME'] == 'push':
+              assert release['id'] == 428139457 and source == 'fe571b7247598bca5e4c43a773aa00ac0ba3ffb8'
+          assets = {item['name']: item for item in release['assets']}
+          assert len(assets) == len(release['assets']), 'Duplicate asset names'
+          def download(name):
+              item = assets[name]
+              assert item['state'] == 'uploaded' and item['size'] > 0
+              url = item['browser_download_url']
+              expected = 'https://github.com/' + repository + '/releases/download/' + tag + '/'
+              assert url.startswith(expected), 'Unexpected asset origin'
+              with urllib.request.urlopen(url, timeout=120) as response:
+                  data = response.read()
+              assert len(data) == item['size'], 'Incomplete asset: ' + name
+              return data
+          sums = download('SHA256SUMS').decode('utf-8')
+          verified = {}
+          for line in sums.splitlines():
+              digest, name = line.split(maxsplit=1)
+              assert re.fullmatch(r'[0-9a-f]{64}', digest)
+              assert name and '/' not in name and '\\' not in name and name not in verified
+              data = download(name)
+              assert hashlib.sha256(data).hexdigest() == digest, 'Checksum mismatch: ' + name
+              verified[name] = data
+          assert set(verified) == set(assets) - {'SHA256SUMS'}, 'Unverified release assets'
+          version, preview = tag[1:].split('-preview.')
+          for platform in ('macos-arm64', 'windows-x64'):
+              manifest = json.loads(verified['build-manifest-' + platform + '.json'].decode('utf-8-sig'))
+              assert manifest['version'] == version and manifest['preview'] == 'preview.' + preview
+              assert manifest['source_commit'] == source and not manifest['private_runtime_data_included']
+          for suffix in ('arm64-preview.dmg', 'windows-x64-setup.exe', 'windows-x64-preview.zip'):
+              assert 'TokenMax-' + version + '-' + suffix in verified
+          before = (release['tag_name'], release['body'], [(a['id'], a['name'], a['size']) for a in release['assets']])
+          updated = request('/releases/' + str(release['id']), {'prerelease': False, 'make_latest': 'true'})
+          after = (updated['tag_name'], updated['body'], [(a['id'], a['name'], a['size']) for a in updated['assets']])
+          assert before == after and not updated['prerelease'] and not updated['draft']
+          for attempt in range(6):
+              try:
+                  latest = request('/releases/latest')
+                  if latest['id'] == release['id']:
+                      break
+              except urllib.error.HTTPError as error:
+                  if error.code != 404:
+                      raise
+              time.sleep(5)
+          else:
+              raise SystemExit('Latest API did not resolve to the selected release')
+          print(json.dumps({'tag': tag, 'source_commit': source, 'latest': True,
+                            'assets_unchanged': len(assets), 'checksums_verified': len(verified)}))
+          PY
