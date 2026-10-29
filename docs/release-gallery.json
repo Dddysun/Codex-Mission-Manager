@@ -534,6 +534,54 @@
             "zh": "有效状态采集中保持榨汁运行（模拟数据）",
             "en": "Valid collection keeps juicing active (demo data)"
           }
+        },
+        {
+          "id": "compact-activity",
+          "platform": "macos",
+          "kind": "activity",
+          "view": "activity",
+          "file": "activity-zh-light.png",
+          "receipt": "activity-zh-light.json",
+          "dimensions": [
+            [
+              1380,
+              900
+            ],
+            [
+              2760,
+              1800
+            ]
+          ],
+          "accent": "blue",
+          "theme": "light",
+          "language": "zh",
+          "highlight": false,
+          "caption": {
+            "zh": "额度恢复摘要与可展开详情",
+            "en": "Compact quota recovery with expandable evidence"
+          }
+        },
+        {
+          "id": "settings",
+          "platform": "windows",
+          "kind": "settings",
+          "view": "settings",
+          "file": "settings-zh-light-native-state-blue.png",
+          "receipt": "settings-zh-light-native-state-blue.png.json",
+          "dimensions": [
+            [
+              1600,
+              2200
+            ]
+          ],
+          "accent": "blue",
+          "theme": "light",
+          "language": "zh",
+          "highlight": false,
+          "caption": {
+            "zh": "精简设置说明",
+            "en": "Concise settings and permissions"
+          }
         }
       ]
     }

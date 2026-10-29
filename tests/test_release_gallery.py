@@ -76,6 +76,32 @@ class ReleaseGalleryTests(unittest.TestCase):
         path = self.dirs[image['platform']] / image['receipt']
         return path, gallery.read_json(path)
 
+    def test_current_version_selection_builds_with_offline_receipts(self):
+        version = (ROOT / 'VERSION').read_text().strip()
+        images = self.config['versions'][version]['images']
+        for flag, value in [('--version', version), ('--tag', 'v' + version + '-preview.1')]:
+            self.arguments[self.arguments.index(flag) + 1] = value
+        for platform in ('macos', 'windows'):
+            manifest_path = self.root / (platform + '-manifest.json')
+            manifest = json.loads(manifest_path.read_text())
+            manifest['version'] = version
+            manifest_path.write_text(json.dumps(manifest))
+        for image in images:
+            image['dimensions'] = [[20, 30]]
+            directory = self.dirs[image['platform']]
+            write_png(directory / image['file'])
+            receipt = dict(hostStarted=False, messagesSent=0, privatePreferencesLoaded=False,
+                           view=image['view'], language=image['language'], theme=image['theme'],
+                           accent=image['accent'], width=20, height=30)
+            if image['platform'] == 'macos':
+                receipt.update(nativeHosting=True, webViewCount=0)
+            else:
+                receipt.update(native=True, ui='WPF', webView=False)
+            (directory / image['receipt']).write_text(json.dumps(receipt))
+        result = self.run_gallery()
+        self.assertEqual(len(result['images']), len(images))
+        self.assertEqual(result['version'], version)
+
     def test_six_images_four_kinds_highlights_and_absolute_asset_urls(self):
         result = self.run_gallery()
         self.assertEqual(len(result['images']), 6)
