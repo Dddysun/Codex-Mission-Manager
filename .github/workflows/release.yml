@@ -165,6 +165,9 @@ jobs:
                        for accent in ('green', 'blue', 'purple', 'yellow') for theme in ('light', 'dark')]
               views += [('brand-light', 'native-brand', []),
                         ('rules-zh-light', 'native-state', ['--rules']),
+                        ('rules-plus-window', 'native-monitor-plus', ['--rules', '--accent', 'blue']),
+                        ('rules-pro-window', 'native-monitor-pro', ['--rules', '--dark', '--english', '--accent', 'purple']),
+                        ('checking-active', 'native-monitor-checking', []),
                         ('settings-en-dark', 'native-state', ['--settings', '--dark', '--english']),
                         ('menu-en-dark', 'native-state', ['--menu-panel', '--dark', '--english']),
                         ('activity-zh-light', 'native-quota-restored', ['--activity', '--accent', 'blue']),
@@ -333,6 +336,9 @@ jobs:
           $views += ,@('settings', 'zh', 'light', 'native-state', 'blue')
           $views += ,@('rules', 'zh', 'light', 'native-state', 'blue')
           $views += ,@('rules', 'en', 'dark', 'native-state', 'purple')
+          $views += ,@('rules', 'zh', 'light', 'native-monitor-plus', 'blue')
+          $views += ,@('rules', 'en', 'dark', 'native-monitor-pro', 'purple')
+          $views += ,@('home', 'zh', 'light', 'native-monitor-checking', 'green')
           $views += ,@('tray', 'en', 'dark', 'native-state', 'yellow')
           $views += ,@('activity', 'zh', 'light', 'native-quota-restored', 'blue')
           $views += ,@('activity', 'en', 'dark', 'native-quota-restored', 'purple')

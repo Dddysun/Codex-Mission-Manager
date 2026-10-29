@@ -32,9 +32,6 @@ class SamplingAuditTests(unittest.TestCase):
         class Service:
             account_display = None
 
-            def __init__(self):
-                self.changed = asyncio.Event()
-
             async def start(self):
                 pass
 

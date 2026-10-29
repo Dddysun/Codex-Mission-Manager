@@ -6,6 +6,17 @@ enum NativeLocalization {
     static let english: [String:String] = {
         let data = #"""
 {
+  "监控窗口": "Monitoring window",
+  "暂停和恢复阈值用于所选窗口；其他窗口用尽或服务禁止使用时仍会暂停。": "Pause and resume thresholds apply to the selected window. An exhausted other window or a service block still pauses work.",
+  "所选窗口暂不可用，请重新选择或等待额度核验。": "The selected window is unavailable. Choose another window or wait for verification.",
+  "该账号未提供固定额度窗口，百分比阈值暂不生效。": "No fixed quota window is provided. Percentage thresholds do not apply.",
+  "该账号未提供此额度窗口。": "This account does not provide this quota window.",
+  "状态暂不可用，正在重试": "Status unavailable; retrying",
+  "自动续接暂缓；不会因此中断正在运行的聊天。": "Automatic continuation is withheld. Active chats are not interrupted by this check.",
+  "检查结果：%@": "Check result: %@",
+  "采集间隔从每轮完成后计算；处理耗时另计。新额度会先更新，聊天采集继续进行。检查不会关闭全局榨汁。": "Intervals start after each collection cycle. Fresh quota is published before chat collection finishes. Checks do not turn off Juicing.",
+  "监控窗口无效，请重新选择。": "Invalid monitoring window. Choose another window.",
+  "所选监控窗口暂不可用，请刷新额度后重试。": "The selected monitoring window is unavailable. Refresh quota and try again.",
   "%@ · 电量 %@ · %@": "%@ · Battery %@ · %@",
   "%@：执行指令": "%@: instruction",
   "上次暂停：%@": "Last paused: %@",

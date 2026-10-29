@@ -221,7 +221,7 @@ class Controller:
     def __init__(self, rpc, store, config, identity, clock=time.time, identity_check=None):
         self.rpc, self.store, self.config, self.identity, self.clock = rpc, store, config, identity, clock
         self.identity_check = identity_check
-        self.rules_revision = effective_rules(store, config)['revision']
+        self.rules_revision = config.get('_rules_revision', effective_rules(store, config)['revision'])
 
     def rules_current(self):
         return effective_rules(self.store, self.config)['revision'] == self.rules_revision
@@ -229,6 +229,16 @@ class Controller:
     def cancelled(self):
         return (self.store.get("supervisor_paused", False) or self.store.get("stop_requested", False)
                 or not self.rules_current())
+
+    async def read_quota(self):
+        """Keep subscription selection identical for the final pre-send check."""
+        sample = parse_bucket(await self.rpc.call("account/rateLimits/read"),
+                              self.config["limit_id"], self.clock())
+        if not sample.get('plan_type'):
+            display = getattr(self.rpc, 'account_display', None) or self.store.get('account_display') or {}
+            sample['plan_type'] = (display.get('account') or {}).get('plan_type')
+        sample['scope'] = self.identity
+        return sample
 
     async def view(self, thread_id):
         thread = (await self.rpc.call("thread/read", {"threadId": thread_id}))["thread"]
@@ -375,9 +385,7 @@ class Controller:
         if self.clock() - first < self.config.get("recovery_confirm_seconds", 5):
             return
         # A second fresh quota read immediately before dispatch, not only a timer.
-        fresh = parse_bucket(await self.rpc.call("account/rateLimits/read"),
-                             self.config["limit_id"], self.clock())
-        fresh['scope'] = self.identity
+        fresh = await self.read_quota()
         if (fresh.get("quota_state") in ("metered", "service_only")
                 and not set(window_map(task.get("pause_sample") or {})).issubset(window_map(fresh))):
             return self.review(task, "额度窗口已变化，请重新确认自动续接")
@@ -629,6 +637,45 @@ async def requests(controller):
                              (state, json.dumps(result), row["id"]))
 
 
+def publish_cycle_status(store, config, sample, phase, started, rpc, control_available, collecting=False):
+    """Publish real quota freshness before slow chat collection, without faking a newer sample."""
+    observed = sample['observed_at']
+    report = {"version": VERSION, "pid": os.getpid(), "observed_at": observed,
+              "observed_at_dubai": local_time(observed), "mode": config["mode"],
+              "phase": phase, "supervisor_paused": store.get("supervisor_paused", False), "quota": sample,
+              "control_available": control_available,
+              "desktop_connection_error": getattr(rpc, 'control_error', None),
+              "collection_in_progress": collecting,
+              "collection_started_at": started, "collection_seconds": max(0, time.time()-started),
+              "tasks": [{k: t.get(k) for k in ("id", "name", "state", "reason")} for t in store.tasks()],
+              "desktop_control": ("connected to existing native desktop session owners; private version-pinned IPC"
+                  if config.get("desktop_control_enabled") and control_available else
+                  "Windows read-only monitoring; control connection is not verified" if os.name == 'nt' else
+                  "unverified; only explicitly adopted, loaded sessions are controllable"),
+              "desktop_discovery_error": getattr(rpc, "discovery_error", None),
+              "task_errors": store.get("task_errors", {}),
+              "unmanaged_desktop_sessions": store.get("desktop_unmanaged", {})}
+    store.put("last_report", report)
+    atomic_json(store.directory / "status.json", report)
+    return report
+
+
+def confirmation_delay(store, config, delay, now):
+    """Honor an outstanding minimum confirmation without a tight retry loop."""
+    from plans import all_plans
+    first_seen = [t.get('recovery_first_seen') for t in store.tasks() if t.get('state') == 'paused'
+                  and t.get('auto_resume', True) and not t.get('manual_hold')]
+    first_seen += [p.get('recovery_first_seen') for p in all_plans(store) if p.get('state') == 'armed']
+    waits = [t+config.get('recovery_confirm_seconds', 5)-now for t in first_seen
+             if type(t) in (int, float) and t > 0]
+    if waits:
+        delay = min(delay, config['near_limit_poll_seconds'])
+        upcoming = [wait for wait in waits if wait > 0]
+        if upcoming:
+            delay = min(delay, max(0.25, min(upcoming)))
+    return delay
+
+
 async def run(config, once=False):
     base_config = dict(config)
     store = Store(config["state_dir"])
@@ -675,7 +722,9 @@ async def run(config, once=False):
                 quota_response = await rpc.call("account/rateLimits/read")
                 if getattr(rpc, "account_display", None) is not None:
                     store.put("account_display", rpc.account_display)
-                sample = parse_bucket(quota_response, config["limit_id"], started)
+                sample = parse_bucket(quota_response, config["limit_id"], time.time())
+                if not sample.get("plan_type"):
+                    sample["plan_type"] = ((store.get("account_display") or {}).get("account") or {}).get("plan_type")
                 sample["scope"] = identity
                 # Audit every successful service sample, even without managed
                 # tasks, pending plans, notifications, or control permission.
@@ -685,11 +734,14 @@ async def run(config, once=False):
                     await rpc.refresh_control()
                 control_available = (config.get('desktop_control_enabled', False) and getattr(rpc, 'control_available', False)
                                      if hasattr(rpc, 'refresh_control') else os.name != 'nt')
+                publish_cycle_status(store, config, sample, phase, started, rpc, control_available, collecting=True)
+                discovered_ids = list(getattr(rpc, 'available', []))
                 if control_available and hasattr(rpc, 'discover'):
                     # Showing current status is independent of permission to
                     # interrupt or resume a conversation.
                     try:
-                        await rpc.discover()
+                        discovered = await rpc.discover()
+                        discovered_ids = list(discovered if discovered is not None else getattr(rpc, 'available', []))
                     except Exception as exc:
                         store.put('catalog_discovery_error', type(exc).__name__)
                 key = identity + ":" + config["limit_id"] + ":" + fingerprint({k: w["reset"] for k, w in window_map(sample).items()})
@@ -704,7 +756,7 @@ async def run(config, once=False):
                     if config.get("quota_notifications", True):
                         store.notice(key + ":warning", "榨汁机：额度预警", summary)
                 old_low = store.get("last_low")
-                if old_low and old_low.get("scope") == identity and recovered(sample, old_low, config, started):
+                if old_low and old_low.get("scope") == identity and recovered(sample, old_low, config, time.time()):
                     if config.get("quota_notifications", True):
                         store.notice(key + ":restored", "榨汁机：额度已恢复", summary + "；已重新核验")
                     store.put("last_low", None)
@@ -731,7 +783,7 @@ async def run(config, once=False):
                             if task["state"] != "disabled":
                                 rpc.hosts.setdefault(task["id"], "local")
                         skipped = {}
-                        for tid in (list(rpc.available) if os.name == 'nt' else await rpc.discover()):
+                        for tid in discovered_ids:
                             if getattr(rpc, 'hosts', {}).get(tid, 'local') != 'local':
                                 continue
                             if tid in excluded or tid in registered or store.get("auto_preferences", {}).get(tid) is False:
@@ -752,21 +804,7 @@ async def run(config, once=False):
                     control_available = False
                     rpc.control_available = False
                     rpc.control_error = rpc.ipc.last_error or "desktop connection unavailable"
-                report = {"version": VERSION, "pid": os.getpid(), "observed_at": started,
-                          "observed_at_dubai": local_time(started), "mode": config["mode"],
-                          "phase": phase, "supervisor_paused": supervisor_paused, "quota": sample,
-                          "control_available": control_available,
-                          "desktop_connection_error": getattr(rpc, 'control_error', None),
-                          "tasks": [{k: t.get(k) for k in ("id", "name", "state", "reason")} for t in store.tasks()],
-                          "desktop_control": ("connected to existing native desktop session owners; private version-pinned IPC"
-                              if config.get("desktop_control_enabled") and control_available else
-                              "Windows read-only monitoring; control connection is not verified" if os.name == 'nt' else
-                              "unverified; only explicitly adopted, loaded sessions are controllable"),
-                          "desktop_discovery_error": getattr(rpc, "discovery_error", None),
-                          "task_errors": store.get("task_errors", {}),
-                          "unmanaged_desktop_sessions": store.get("desktop_unmanaged", {})}
-                store.put("last_report", report)
-                atomic_json(store.directory / "status.json", report)
+                report = publish_cycle_status(store, config, sample, phase, started, rpc, control_available)
                 await deliver_notices(store, config)
                 failures = 0
                 if once:
@@ -775,6 +813,7 @@ async def run(config, once=False):
                 from plans import all_plans
                 pending_plan = any(p["state"] in ("armed", "sending") for p in all_plans(store))
                 delay = config["near_limit_poll_seconds"] if phase in ("warning", "low", "blocked") or pending_plan else config["poll_seconds"]
+                delay = confirmation_delay(store, config, delay, time.time())
                 reset = next_reset(sample)
                 until_reset = reset - time.time() if reset is not None else 0
                 if until_reset > 0:

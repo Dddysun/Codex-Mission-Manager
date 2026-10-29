@@ -59,8 +59,9 @@ struct MissionWindow: View {
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: "exclamationmark.triangle")
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(!model.connected ? L("正在连接本机后台") : L("检查状态待恢复")).fontWeight(.semibold)
-                            Text(model.connectionError.isEmpty ? L("正在核对账号、额度和聊天状态；取得可靠状态后才能自动续接。") : model.connectionError)
+                            Text(!model.connected ? L("正在连接本机后台") : L("状态暂不可用，正在重试")).fontWeight(.semibold)
+                            Text(model.connectionError.isEmpty ? L("自动续接暂缓；不会因此中断正在运行的聊天。") : model.connectionError)
+                            if let kind=model.snapshot?.service_error_type {Text(L("检查结果：%@",kind)).font(.caption)}
                         }
                         Spacer()
                         Button(L("重新检查")) { Task { await model.refreshControl() } }
@@ -388,6 +389,12 @@ struct MissionRulesEditor: View {
     var current: MissionRules? {model.snapshot?.rules}
     var text: [String:String] {model.rulesDraftRevision == nil ? (current?.values.mapValues(String.init) ?? [:]) : model.rulesDraft}
     var validation: (values:[String:Int]?,error:String?) {MissionRuleFields.validation(text,remoteBounds:current?.bounds)}
+    var selectedWindow:String {
+        let requested=model.rulesWindowDraft ?? current?.requestedWindow ?? "auto"
+        if requested != "auto" {return requested}
+        return model.snapshot?.usage?.monitoring?.effective_window ??
+            (model.snapshot?.usage?.canMonitor("five_hour") == true ? "five_hour":"weekly")
+    }
     var body: some View {
         ScrollView {
             VStack(alignment:.leading,spacing:22) {
@@ -397,6 +404,21 @@ struct MissionRulesEditor: View {
                 }
                 GroupBox {
                     VStack(alignment:.leading,spacing:16) {
+                        VStack(alignment:.leading,spacing:10) {
+                            Text(L("监控窗口")).font(.headline)
+                            HStack(spacing:14) {
+                                windowChoice("five_hour",title:L("五小时额度"))
+                                windowChoice("weekly",title:L("周额度"))
+                            }
+                            Text(L("暂停和恢复阈值用于所选窗口；其他窗口用尽或服务禁止使用时仍会暂停。"))
+                                .font(.caption).foregroundStyle(.secondary)
+                            if model.snapshot?.usage?.monitoring?.state == "unavailable" {
+                                Text(L("所选窗口暂不可用，请重新选择或等待额度核验。")).font(.caption).foregroundStyle(.orange)
+                            } else if model.snapshot?.usage?.monitoring?.state == "service_only" {
+                                Text(L("该账号未提供固定额度窗口，百分比阈值暂不生效。")).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                        Divider()
                         ForEach(MissionRuleFields.keys,id:\.self) { key in field(key) }
                         Divider()
                         Text(L("恢复阈值至少高于暂停阈值 5%；临近阈值采集不能慢于正常采集。")).font(.caption).foregroundStyle(.secondary)
@@ -433,11 +455,21 @@ struct MissionRulesEditor: View {
                         Text(L("任务控制行为")).font(.headline)
                         Text(L("暂停和续接前核对账号、原任务、当前回合及服务许可。手动输入与审批优先；状态不明确时不重复发送。"))
                         Text(L("预约在核验额度恢复后执行一次。关闭全局自动控制会停止预约发送；保存指令不会立即执行。"))
-                        Text(L("采集间隔从每轮完成后计算；处理耗时另计。界面刷新只读取后台缓存。"))
+                        Text(L("采集间隔从每轮完成后计算；处理耗时另计。新额度会先更新，聊天采集继续进行。检查不会关闭全局榨汁。"))
                     }.foregroundStyle(.secondary).padding(14).frame(maxWidth:.infinity,alignment:.leading)
                 }
             }.padding(26).frame(maxWidth:960,alignment:.leading)
         }.frame(maxWidth:.infinity,alignment:.leading).background(missionCanvas).foregroundStyle(.primary).preferredColorScheme(model.colorScheme).tint(model.tint)
+    }
+    func windowChoice(_ value:String,title:String)->some View {
+        Button {model.editMonitorWindow(value)} label: {
+            Label(title,systemImage:selectedWindow == value ? "largecircle.fill.circle":"circle")
+                .frame(minWidth:130,alignment:.leading)
+        }.buttonStyle(.plain)
+            .foregroundStyle(selectedWindow == value ? model.tint:Color.primary)
+            .disabled(!model.connected || model.snapshot?.usage?.canMonitor(value) != true || current == nil || model.rulesSaving)
+            .opacity(model.snapshot?.usage?.canMonitor(value) == true ? 1:0.42)
+            .help(model.snapshot?.usage?.canMonitor(value) == true ? title:L("该账号未提供此额度窗口。"))
     }
     func field(_ key:String) -> some View {
         let bound=MissionRuleFields.bounds[key]!

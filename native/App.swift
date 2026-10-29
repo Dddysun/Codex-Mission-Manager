@@ -60,6 +60,7 @@ final class MissionModel: ObservableObject {
     @Published var drafts: [String: MissionDraft] = [:]
     @Published var rulesDraft: [String:String] = [:]
     @Published var rulesDraftRevision: Int?
+    @Published var rulesWindowDraft: String?
     @Published var rulesStatus = ""
     @Published var rulesSaving = false
     var refreshing = false
@@ -254,16 +255,26 @@ final class MissionModel: ObservableObject {
         if rulesDraftRevision == nil {
             rulesDraftRevision=current.revision
             rulesDraft=current.values.mapValues(String.init)
+            rulesWindowDraft=current.requestedWindow
         }
         rulesDraft[key]=text;rulesStatus=""
     }
-    func discardRulesDraft() { rulesDraft=[:];rulesDraftRevision=nil;rulesStatus="" }
+    func editMonitorWindow(_ window:String) {
+        guard ["five_hour","weekly"].contains(window), let current=snapshot?.rules,
+              snapshot?.usage?.canMonitor(window) == true else {return}
+        if rulesDraftRevision == nil {
+            rulesDraftRevision=current.revision;rulesDraft=current.values.mapValues(String.init)
+        }
+        rulesWindowDraft=window;rulesStatus=""
+    }
+    func discardRulesDraft() { rulesDraft=[:];rulesDraftRevision=nil;rulesWindowDraft=nil;rulesStatus="" }
     @MainActor func saveRules() async {
         guard !stopping, !rulesSaving, !busy, connected, let state=snapshot?.rules, let url=baseURL else { return }
         let text=rulesDraftRevision == nil ? state.values.mapValues(String.init) : rulesDraft
         let validated=MissionRuleFields.validation(text,remoteBounds:state.bounds)
         guard let values=validated.values else {rulesStatus=validated.error ?? L("规则未通过校验。");return}
         let revision=rulesDraftRevision ?? state.revision
+        let window=rulesWindowDraft ?? state.requestedWindow
         rulesSaving=true;rulesStatus=L("正在保存规则…")
         defer { rulesSaving=false }
         do {
@@ -272,16 +283,16 @@ final class MissionModel: ObservableObject {
             request.setValue("application/json",forHTTPHeaderField:"Content-Type")
             request.setValue("1",forHTTPHeaderField:"X-Guardian-UI")
             request.setValue(url.absoluteString.trimmingCharacters(in:CharacterSet(charactersIn:"/")),forHTTPHeaderField:"Origin")
-            request.httpBody=try JSONSerialization.data(withJSONObject:MissionCommands.rules(values,revision:revision))
+            request.httpBody=try JSONSerialization.data(withJSONObject:MissionCommands.rules(values,revision:revision,monitorWindow:window))
             let (data,response)=try await session.data(for:request)
             let body=(try? JSONSerialization.jsonObject(with:data)) as? [String:Any]
             guard (response as? HTTPURLResponse)?.statusCode == 200 else {
-                throw NSError(domain:"Rules",code:1,userInfo:[NSLocalizedDescriptionKey:body?["error"] as? String ?? L("规则保存失败；草稿已保留。")])
+                throw NSError(domain:"Rules",code:1,userInfo:[NSLocalizedDescriptionKey:L(body?["error"] as? String ?? "规则保存失败；草稿已保留。")])
             }
             guard let metadata=body?["rules"], JSONSerialization.isValidJSONObject(metadata),
                let encoded=try? JSONSerialization.data(withJSONObject:metadata),
                let confirmed=try? JSONDecoder().decode(MissionRules.self,from:encoded),
-               confirmed.confirms(values,after:revision) else {
+               confirmed.confirms(values,monitorWindow:window,after:revision) else {
                 throw NSError(domain:"Rules",code:2,userInfo:[NSLocalizedDescriptionKey:L("操作结果待核对，请刷新后检查记录")])
             }
             if confirmed.revision >= (snapshot?.rules?.revision ?? 0) {
@@ -289,7 +300,9 @@ final class MissionModel: ObservableObject {
                 configureRefreshTimer(Double(confirmed.values["ui_poll_seconds"] ?? 5))
             }
             // Preserve any edits made while the request was in flight.
-            if rulesDraftRevision == revision && rulesDraft == text { rulesDraft=[:];rulesDraftRevision=nil }
+            if rulesDraftRevision == revision && rulesDraft == text && rulesWindowDraft == window {
+                rulesDraft=[:];rulesDraftRevision=nil;rulesWindowDraft=nil
+            }
             rulesStatus=L("规则已保存。")
             await refreshControl()
         } catch { rulesStatus=error.localizedDescription+" · "+L("草稿已保留，请核对后重试。") }

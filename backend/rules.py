@@ -2,6 +2,7 @@
 import json
 import time
 from event_origin import origin_detail
+from quota import MONITOR_WINDOWS, monitoring_state, finite_number
 
 BOUNDS = {
     'pause_remaining': {'min': 1, 'max': 50, 'default': 10},
@@ -45,30 +46,49 @@ def effective_rules(store, config):
         values = validate(saved['values'])
     except (KeyError, TypeError, ValueError):
         values = base
-    return {'revision': revision, 'values': values, 'bounds': BOUNDS, 'constraints': CONSTRAINTS}
+    window = saved.get('monitor_window', config.get('monitor_window', 'auto')) if isinstance(saved, dict) else config.get('monitor_window', 'auto')
+    if not isinstance(window, str) or window not in MONITOR_WINDOWS:
+        window = 'auto'
+    return {'revision': revision, 'values': values, 'monitor_window': window,
+            'bounds': BOUNDS, 'constraints': CONSTRAINTS}
 
 
 def effective_config(store, config):
     result = dict(config)
-    result.update(effective_rules(store, config)['values'])
+    rules = effective_rules(store, config)
+    result.update(rules['values'])
+    result['monitor_window'] = rules['monitor_window']
+    result['_rules_revision'] = rules['revision']
     result['warn_remaining'] = max(result.get('warn_remaining', 20), result['pause_remaining'])
     result['max_sample_age_seconds'] = max(config.get('max_sample_age_seconds', 90),
         result['poll_seconds'] + 2 * result.get('rpc_timeout_seconds', 25) + 10)
     return result
 
 
-def update_rules(store, config, changes, revision):
+def update_rules(store, config, changes, revision, monitor_window=None):
     if type(revision) is not int or revision < 0:
         raise ValueError('rules_revision is required')
-    if not isinstance(changes, dict) or not changes or set(changes) - set(BOUNDS):
+    if not isinstance(changes, dict) or (not changes and monitor_window is None) or set(changes) - set(BOUNDS):
         raise ValueError('Only operating rules may be edited; service quotas and reset times are read-only')
+    if monitor_window is not None and (not isinstance(monitor_window, str) or monitor_window not in MONITOR_WINDOWS):
+        raise ValueError('监控窗口无效，请重新选择。')
     with store.db:
         store.db.execute('BEGIN IMMEDIATE')
         current = effective_rules(store, config)
         if revision != current['revision']:
             raise ValueError('Operating rules changed; refresh and try again')
         values = validate(dict(current['values'], **changes))
-        saved = {'revision': revision + 1, 'values': values}
+        window = current['monitor_window'] if monitor_window is None else monitor_window
+        if window != current['monitor_window'] and window != 'auto':
+            sample = dict((store.get('last_report') or {}).get('quota') or {})
+            if not sample.get('plan_type'):
+                sample['plan_type'] = ((store.get('account_display') or {}).get('account') or {}).get('plan_type')
+            observed = sample.get('observed_at')
+            age = time.time() - observed if finite_number(observed) else float('inf')
+            selected = monitoring_state(sample, dict(config, monitor_window=window))
+            if not 0 <= age <= effective_config(store, config)['max_sample_age_seconds'] or selected['state'] != 'ready':
+                raise ValueError('所选监控窗口暂不可用，请刷新额度后重试。')
+        saved = {'revision': revision + 1, 'values': values, 'monitor_window': window}
         store.db.execute('INSERT OR REPLACE INTO kv VALUES(?,?)', ('runtime_rules', json.dumps(saved)))
         store.db.execute('INSERT INTO events(created,state,detail) VALUES(?,?,?)',
                          (time.time(), 'rules_updated', json.dumps(origin_detail('rules_updated', saved, 'user'))))

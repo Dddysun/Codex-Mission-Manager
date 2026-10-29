@@ -388,6 +388,154 @@
           }
         }
       ]
+    },
+    "0.4.3": {
+      "images": [
+        {
+          "id": "plus-window",
+          "platform": "macos",
+          "kind": "rules",
+          "view": "rules",
+          "file": "rules-plus-window.png",
+          "receipt": "rules-plus-window.json",
+          "dimensions": [
+            [
+              1380,
+              900
+            ],
+            [
+              2760,
+              1800
+            ]
+          ],
+          "accent": "blue",
+          "theme": "light",
+          "language": "zh",
+          "highlight": true,
+          "caption": {
+            "zh": "Plus：五小时与周额度可选（模拟数据）",
+            "en": "Plus: five-hour and weekly choices (demo data)"
+          }
+        },
+        {
+          "id": "pro-window",
+          "platform": "macos",
+          "kind": "rules",
+          "view": "rules",
+          "file": "rules-pro-window.png",
+          "receipt": "rules-pro-window.json",
+          "dimensions": [
+            [
+              1380,
+              900
+            ],
+            [
+              2760,
+              1800
+            ]
+          ],
+          "accent": "purple",
+          "theme": "dark",
+          "language": "en",
+          "highlight": true,
+          "caption": {
+            "zh": "Pro：周额度默认选中，五小时置灰（模拟数据）",
+            "en": "Pro: weekly selected, five-hour disabled (demo data)"
+          }
+        },
+        {
+          "id": "checking-active",
+          "platform": "macos",
+          "kind": "home",
+          "view": "home",
+          "file": "checking-active.png",
+          "receipt": "checking-active.json",
+          "dimensions": [
+            [
+              1380,
+              900
+            ],
+            [
+              2760,
+              1800
+            ]
+          ],
+          "accent": "green",
+          "theme": "light",
+          "language": "zh",
+          "highlight": false,
+          "caption": {
+            "zh": "有效状态采集中保持榨汁运行（模拟数据）",
+            "en": "Valid collection keeps juicing active (demo data)"
+          }
+        },
+        {
+          "id": "plus-window",
+          "platform": "windows",
+          "kind": "rules",
+          "view": "rules",
+          "file": "rules-zh-light-native-monitor-plus-blue.png",
+          "receipt": "rules-zh-light-native-monitor-plus-blue.png.json",
+          "dimensions": [
+            [
+              2760,
+              1800
+            ]
+          ],
+          "accent": "blue",
+          "theme": "light",
+          "language": "zh",
+          "highlight": true,
+          "caption": {
+            "zh": "Plus：五小时与周额度可选（模拟数据）",
+            "en": "Plus: five-hour and weekly choices (demo data)"
+          }
+        },
+        {
+          "id": "pro-window",
+          "platform": "windows",
+          "kind": "rules",
+          "view": "rules",
+          "file": "rules-en-dark-native-monitor-pro-purple.png",
+          "receipt": "rules-en-dark-native-monitor-pro-purple.png.json",
+          "dimensions": [
+            [
+              2760,
+              1800
+            ]
+          ],
+          "accent": "purple",
+          "theme": "dark",
+          "language": "en",
+          "highlight": true,
+          "caption": {
+            "zh": "Pro：周额度默认选中，五小时置灰（模拟数据）",
+            "en": "Pro: weekly selected, five-hour disabled (demo data)"
+          }
+        },
+        {
+          "id": "checking-active",
+          "platform": "windows",
+          "kind": "home",
+          "view": "home",
+          "file": "home-zh-light-native-monitor-checking-green.png",
+          "receipt": "home-zh-light-native-monitor-checking-green.png.json",
+          "dimensions": [
+            [
+              2760,
+              1800
+            ]
+          ],
+          "accent": "green",
+          "theme": "light",
+          "language": "zh",
+          "highlight": false,
+          "caption": {
+            "zh": "有效状态采集中保持榨汁运行（模拟数据）",
+            "en": "Valid collection keeps juicing active (demo data)"
+          }
+        }
+      ]
     }
   }
 }

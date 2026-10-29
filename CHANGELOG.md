@@ -1,5 +1,14 @@
 # Changelog / 版本记录
 
+## 0.4.3 — Monitoring window and collection status / 监控窗口与采集状态
+
+- Choose five-hour or weekly thresholds in native Operating rules; Pro defaults to weekly with five-hour disabled. / 原生运行规则可选五小时或周额度，Pro 默认周额度，五小时置灰。
+- Save window and numeric rules atomically, preserve existing schedule windows, and cancel control from an obsolete rule cycle. / 窗口与数值规则原子保存，保留已有预约窗口，旧规则轮次停止控制。
+- Publish verified quota before collecting chats, retain actual timestamps, reuse discovery, and honor confirmation deadlines. / 先更新已核验额度，保留真实采样时间，复用目录发现并考虑恢复复核期限。
+- Distinguish awaiting verification from a global pause; retain working motion during healthy collection. / 区分待核验与全局暂停，正常采集保留工作动画。
+
+See [0.4.3 release notes](docs/releases/0.4.3.md). / 详见 [0.4.3 发行说明](docs/releases/0.4.3.md)。
+
 ## 0.4.2 — Runtime fixes and core discharge / 运行修复与内核放电
 
 - Distinguish an explicitly unloaded monitored chat from real connection failure; preserve unresolved-action alerts and task permissions. / 区分明确未加载的监测聊天与真实连接故障，保留未确认动作的告警和任务许可。
