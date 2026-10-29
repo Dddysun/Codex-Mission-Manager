@@ -1,5 +1,7 @@
 # TokenMax · 内核放电 01 / Core-origin discharge 01
 
+历史提案；后续反馈要求减少固定方向和旋转感，当前迭代见[随机放电 02](../core-discharge-v2/README.md)。 / Archived proposal; see [Irregular discharge 02](../core-discharge-v2/README.md) for the current iteration.
+
 品牌动效提案 `1.3.0-proposal.1`。复用 1.2.0 的杯体、手柄、底座和状态符号；电弧从杯内金色闪电向外分叉，短促出现并衰减，少量尖端越过杯壁。暖白电芯与金色细丝参考真实放电的视觉特征，保留现有品牌配色。
 
 This motion proposal reuses the 1.2.0 silhouette and state symbols. Branched, warm-white and gold discharges originate at the central bolt, grow outwards, and decay. A few tips briefly extend past the cup. The paths never form an orbit around the appliance.

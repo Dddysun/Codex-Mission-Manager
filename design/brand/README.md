@@ -58,6 +58,10 @@ logo.animated = false;
 
 ## 动效提案 / Motion proposal
 
+[随机放电 02 / Irregular discharge 02](proposals/core-discharge-v2/README.md)（`1.3.0-proposal.2`）为最新提案：十种独立的弯折与多级分叉结构，长短、强弱、持续时间和停顿不同；连续预览每轮重新随机。包含组合动图、十种动态总览、十个独立 GIF 及视频。正式组件仍为 1.2.0，尚未替换原生应用。
+
+The latest [irregular discharge proposal](proposals/core-discharge-v2/README.md) contains ten independent bent, branching structures, varied lengths/timing, a reshuffling live preview, a combined animation, ten individual GIFs and a video. Production remains unchanged.
+
 [内核放电 01 / Core-origin discharge 01](proposals/core-discharge-v1/README.md)（`1.3.0-proposal.1`）提供由杯内闪电向外分叉放电的独立预览，包含动图、视频及深浅色静帧。当前正式组件仍为 1.2.0，提案尚未应用到 Mac、Windows 或正式 SVG。
 
 The [core-origin discharge proposal](proposals/core-discharge-v1/README.md) includes GIF, video, and light/dark stills. The production component remains 1.2.0; this preview has not replaced native renderers or production SVG assets.
