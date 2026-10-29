@@ -23,6 +23,9 @@ IS_WINDOWS = os.name == "nt"
 # Long desktop conversations can include image-heavy history in a snapshot.
 # Keep a bounded allocation while accepting valid frames above the old 64 MiB cap.
 MAX_DESKTOP_FRAME_BYTES = 128 * 1024 * 1024
+# The supported router can take ten seconds to finish a negative discovery.
+# A shorter local deadline loses its explicit no-client-found response.
+OWNER_DISCOVERY_TIMEOUT_SECONDS = 12
 
 
 VERSIONS = {"initialize": 0, "thread-owner-discovery": 1,
@@ -32,6 +35,10 @@ VERSIONS = {"initialize": 0, "thread-owner-discovery": 1,
 
 class DesktopError(RuntimeError):
     pass
+
+
+class DesktopOwnerUnavailable(DesktopError):
+    """The router explicitly found no client owning this conversation."""
 
 
 def windows_pipe_address(value=None):
@@ -201,14 +208,16 @@ class DesktopIPC:
                 return await future
             result = await asyncio.wait_for(exchange(), request_timeout + .5)
             if result.get("resultType") != "success":
+                if method == "thread-owner-discovery" and result.get("error") == "no-client-found":
+                    raise DesktopOwnerUnavailable("desktop conversation is not loaded")
                 # Known local protocol diagnostics only; never log conversation content.
                 raise DesktopError(method + ": " + str(result.get("error", "unknown"))[:180])
             return result
         finally:
             self.pending.pop(request_id, None)
 
-    async def owner(self, thread_id, host="local"):
-        result = await self.call("thread-owner-discovery", {"conversationId": thread_id, "hostId": host}, timeout=3)
+    async def owner(self, thread_id, host="local", timeout=OWNER_DISCOVERY_TIMEOUT_SECONDS):
+        result = await self.call("thread-owner-discovery", {"conversationId": thread_id, "hostId": host}, timeout=timeout)
         owner = result["handledByClientId"]
         self.owners[thread_id] = owner
         self.known[thread_id] = host
@@ -288,6 +297,7 @@ class DesktopAdapter:
         self.changed = quota_rpc.changed
         self.views, self.available = {}, []
         self.discovery_signatures = {}
+        self.unloaded = set()
         self.discovery_error = None
         self.account_display = None
         self.control_available = not IS_WINDOWS
@@ -313,6 +323,7 @@ class DesktopAdapter:
         self.available = []
         self.views.clear()
         self.discovery_signatures.clear()
+        self.unloaded.clear()
         if not self.config.get('desktop_control_enabled'):
             self.control_error = 'desktop_control_disabled'
             return False
@@ -355,16 +366,26 @@ class DesktopAdapter:
         semaphore = asyncio.Semaphore(5)
         async def check(tid, host):
             if tid in self.ipc.owners:
+                self.unloaded.discard(tid)
                 return tid
             previous = self.discovery_signatures.get(tid)
             if previous and previous[0] == signatures.get(tid) and time.monotonic() - previous[1] < 120:
                 return None
             async with semaphore:
                 try:
-                    await self.ipc.owner(tid, host)
+                    # Directory scanning stays cheap. A managed chat receives
+                    # the full negative-discovery budget when its state is read.
+                    await self.ipc.owner(tid, host, timeout=3)
+                    self.unloaded.discard(tid)
                     self.hosts[tid] = host
                     return tid
+                except DesktopOwnerUnavailable:
+                    self.unloaded.add(tid)
+                    self.views.pop(tid, None)
+                    self.discovery_signatures[tid] = (signatures.get(tid), time.monotonic())
+                    return None
                 except (DesktopError, asyncio.TimeoutError):
+                    self.unloaded.discard(tid)
                     self.discovery_signatures[tid] = (signatures.get(tid), time.monotonic())
                     return None
         results = await asyncio.gather(*(check(tid, host) for tid, host in candidates.items()))
@@ -403,7 +424,22 @@ class DesktopAdapter:
         tid = params.get("threadId")
         host = self.hosts.get(tid, "local")
         if method == "thread/read":
-            self.views[tid] = await self.ipc.snapshot(tid, host)
+            if not self.control_available or self.ipc.disconnected:
+                raise DesktopError(self.ipc.last_error or "desktop connection unavailable")
+            negative = self.discovery_signatures.get(tid)
+            if (tid in self.unloaded and tid not in self.ipc.owners and negative
+                    and time.monotonic() - negative[1] < 120):
+                raise DesktopOwnerUnavailable("desktop conversation is not loaded")
+            self.unloaded.discard(tid)
+            try:
+                self.views[tid] = await self.ipc.snapshot(tid, host)
+                self.unloaded.discard(tid)
+            except DesktopOwnerUnavailable:
+                self.unloaded.add(tid)
+                self.views.pop(tid, None)
+                signature = self.discovery_signatures.get(tid, (None,))[0]
+                self.discovery_signatures[tid] = (signature, time.monotonic())
+                raise
             return {"thread": self.views[tid]["thread"]}
         if method == "thread/turns/list":
             return {"data": self.views[tid]["turns"]}

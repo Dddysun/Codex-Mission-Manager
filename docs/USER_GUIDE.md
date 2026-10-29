@@ -17,6 +17,8 @@
 - **暂停榨汁：**停止自动暂停、续接和预约调度，不中断正在运行的任务。
 - **暂停所有任务：**手动暂停符合条件的受管任务。重新“开始榨汁”不会解除这些手动保持。
 
+“未打开”表示当前没有客户端加载该聊天；榨汁许可仍保留。你在 Codex 中打开聊天后，后续状态采集会重新核对。此检查不会自动打开聊天或发送指令；“连接待恢复”保留给实际通信异常。
+
 启用榨汁只代表调度已开启，不代表每个聊天都在执行。聊天状态和操作记录反映实际结果。Logo 停用时灰色静止，启用时金色闪电每 2 秒渐强渐弱，十种随机分叉电流从符号向外发出；等待、断连和错误各有杯内符号。系统开启“减少动态效果”时保持静态。Mac 菜单栏使用单独的彩色小图标。
 
 界面读取后台缓存；默认每 5 秒刷新。任务状态通常每 30 秒采集，临近额度或有预约时每 10 秒采集，另加处理耗时。连接中断时显示待恢复，并自动重连；不会把旧状态当作已执行回执。
@@ -78,6 +80,8 @@
 - **Run now:** sends the current instruction. Submission is not confirmed delivery; uncertain results are not automatically retried.
 - **Pause Juicing:** stops automatic pause, resume, and scheduling without interrupting currently running tasks.
 - **Pause all tasks:** manually holds eligible managed tasks. **Start Juicing** does not release those holds.
+
+“Not open” means no client currently owns the chat. Its juicing permission stays saved. Opening it in Codex allows subsequent collection to recheck it; collection does not open chats or send instructions. “Connection unavailable” remains reserved for actual communication errors.
 
 Enabled juicing means scheduling is on, not that every chat is running. Chat status and Activity report actual outcomes. The logo is gray and static while stopped; while enabled, its gold bolt breathes every two seconds and ten varied branching discharges emerge from the symbol. Waiting, disconnected, and error states have distinct symbols inside the cup. System reduced-motion settings keep it static.
 
