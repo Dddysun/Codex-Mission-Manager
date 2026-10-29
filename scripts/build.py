@@ -22,7 +22,7 @@ def run(args, **kwargs):
 
 def runtime(source, target):
     source = Path(source).resolve()
-    info = subprocess.check_output([str(source / "bin/python3"), "-I", "-c",
+    info = subprocess.check_output([str(source / "bin/python3"), "-B", "-I", "-c",
         "import sys,json;print(json.dumps({'version':sys.version_info[:2]}))"], text=True)
     version = ".".join(map(str, json.loads(info)["version"]))
     (target / "bin").mkdir(parents=True)
@@ -114,7 +114,7 @@ def build(args):
     shutil.copytree(ROOT / "third-party", resources / "third-party")
     shutil.copyfile(ROOT / "docs/USER_GUIDE.md", resources / "USER_GUIDE.md")
     shutil.copyfile(ROOT / "VERSION", resources / "VERSION")
-    run([resources / "python/bin/python3", "-I", backend / "app_host.py", "--self-test"])
+    run([resources / "python/bin/python3", "-B", "-I", backend / "app_host.py", "--self-test"])
     run([contents / "MacOS/CodexMissionManager", "--self-test"])
     run([contents / "Library/HelperTools/PowerHelper", "--self-test"])
     # Remove only build metadata that invalidates a code seal. Never remove

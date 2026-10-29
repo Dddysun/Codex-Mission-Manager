@@ -127,7 +127,9 @@ def support_directory():
 
 
 def python_command(script, *args, isolated=False):
-    command = [sys.executable, '-X', 'utf8']
+    # -I ignores PYTHON* environment variables, including the no-bytecode flag.
+    # Every owned interpreter must keep the signed application resources sealed.
+    command = [sys.executable, '-B', '-X', 'utf8']
     if isolated:
         command.append('-I')
     return command + [str(script)] + list(map(str, args))

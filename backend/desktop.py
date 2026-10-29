@@ -125,7 +125,7 @@ class DesktopIPC:
             raise DesktopError(self.last_error or "desktop connection unavailable")
         data = json.dumps(value, ensure_ascii=False).encode()
         self.writer.write(struct.pack("<I", len(data)) + data)
-        await self.writer.drain()
+        await asyncio.wait_for(self.writer.drain(), self.timeout)
 
     async def _read(self):
         try:
@@ -196,8 +196,10 @@ class DesktopIPC:
         if host != "local" and method.startswith("thread-follower-"):
             value["hostId"] = host
         try:
-            await self.send(value)
-            result = await asyncio.wait_for(future, request_timeout + .5)
+            async def exchange():
+                await self.send(value)
+                return await future
+            result = await asyncio.wait_for(exchange(), request_timeout + .5)
             if result.get("resultType") != "success":
                 # Known local protocol diagnostics only; never log conversation content.
                 raise DesktopError(method + ": " + str(result.get("error", "unknown"))[:180])
@@ -266,7 +268,7 @@ class DesktopIPC:
         if self.writer:
             self.writer.close()
             with contextlib.suppress(Exception):
-                await self.writer.wait_closed()
+                await asyncio.wait_for(self.writer.wait_closed(), 1)
         if self.task:
             self.task.cancel()
             with contextlib.suppress(asyncio.CancelledError):

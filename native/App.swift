@@ -122,7 +122,7 @@ final class MissionModel: ObservableObject {
         guard !stopping, host == nil, let resources = Bundle.main.resourceURL else { return }
         let task = Process(), output = Pipe(), input = Pipe()
         task.executableURL = resources.appendingPathComponent("python/bin/python3")
-        task.arguments = ["-I", resources.appendingPathComponent("backend/app_host.py").path]
+        task.arguments = ["-B", "-I", resources.appendingPathComponent("backend/app_host.py").path]
         task.standardInput = input
         task.standardOutput = output
         do {

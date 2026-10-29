@@ -35,7 +35,7 @@ class Rpc:
 
     async def send(self, message):
         self.process.stdin.write((json.dumps(message, ensure_ascii=False) + "\n").encode())
-        await self.process.stdin.drain()
+        await asyncio.wait_for(self.process.stdin.drain(), self.timeout)
 
     async def _read(self):
         try:
@@ -74,8 +74,12 @@ class Rpc:
         future = asyncio.get_running_loop().create_future()
         self.pending[request_id] = future
         try:
-            await self.send({"id": request_id, "method": method, "params": params or {}})
-            obj = await asyncio.wait_for(future, self.timeout)
+            async def exchange():
+                await self.send({"id": request_id, "method": method, "params": params or {}})
+                return await future
+            # Backpressure is part of the request budget, not an unbounded
+            # prelude to the reply timeout. Ambiguous sends remain unreplayed.
+            obj = await asyncio.wait_for(exchange(), self.timeout)
             if "error" in obj:
                 raise RpcError(method, obj["error"].get("code"))
             return obj["result"]

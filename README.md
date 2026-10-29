@@ -6,6 +6,8 @@ Pause when quota is low. Continue when it returns. A native Codex companion for 
 
 **V0.4.1 公开预览 / Public preview** · [下载 / Downloads](https://github.com/Dddysun/Codex-Mission-Manager/releases) · [使用指南 / User guide](docs/USER_GUIDE.md) · [更新说明 / Release notes](docs/releases/0.4.1.md)
 
+本分支包含 **0.4.2 开发候选** 的运行资源完整性修复；已发布安装包见 Releases。 / This branch contains the **0.4.2 development candidate** runtime-integrity fix; see Releases for published packages. [0.4.2 notes](docs/releases/0.4.2.md)
+
 ## 中文
 
 - 按聊天授权暂停与续接，支持恢复后执行一次性指令及“立刻执行”。

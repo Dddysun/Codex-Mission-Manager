@@ -50,6 +50,8 @@
 
 ### 升级与排查
 
+0.4.2 修复运行后生成程序包内缓存导致 Mac 签名完整性检查失败的问题，并为连接卡住时的写入和关闭增加超时保护。升级仍按下述步骤进行，已有设置、任务和记录保留。
+
 升级前退出旧版。Mac 新应用为 `TokenMax.app`；旧版 `Codex Mission Manager.app` 可在退出后移除，勿同时运行。Windows 安装器沿用原安装位置。设置、任务和记录保留。
 
 连接异常时，在设置中检查客户端状态，确认已登录并重新检查。未知客户端版本需要兼容更新。持续“连接中”不代表工作正常。
@@ -103,6 +105,8 @@ Closing the window keeps the app in the menu bar or tray. Use **Quit TokenMax** 
 Keep-awake prevents idle sleep, not manual sleep or guaranteed operation with the lid closed. The Mac preview does not enable the closed-lid helper. Ordinary control needs no Accessibility, Screen Recording, or Full Disk Access; protected project folders may still require system consent.
 
 ### Upgrade and troubleshoot
+
+0.4.2 prevents runtime caches inside the app from invalidating the Mac resource seal and bounds writes and shutdown on stalled connections. Follow the upgrade steps below; existing settings, tasks, and history are retained.
 
 Quit the previous version before upgrading. On Mac, install `TokenMax.app`, then remove the old `Codex Mission Manager.app`; do not run both. Windows retains the existing installation location. Settings, tasks, and history are preserved.
 

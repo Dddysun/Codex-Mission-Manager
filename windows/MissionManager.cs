@@ -1553,7 +1553,7 @@ namespace CodexMissionManager
             try
             {
                 try { Directory.CreateDirectory(preferences.DirectoryPath); } catch (Exception ex) { diagnostic.RecordDataDirectoryFailure(ex); throw; }
-                var start = new ProcessStartInfo(python, "-X utf8 -I \"" + script + "\" --directory \"" + preferences.DirectoryPath + "\"") {
+                var start = new ProcessStartInfo(python, "-B -X utf8 -I \"" + script + "\" --directory \"" + preferences.DirectoryPath + "\"") {
                     WorkingDirectory = directory, UseShellExecute = false, CreateNoWindow = true,
                     RedirectStandardInput = true, RedirectStandardOutput = true, RedirectStandardError = true,
                     StandardOutputEncoding = Encoding.UTF8, StandardErrorEncoding = Encoding.UTF8 };

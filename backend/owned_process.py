@@ -78,7 +78,7 @@ class OwnedProcess:
         self._result = None
         self.job = WindowsJob() if IS_WINDOWS else None
         assigned = False
-        command = [sys.executable, '-X', 'utf8', '-I', str(Path(__file__).resolve()),
+        command = [sys.executable, '-B', '-X', 'utf8', '-I', str(Path(__file__).resolve()),
                    '--bootstrap', str(Path(script).resolve())] + list(map(str, args))
         options = ({'creationflags': subprocess.CREATE_NO_WINDOW} if IS_WINDOWS
                    else {'start_new_session': True})

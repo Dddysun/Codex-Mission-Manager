@@ -62,6 +62,10 @@ Outputs include the WPF application, a current-user setup EXE, a portable ZIP, `
 
 ## Isolated checks / 隔离检查
 
+Packaged Python launchers must pass `-B` explicitly, including when using `-I`; isolated mode ignores `PYTHONDONTWRITEBYTECODE`. The DMG verifier also tests a writable disposable copy, cold imports and the owned child, then rechecks resource hashes and the signature. A read-only mount alone cannot detect attempted cache writes.
+
+随包 Python 的所有启动入口必须显式使用 `-B`，包含使用 `-I` 的情况；隔离模式会忽略 `PYTHONDONTWRITEBYTECODE`。DMG 校验还会对可写临时副本执行冷导入及后台子进程自检，再核对资源摘要和签名。仅使用只读挂载无法发现缓存写入尝试。
+
 Run checks against synthetic fixtures, outside an installed application's data directory. The test runner creates and removes a disposable sample configuration only when one does not already exist. Use a clean checkout for release validation.
 
 检查使用示例数据，不应指向已安装应用的数据目录。测试运行器仅在不存在配置时创建并删除临时示例配置；发行验证应使用干净源码副本。

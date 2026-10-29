@@ -1,4 +1,14 @@
 # Changelog / 版本记录
+
+## 0.4.2 — Runtime resource integrity / 运行资源完整性
+
+- Disable Python bytecode writes explicitly in both native launchers and owned subprocesses. / 两平台原生启动器和后台子进程显式禁止生成 Python 字节码缓存。
+- Verify cold imports on a writable application copy, then recheck unchanged resources and the Mac signature. / 在可写应用副本中验证冷导入，再核对资源未变及 Mac 签名完整性。
+- Bound transport writes, full request exchanges and desktop connection shutdown. / 为通信写入、完整请求与桌面连接关闭设置超时边界。
+- Preserve native interfaces, existing settings, tasks, and history. / 保留原生界面、已有设置、任务和记录。
+
+See [0.4.2 release notes](docs/releases/0.4.2.md). / 详见 [0.4.2 发行说明](docs/releases/0.4.2.md)。
+
 ## 0.4.1
 
 - 修复大型会话快照导致状态同步断开的问题，并补上 Mac 自动重连与断线状态报告。

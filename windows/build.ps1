@@ -94,7 +94,7 @@ if ($LASTEXITCODE -ne 0) { throw 'Native application compilation failed.' }
 
 $python = Join-Path $runtime 'python.exe'
 Write-Output 'Checking embedded Python and isolated backend imports'
-& $python -X utf8 -I (Join-Path $backend 'app_host.py') --self-test
+& $python -B -X utf8 -I (Join-Path $backend 'app_host.py') --self-test
 if ($LASTEXITCODE -ne 0) { throw 'Embedded backend self-test failed.' }
 $nativeReceipt = Join-Path $scratch 'native-self-test.json'
 $nativeTest = Start-Process -FilePath (Join-Path $app 'CodexMissionManager.exe') -ArgumentList @('--self-test',('"'+$nativeReceipt+'"')) -Wait -PassThru

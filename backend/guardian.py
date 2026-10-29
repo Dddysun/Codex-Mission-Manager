@@ -766,7 +766,7 @@ def make_launch_agent(config, python):
     import plistlib
     execution_root = Path(config.get("runtime_root", ROOT))
     execution_config = config["_path"]
-    value = {"Label": "local.usage-guardian", "ProgramArguments": [str(Path(python).resolve()),
+    value = {"Label": "local.usage-guardian", "ProgramArguments": [str(Path(python).resolve()), "-B",
               str(execution_root / "guardian.py"), "--config", execution_config, "run"],
              "WorkingDirectory": str(execution_root), "RunAtLoad": True, "KeepAlive": True,
              "ThrottleInterval": 30, "ProcessType": "Background",
