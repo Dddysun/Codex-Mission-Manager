@@ -1,10 +1,10 @@
-# TokenMax · TOKEN榨汁机
+# Token榨汁机 / TokenMax
 
 额度不足时暂停，恢复后继续。面向 macOS 和 Windows 的原生 Codex 任务管理应用。
 
 Pause when quota is low. Continue when it returns. A native Codex companion for macOS and Windows.
 
-**源码版本 V0.4.2 / Source version V0.4.2** · [下载 / Downloads](https://github.com/Dddysun/Codex-Mission-Manager/releases) · [使用指南 / User guide](docs/USER_GUIDE.md) · [更新说明 / Release notes](docs/releases/0.4.2.md)
+**源码版本 V0.4.2 / Source version V0.4.2** · [下载 / Downloads](https://github.com/Dddysun/TokenMax-Zhazhiji/releases) · [使用指南 / User guide](docs/USER_GUIDE.md) · [更新说明 / Release notes](docs/releases/0.4.2.md)
 
 0.4.2 集成资源完整性、通信期限、并发许可和输入边界修复，以及十种内核放电与 2 秒呼吸 Logo。下载时核对发布标签、构建号和校验文件。 / 0.4.2 combines resource-integrity, deadline, permission-concurrency and input-boundary fixes with ten core-origin discharges and two-second bolt breathing. Verify the release tag, build number and checksums. [0.4.2 notes](docs/releases/0.4.2.md)
 
@@ -19,7 +19,7 @@ Pause when quota is low. Continue when it returns. A native Codex companion for 
 
 ### 安装
 
-从 [Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases) 选择已发布的预览标签，并核对 0.4.2 对应的构建号：
+从 [Releases](https://github.com/Dddysun/TokenMax-Zhazhiji/releases) 选择已发布的预览标签，并核对 0.4.2 对应的构建号：
 
 - **Mac：**`TokenMax-0.4.2-arm64-preview.dmg`。Apple Silicon，macOS 14+。
 - **Windows：**`TokenMax-0.4.2-windows-x64-setup.exe`，另有便携 ZIP。Windows 10 build 19041+、x64、.NET Framework 4.8+。
@@ -43,7 +43,7 @@ Mac 预览为临时签名、未公证；Windows 预览未签名。客户端控�
 
 ### Install
 
-Choose a published preview tag from [Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases). Check the build number associated with 0.4.2:
+Choose a published preview tag from [Releases](https://github.com/Dddysun/TokenMax-Zhazhiji/releases). Check the build number associated with 0.4.2:
 
 - **Mac:** `TokenMax-0.4.2-arm64-preview.dmg`. Apple Silicon, macOS 14+.
 - **Windows:** `TokenMax-0.4.2-windows-x64-setup.exe`, or the portable ZIP. Windows 10 build 19041+, x64, .NET Framework 4.8+.
