@@ -30,7 +30,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       RELEASE_REPOSITORY: ${{ github.repository }}
-      RELEASE_TAG: ${{ inputs.tag || 'v0.4.2-preview.13' }}
+      RELEASE_TAG: ${{ inputs.tag || 'v0.4.3-preview.17' }}
     steps:
       - name: Verify published identity and assets, then set Latest
         run: |
@@ -68,7 +68,7 @@ jobs:
           assert ref['type'] == 'commit'
           source = ref['sha']
           if os.environ['GITHUB_EVENT_NAME'] == 'push':
-              assert release['id'] == 428139457 and source == 'fe571b7247598bca5e4c43a773aa00ac0ba3ffb8'
+              assert release['id'] == 428369697 and source == 'ef5e95fbc2aa8308e56e6bc0baf30d3af843ccdb'
           assets = {item['name']: item for item in release['assets']}
           assert len(assets) == len(release['assets']), 'Duplicate asset names'
           def download(name):
