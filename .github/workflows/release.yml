@@ -116,7 +116,7 @@ jobs:
             --output "$RUNNER_TEMP/mission-macos"
       - name: Verify native Chinese input composition
         run: |
-          "$RUNNER_TEMP/mission-macos/Codex Mission Manager.app/Contents/MacOS/CodexMissionManager" \
+          "$RUNNER_TEMP/mission-macos/TokenMax.app/Contents/MacOS/CodexMissionManager" \
             --editor-self-test > "$RUNNER_TEMP/native-editor-macos-arm64.json"
           python3 - <<'PY'
           import json
@@ -128,7 +128,7 @@ jobs:
           PY
       - name: Verify bounded native quit lifecycle
         run: |
-          "$RUNNER_TEMP/mission-macos/Codex Mission Manager.app/Contents/MacOS/CodexMissionManager" \
+          "$RUNNER_TEMP/mission-macos/TokenMax.app/Contents/MacOS/CodexMissionManager" \
             --lifecycle-self-test > "$RUNNER_TEMP/native-lifecycle-macos-arm64.json"
           python3 - <<'PYCODE'
           import json
@@ -152,7 +152,7 @@ jobs:
           available = subprocess.run(['pgrep', '-x', 'WindowServer'], capture_output=True).returncode == 0
           reports = []
           if available:
-              executable = root / 'mission-macos/Codex Mission Manager.app/Contents/MacOS/CodexMissionManager'
+              executable = root / 'mission-macos/TokenMax.app/Contents/MacOS/CodexMissionManager'
               views = [(accent + '-' + theme, 'native-state', ['--accent', accent] + (['--dark', '--english'] if theme == 'dark' else []))
                        for accent in ('green', 'blue', 'purple', 'yellow') for theme in ('light', 'dark')]
               views += [('rules-zh-light', 'native-state', ['--rules']),
@@ -424,9 +424,9 @@ jobs:
                   shutil.copyfile(source, root / source.name)
           version = os.environ['RELEASE_VERSION']
           expected = [
-              'Codex-Mission-Manager-' + version + '-arm64-preview.dmg',
-              'Codex-Mission-Manager-' + version + '-windows-x64-setup.exe',
-              'Codex-Mission-Manager-' + version + '-windows-x64-preview.zip',
+              'TokenMax-' + version + '-arm64-preview.dmg',
+              'TokenMax-' + version + '-windows-x64-setup.exe',
+              'TokenMax-' + version + '-windows-x64-preview.zip',
               'build-manifest-macos-arm64.json', 'build-manifest-windows-x64.json',
               'verification-macos-arm64.json', 'native-lifecycle-macos-arm64.json', 'native-textbox-layout-windows-x64.json', 'windows-smoke-test-results.json',
           ]

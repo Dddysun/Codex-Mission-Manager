@@ -11,7 +11,7 @@ struct MissionMenuPanel: View {
         ScrollView {
         VStack(alignment:.leading,spacing:16) {
             HStack {
-                Label(L("任务管家"),systemImage:"checkmark.shield").font(.headline)
+                HStack(spacing:8) { JuicerLogo(state:model.logoState).frame(width:32,height:32); Text(L("榨汁机")).font(.headline) }
                 Spacer()
                 Text(model.snapshot?.usage?.account?.subscription ?? L("待识别")).font(.caption).foregroundStyle(.secondary)
             }
@@ -30,7 +30,7 @@ struct MissionMenuPanel: View {
                 if !model.connected || model.snapshot?.usage?.stale != false { Label(L("额度待同步"),systemImage:"clock").font(.caption).foregroundStyle(.orange) }
             }
             HStack(spacing:8) {
-                Button(model.paused ? L("恢复自动控制") : L("暂停自动控制")) { model.setGlobalAutomatic(model.paused) }.frame(maxWidth:.infinity)
+                Button(model.paused ? L("开始榨汁") : L("暂停榨汁")) { model.setGlobalAutomatic(model.paused) }.frame(maxWidth:.infinity)
                 Button(L("暂停所有任务")) { model.pauseAllTasks() }.frame(maxWidth:.infinity)
                     .help(L("暂停允许接管的执行中任务，并关闭全局自动控制。手动暂停的任务需手动恢复。"))
             }.controlSize(.small).disabled(model.busy || !model.connected || model.snapshot?.bulk_pause?.state == "pending" || model.snapshot?.bulk_pause?.state == "processing")

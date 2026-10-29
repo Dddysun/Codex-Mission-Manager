@@ -211,7 +211,7 @@ class Controller:
         task.update(state="needs_review", reason=reason)
         self.store.save_task(task, origin=origin)
         self.store.notice("review:" + task["id"] + ":" + str(task.get("action_id", "")),
-                          "额度管家：任务需要检查", task["name"] + "；" + reason)
+                          "榨汁机：任务需要检查", task["name"] + "；" + reason)
 
     async def pause(self, task, sample, manual=False):
         origin = 'user' if manual else 'automatic'
@@ -257,7 +257,7 @@ class Controller:
                                 baseline_message_id=message_id(view),
                                 paused_goal_updated_at=(view["goal"] or {}).get("updatedAt"))
                     self.store.save_task(task, origin=origin)
-                    self.store.notice("paused:" + task["action_id"], "额度管家：已暂停任务", task["name"])
+                    self.store.notice("paused:" + task["action_id"], "榨汁机：已暂停任务", task["name"])
                     return
                 if not paused_for_goal and latest.get("status") in ("completed", "failed"):
                     return self.review(task, "回合已完成或失败，不自动续做", origin=origin)
@@ -292,7 +292,7 @@ class Controller:
                     paused_goal_updated_at=(goal or {}).get("updatedAt"))
         self.store.save_task(task)
         self.store.notice("quota-interruption:" + task["id"] + ":" + task["turn_id"],
-                          "额度管家：已登记额度中断", task["name"])
+                          "榨汁机：已登记额度中断", task["name"])
 
     async def resume(self, task):
         if self.cancelled():
@@ -340,7 +340,7 @@ class Controller:
         task.update(state="resume_intent", action_id=str(uuid.uuid4()))
         if not self.store.save_task(task):
             return
-        message = ("额度管家：可用额度已重新核验恢复。继续本会话原有任务，遵从用户最新指令。"
+        message = ("榨汁机：可用额度已重新核验恢复。继续本会话原有任务，遵从用户最新指令。"
                    "先核对工作区、文件修改及仍在运行的命令，避免重复执行已完成步骤；"
                    "若原任务已完成、被取消或需要用户决定，请停止并说明。"
                    "本次续做标识：" + task["action_id"] + self.config.get("resume_message_suffix", ""))
@@ -368,7 +368,7 @@ class Controller:
                         resumed_at=self.clock())
             self.store.save_task(task)
             label = '新额度窗口' if task['recovery_reason'] == 'window_advanced' else '可用余额已恢复；重置原因未知'
-            self.store.notice("resumed:" + task["action_id"], "额度管家：已恢复任务", task["name"] + '；' + label)
+            self.store.notice("resumed:" + task["action_id"], "榨汁机：已恢复任务", task["name"] + '；' + label)
         except Exception as exc:
             task["last_control_error"] = {"type": type(exc).__name__, "detail": str(exc)[:400]}
             self.review(task, "续做请求结果不确定；不会自动重复发送")
@@ -567,7 +567,7 @@ async def run(config, once=False):
     try:
         lock_file(lock)
     except BlockingIOError:
-        raise SystemExit("额度管家已在运行；使用 status 查看。")
+        raise SystemExit("榨汁机已在运行；使用 status 查看。")
     store.put("stop_requested", False)
     power_guard = None
     if sys.platform == "darwin" and config.get("power_guard_enabled", True):
@@ -577,7 +577,7 @@ async def run(config, once=False):
                 close_fds=True)
             store.put("power_guard", {"pid": power_guard.pid, "guardian_pid": os.getpid()})
         except OSError as exc:
-            store.notice("power-guard-unavailable", "额度管家：防睡眠保护未启动", type(exc).__name__)
+            store.notice("power-guard-unavailable", "榨汁机：防睡眠保护未启动", type(exc).__name__)
     rpc = None
     failures, identity = 0, None
     try:
@@ -629,15 +629,15 @@ async def run(config, once=False):
                     mode = ("仅提醒模式，未中断任务" if config["mode"] == "notify" else
                             "仅监测，客户端控制连接尚未核验" if not control_available else "正在核对并暂停受管任务")
                     if config.get("quota_notifications", True):
-                        store.notice(key + ":low", "额度管家：额度不足", summary + "；" + mode)
+                        store.notice(key + ":low", "榨汁机：额度不足", summary + "；" + mode)
                     store.put("last_low", sample)
                 elif phase == "warning":
                     if config.get("quota_notifications", True):
-                        store.notice(key + ":warning", "额度管家：额度预警", summary)
+                        store.notice(key + ":warning", "榨汁机：额度预警", summary)
                 old_low = store.get("last_low")
                 if old_low and old_low.get("scope") == identity and recovered(sample, old_low, config, started):
                     if config.get("quota_notifications", True):
-                        store.notice(key + ":restored", "额度管家：额度已恢复", summary + "；已重新核验")
+                        store.notice(key + ":restored", "榨汁机：额度已恢复", summary + "；已重新核验")
                     store.put("last_low", None)
                 supervisor_paused = store.get("supervisor_paused", False)
                 controller = Controller(rpc, store, config, identity, identity_check=lambda: identity_for(rpc, store))
@@ -716,7 +716,7 @@ async def run(config, once=False):
                 atomic_json(store.directory / "status.json", error)
                 if failures >= 3:
                     store.notice("connection:" + str(int(time.time() // 3600)),
-                                 "额度管家：监测不可用", "连续读取失败；已停止自动恢复，请查看状态。")
+                                 "榨汁机：监测不可用", "连续读取失败；已停止自动恢复，请查看状态。")
                     await deliver_notices(store, config)
                 if rpc:
                     await rpc.close()
@@ -774,7 +774,7 @@ def make_launch_agent(config, python):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="任务管家：Codex 用量监测与任务控制")
+    parser = argparse.ArgumentParser(description="榨汁机：Codex 用量监测与任务控制")
     parser.add_argument("--config", default=str(ROOT / "config.json"))
     sub = parser.add_subparsers(dest="command", required=True)
     for name in ("run", "once", "status", "pause", "unpause", "notices", "start", "stop"):
@@ -815,7 +815,7 @@ def main():
                 try:
                     lock_file(lock)
                 except BlockingIOError:
-                    print("额度管家已经在运行")
+                    print("榨汁机已在运行")
                     return 0
             with (store.directory / "daemon.log").open("ab") as out, (store.directory / "daemon-error.log").open("ab") as err:
                 execution_root = Path(config.get("runtime_root", ROOT))

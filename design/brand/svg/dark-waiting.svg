@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="qj-8" class="qj" data-state="waiting" data-animated="false" data-reduced="false" width="256" height="256" viewBox="0 0 256 256" focusable="false" role="img" aria-labelledby="qj-8-title">
+      <title id="qj-8-title">榨汁机 · 等待额度</title>
+      <style>#qj-8{--qj-blue:#4878AF;--qj-glass:#172638;--qj-gray:#7F8C9C;--qj-gold:#E7B43C;--qj-swirl:#537A9F;--qj-muted:#637285;--qj-badge:#1C2939;--qj-red:#D67A80;display:block;overflow:visible}
+      
+      #qj-8 .blue{fill:var(--qj-blue)}#qj-8 .glass{fill:var(--qj-glass)}
+      #qj-8 .handle{stroke:var(--qj-blue)}#qj-8 .bolt{fill:var(--qj-gray)}
+      #qj-8[data-state="working"] .bolt{fill:var(--qj-gold)}
+      #qj-8[data-state="disconnected"],#qj-8[data-state="idle"]{--qj-blue:var(--qj-muted)}
+      #qj-8 .arcs{stroke:var(--qj-gold)}#qj-8 .energy-base{opacity:.16}#qj-8 .energy-trace{opacity:.8;stroke-dasharray:38 150 12 112}
+      #qj-8 .pause-mark{stroke:var(--qj-gold)}
+      #qj-8 .disconnect-mark{stroke:var(--qj-gray)}#qj-8 .error-mark{fill:var(--qj-red)}
+      </style>
+      
+      <g data-layer="handle"><path class="handle" d="M180 78H199Q229 78 226 110L223 128Q220 156 176 153" fill="none" stroke-width="15" stroke-linejoin="round"/></g>
+      <g data-layer="cup"><path class="blue" d="M62 63H193L181 158Q179 177 160 177H94Q75 177 73 158Z"/><path class="glass" d="M78 76H177L166 155Q165 163 155 163H99Q89 163 88 155Z"/></g>
+      <g data-layer="lid"><rect class="blue" x="57" y="48" width="142" height="22" rx="11"/></g>
+      <g data-layer="top-knob"><rect class="blue" x="110" y="29" width="35" height="14" rx="6"/><g class="motion knob-rotor"><circle class="glass" cx="127" cy="36" r="5"/><path class="blue" d="M127 32V36" stroke="var(--qj-blue)" stroke-width="2.5" stroke-linecap="round"/></g></g>
+      <g data-layer="base"><path class="blue" d="M88 182H166Q183 182 187 199L190 212Q192 222 180 222H74Q62 222 64 212L67 199Q71 182 88 182Z"/></g>
+      <g data-layer="control"><circle class="glass" cx="127" cy="202" r="10"/><path d="M127 196V201" stroke="var(--qj-blue)" stroke-width="3" stroke-linecap="round"/></g>
+      <g data-layer="status-symbol" class="motion symbol-motion"><path class="pause-mark" d="M115 94V135M139 94V135" stroke-width="10" stroke-linecap="round"/></g>
+      
+    </svg>

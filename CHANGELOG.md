@@ -1,5 +1,14 @@
 # Changelog / 版本记录
 
+## 0.4.0 — TokenMax · 榨汁机
+
+- Renamed both apps and packages, retaining existing data. / 两平台更名并保留现有数据。
+- Added the geometric juicer logo, native running animation, dark colors, and reduced-motion support. / 接入几何榨汁机 Logo、原生动效、深色及减少动态适配。
+- Introduced Start Juicing and clean per-chat Juicing switches. / 启动改为“开始榨汁”，精简聊天开关。
+- Shortened Chinese/English copy and collapsed quota-event evidence. / 精简中英文提示，额度记录详情按需展开。
+
+See [0.4.0 release notes](docs/releases/0.4.0.md). / 详见 [0.4.0 发行说明](docs/releases/0.4.0.md)。
+
 ## 0.3.4 — Activity source filters / 操作记录来源筛选
 
 - Added All records, User actions, and Automatic processes to both native Activity pages. / 两平台原生操作记录增加“全部记录／用户操作／自动进程”下拉筛选。

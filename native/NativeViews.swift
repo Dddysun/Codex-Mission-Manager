@@ -90,15 +90,15 @@ struct MissionWindow: View {
     var sidebar: some View {
         VStack(alignment: .leading, spacing: 22) {
             HStack(spacing: 12) {
-                Image(systemName: "checkmark.shield").font(.system(size: 28)).padding(10).background(.white.opacity(0.08)).clipShape(RoundedRectangle(cornerRadius: 12))
+                JuicerLogo(state:model.logoState,darkSurface:true).frame(width:54,height:54)
                 VStack(alignment: .leading, spacing: 4) {
                     Text(L("任务管家")).font(.title2.bold())
-                    Text("MISSION / LOCAL").font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(2).foregroundStyle(.white.opacity(0.5))
+                    Text("TOKENMAX / LOCAL").font(.system(size: 10, weight: .semibold, design: .monospaced)).tracking(2).foregroundStyle(.white.opacity(0.5))
                 }
             }.padding(.bottom, 16)
             Text(L("工作空间")).font(.caption).foregroundStyle(.white.opacity(0.5))
             VStack(spacing: 6) {
-                nav(L("任务控制"), icon: "square.grid.2x2", key: "tasks")
+                nav(L("来一杯"), icon: "square.grid.2x2", key: "tasks")
                 nav(L("操作记录"), icon: "clock.arrow.circlepath", key: "events")
                 nav(L("运行规则"), icon: "slider.horizontal.3", key: "rules")
             }
@@ -179,7 +179,7 @@ struct MissionWindow: View {
         HStack {
             Text(L("本机工作空间")).foregroundStyle(.secondary)
             Text("/").foregroundStyle(.tertiary)
-            Text(section == "tasks" ? L("任务控制") : section == "events" ? L("操作记录") : L("运行规则")).fontWeight(.medium)
+            Text(section == "tasks" ? L("来一杯") : section == "events" ? L("操作记录") : L("运行规则")).fontWeight(.medium)
             Spacer()
             Text(L("最近同步 ") + missionTime(model.snapshot?.observed_at)).font(.caption).foregroundStyle(.secondary)
             Button { Task { await model.refreshControl() } } label: { Image(systemName: "arrow.clockwise") }.help(L("刷新状态"))
@@ -189,13 +189,13 @@ struct MissionWindow: View {
         VStack(alignment: .leading, spacing: 18) {
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(L("任务控制")).font(.system(size: 28, weight: .bold))
+                    Text(L("来一杯")).font(.system(size: 28, weight: .bold))
                     Text(L("根据可用额度管理任务暂停、恢复和预约执行。")).foregroundStyle(.secondary)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 8) {
-                    Text(model.snapshot?.control_enabled == true && model.connected ? L("自动控制已启用") : L("自动控制未生效")).font(.caption).foregroundStyle(.secondary)
-                    Button(model.snapshot?.running == false ? L("启动后台服务") : model.paused ? L("启用自动控制") : L("暂停自动控制")) { model.toggleAutomatic() }.disabled(!model.connected || model.busy)
+                    Text(model.logoState.title).font(.caption).foregroundStyle(.secondary)
+                    Button(model.snapshot?.running == false ? L("启动后台服务") : model.paused ? L("开始榨汁") : L("暂停榨汁")) { model.toggleAutomatic() }.disabled(!model.connected || model.busy)
                 }
             }
             HStack(spacing: 0) {
@@ -241,12 +241,10 @@ struct MissionWindow: View {
                     Image(systemName: event.isQuotaRestored ? "arrow.clockwise.circle" : "clock").foregroundStyle(model.tint)
                     VStack(alignment: .leading, spacing: 5) {
                         Text(L(event.label)).fontWeight(.semibold)
-                        Text(event.scopeTitle)
                         if event.isQuotaRestored {
-                            ForEach(Array(event.restorationLines.enumerated()),id:\.offset) { _,line in
-                                Text(line).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
-                            }
+                            MissionQuotaEventEvidence(event:event)
                         } else {
+                            Text(event.scopeTitle)
                             if let recovery=event.detail?.recoveryNote {Text(recovery).font(.callout).foregroundStyle(.secondary)}
                             if let reason = event.detail?.reason { Text(L(reason)).font(.callout).foregroundStyle(.secondary).textSelection(.enabled) }
                         }
@@ -281,6 +279,25 @@ struct MissionWindow: View {
                 if let message = r.message { Text(L(message)).textSelection(.enabled) }
             }
         }.padding(28).frame(width: 620)
+    }
+}
+
+struct MissionQuotaEventEvidence: View {
+    let event: MissionEvent
+    @State private var expanded = false
+    var body: some View {
+        VStack(alignment:.leading,spacing:6) {
+            ForEach(Array(event.restorationSummary.enumerated()),id:\.offset) { _,line in
+                Text(line).font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+            }
+            DisclosureGroup(L("详情"),isExpanded:$expanded) {
+                VStack(alignment:.leading,spacing:5) {
+                    ForEach(Array(event.restorationLines.enumerated()),id:\.offset) { _,line in
+                        Text(line).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                    }
+                }.padding(.top,4).frame(maxWidth:.infinity,alignment:.leading)
+            }.font(.caption).foregroundStyle(.secondary)
+        }
     }
 }
 
@@ -325,9 +342,10 @@ struct MissionChatRow: View {
                     Text(L("额度恢复后执行 · 一次性")).font(.caption).foregroundStyle(.secondary)
                     Spacer(minLength:4)
                     VStack(alignment:.trailing,spacing:4) {
-                        Text(L("自动控制")).font(.caption2).foregroundStyle(.secondary)
+                        Text(L("榨汁状态")).font(.caption2).foregroundStyle(.secondary)
                         Toggle(autoLabel,isOn:Binding(get:{chat.automatic},set:{model.setAutomatic(chat,enabled:$0)}))
-                            .font(.caption).toggleStyle(.switch).controlSize(.small).disabled(locked || !chat.controllable)
+                            .labelsHidden().font(.caption).toggleStyle(.switch).controlSize(.small).disabled(locked || !chat.controllable)
+                            .accessibilityLabel(L("%@：榨汁状态",chat.name)).accessibilityValue(autoLabel)
                             .help(L("按额度暂停并自动续接；关闭不停止当前任务"))
                     }
                 }

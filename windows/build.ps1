@@ -77,7 +77,7 @@ $references += @('PresentationFramework.dll','PresentationCore.dll','WindowsBase
 foreach ($reference in $references) { if (!(Test-Path -LiteralPath $reference)) { throw ('Required Windows framework assembly is missing: '+$reference) } }
 $icon = Join-Path $scratch 'AppIcon.ico'
 $brandIcon = Join-Path $PSScriptRoot 'Assets\AppIcon.ico'
-if (!(Test-Path -LiteralPath $brandIcon)) { throw 'The Mission Manager brand icon is missing.' }
+if (!(Test-Path -LiteralPath $brandIcon)) { throw 'The TokenMax brand icon is missing.' }
 Copy-Item -LiteralPath $brandIcon -Destination $icon
 $appManifest = Join-Path $scratch 'app.manifest'
 $manifestSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'app.manifest')) -replace '(assemblyIdentity version=")[^"]+', ('${1}'+$version+'.0')
@@ -85,9 +85,9 @@ $manifestSource = [IO.File]::ReadAllText((Join-Path $PSScriptRoot 'app.manifest'
 $common = @('/nologo','/target:winexe','/platform:x64','/optimize+','/utf8output','/codepage:65001',('/win32manifest:'+$appManifest),('/win32icon:'+$icon))
 $versionInfo = Join-Path $scratch 'VersionInfo.cs'
 $fileBuild = [Math]::Min(65534,[int]$buildNumber)
-$versionSource = '[assembly: System.Reflection.AssemblyVersion("'+$version+'.0")][assembly: System.Reflection.AssemblyFileVersion("'+$version+'.'+$fileBuild+'")][assembly: System.Reflection.AssemblyInformationalVersion("'+$version+'-'+$preview+'")][assembly: System.Reflection.AssemblyProduct("Codex Mission Manager")]'
+$versionSource = '[assembly: System.Reflection.AssemblyVersion("'+$version+'.0")][assembly: System.Reflection.AssemblyFileVersion("'+$version+'.'+$fileBuild+'")][assembly: System.Reflection.AssemblyInformationalVersion("'+$version+'-'+$preview+'")][assembly: System.Reflection.AssemblyProduct("TokenMax")]'
 [IO.File]::WriteAllText($versionInfo,$versionSource,(New-Object Text.UTF8Encoding($false)))
-$appArgs = $common + @('/out:'+(Join-Path $app 'CodexMissionManager.exe')) + ($references | ForEach-Object { '/reference:'+$_ }) + @((Join-Path $PSScriptRoot 'MissionManager.cs'),$versionInfo)
+$appArgs = $common + @('/out:'+(Join-Path $app 'CodexMissionManager.exe')) + ($references | ForEach-Object { '/reference:'+$_ }) + @((Join-Path $PSScriptRoot 'MissionManager.cs'),(Join-Path $PSScriptRoot 'JuicerLogo.cs'),$versionInfo)
 Write-Output 'Compiling native Windows application'
 & $compiler @appArgs
 if ($LASTEXITCODE -ne 0) { throw 'Native application compilation failed.' }
@@ -100,12 +100,12 @@ $nativeReceipt = Join-Path $scratch 'native-self-test.json'
 $nativeTest = Start-Process -FilePath (Join-Path $app 'CodexMissionManager.exe') -ArgumentList @('--self-test',('"'+$nativeReceipt+'"')) -Wait -PassThru
 if ($nativeTest.ExitCode -ne 0 -or !(Test-Path -LiteralPath $nativeReceipt)) { throw 'Native application self-test failed or produced no receipt.' }
 $nativeResult = Get-Content -LiteralPath $nativeReceipt -Raw -Encoding UTF8 | ConvertFrom-Json
-if (!$nativeResult.native -or $nativeResult.webView -or $nativeResult.hostStarted) { throw 'Native self-test did not satisfy the no-WebView/no-background-host contract.' }
+if (!$nativeResult.native -or $nativeResult.webView -or $nativeResult.hostStarted -or !$nativeResult.brandPresentationChecks) { throw 'Native self-test did not satisfy the no-WebView/no-background-host contract.' }
 
 $manifest = [ordered]@{
     version=$version; preview=$preview; build_number=$buildNumber; platform='windows'; architecture='x64'
     minimum_windows='10.0.19041'; framework='.NET Framework 4.8 or later'; framework_bundled=$false
-    ui='WPF'; webview=$false; python=$lock.version; python_distribution=$lock.distribution; python_sha256=$lock.sha256
+    ui='WPF'; webview=$false; product='TokenMax'; product_zh='榨汁机'; brand_identity_version='1.1.0'; python=$lock.version; python_distribution=$lock.distribution; python_sha256=$lock.sha256
     python_bundled=$true; private_runtime_data_included=$false; signing='unsigned-preview'
     normal_poll_delay_seconds=30; near_limit_or_pending_plan_poll_delay_seconds=10; ui_poll_seconds=5
     configurable_rules=$true; theme_accents=@('green','blue','purple','yellow'); chat_sources=@('codex')
@@ -118,7 +118,7 @@ $manifestPath = Join-Path $output 'build-manifest.json'
 $manifest | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $manifestPath -Encoding UTF8
 Copy-Item -LiteralPath $manifestPath -Destination (Join-Path $app 'build-manifest.json')
 
-$portableName = 'Codex-Mission-Manager-'+$version+'-windows-x64-preview.zip'
+$portableName = 'TokenMax-'+$version+'-windows-x64-preview.zip'
 $portable = Join-Path $output $portableName
 if (Test-Path -LiteralPath $portable) { Remove-Item -LiteralPath $portable -Force }
 [IO.Compression.ZipFile]::CreateFromDirectory($app,$portable,[IO.Compression.CompressionLevel]::Optimal,$false)
@@ -132,7 +132,7 @@ $installerRefs = @('System.dll','System.Core.dll','System.Drawing.dll','System.W
 $installerArgs = $common + @('/out:'+$stub) + $installerRefs + @($installerCs,$versionInfo)
 & $compiler @installerArgs
 if ($LASTEXITCODE -ne 0) { throw 'Native installer compilation failed.' }
-$setup = Join-Path $output ('Codex-Mission-Manager-'+$version+'-windows-x64-setup.exe')
+$setup = Join-Path $output ('TokenMax-'+$version+'-windows-x64-setup.exe')
 Copy-Item -LiteralPath $stub -Destination $setup -Force
 $target = [IO.File]::Open($setup,[IO.FileMode]::Append,[IO.FileAccess]::Write,[IO.FileShare]::None)
 try {
@@ -147,7 +147,7 @@ $installerReceipt = Join-Path $scratch 'installer-self-test.json'
 $installerTest = Start-Process -FilePath $setup -ArgumentList @('--self-test',('"'+$installerReceipt+'"')) -Wait -PassThru
 if ($installerTest.ExitCode -ne 0 -or !(Test-Path -LiteralPath $installerReceipt)) { throw 'Appended installer integrity self-test failed.' }
 $installerResult = Get-Content -LiteralPath $installerReceipt -Raw -Encoding UTF8 | ConvertFrom-Json
-if ($installerResult.version -ne $version -or $installerResult.preview -ne $preview -or !$installerResult.payload_verified -or $installerResult.installed -or $installerResult.host_started) { throw 'Installer self-test attempted installation or failed payload validation.' }
+if ($installerResult.version -ne $version -or $installerResult.preview -ne $preview -or !$installerResult.payload_verified -or !$installerResult.shortcut_migration_checks -or $installerResult.installed -or $installerResult.host_started) { throw 'Installer self-test attempted installation or failed payload validation.' }
 
 $sumLines = @($portable,$setup,$manifestPath) | ForEach-Object {
     (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash.ToLowerInvariant()+'  '+[IO.Path]::GetFileName($_)

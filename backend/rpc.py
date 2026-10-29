@@ -29,7 +29,7 @@ class Rpc:
             **({'creationflags':subprocess.CREATE_NO_WINDOW} if os.name == 'nt' else {}))
         self.reader = asyncio.create_task(self._read())
         result = await self.call("initialize", {"clientInfo": {
-            "name": "usage_guardian", "title": "Usage Guardian", "version": VERSION}})
+            "name": "usage_guardian", "title": "TokenMax", "version": VERSION}})
         await self.send({"method": "initialized"})
         return result
 

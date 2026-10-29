@@ -222,13 +222,13 @@ class PlanRunner:
                     continue
                 reply = await self.rpc.call("turn/start", {"threadId": plan["thread_id"],
                     "clientUserMessageId": plan["action_id"], "input": [{"type": "text", "text":
-                    plan["prompt"] + "\n\n（任务管家：这是你手动安排的额度恢复后执行指令；请先核对已有进度，避免重复执行。计划标识：" + plan["action_id"] + "）", "text_elements": []}],
+                    plan["prompt"] + "\n\n（榨汁机：这是你手动安排的额度恢复后执行指令；请先核对已有进度，避免重复执行。计划标识：" + plan["action_id"] + "）", "text_elements": []}],
                     **({"_guardian_expected_turn_id": latest.get("id")} if getattr(self.rpc, "supports_expected_previous_turn", False) else {})})
                 if reply["turn"].get("status") not in ("inProgress", "completed"):
                     raise RuntimeError("start not confirmed")
                 turn_id = reply["turn"]["id"]
                 self.track_sent(plan, turn_id)
-                self.store.notice("plan-sent:" + plan["id"], "任务管家：已发送预约指令", plan["name"])
+                self.store.notice("plan-sent:" + plan["id"], "榨汁机：已发送预约指令", plan["name"])
                 break  # One confirmed manual dispatch per tick, before automatic resumes.
             except Exception as exc:
                 if plan["state"] == "sending":

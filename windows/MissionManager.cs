@@ -94,10 +94,10 @@ namespace CodexMissionManager
         {
             switch (value)
             {
-                case "user_reset": return T(english, "用户主动恢复", "User-initiated reset");
-                case "official_scheduled_reset": return T(english, "官方正常周期重置", "Scheduled service reset");
-                case "official_independent_reset": return T(english, "官方独立重置", "Independent service reset");
-                default: return T(english, "额度恢复·原因待确认", "Quota restored · cause unconfirmed");
+                case "user_reset": return T(english, "用户恢复（推断）", "User reset (inferred)");
+                case "official_scheduled_reset": return T(english, "周期重置（推断）", "Scheduled reset (inferred)");
+                case "official_independent_reset": return T(english, "额外重置（推断）", "Extra reset (inferred)");
+                default: return T(english, "额度恢复", "Quota restored");
             }
         }
         static double Number(Dictionary<string, object> item, string key)
@@ -129,12 +129,19 @@ namespace CodexMissionManager
             if (minutes % 60 == 0) return (minutes / 60).ToString("0", CultureInfo.InvariantCulture) + T(english, "小时额度", "-hour quota");
             return minutes.ToString("0", CultureInfo.InvariantCulture) + T(english, "分钟额度", "-minute quota");
         }
+        public static string Summary(Dictionary<string, object> item, bool english)
+        {
+            var windows = Json.Rows(Json.Child(item, "detail"), "windows");
+            if (windows.Count == 0) return T(english, "余额变化待核实", "Balance change unverified");
+            return String.Join(" · ", windows.Select(window => WindowTitle(window, english) + " " +
+                Percent(window, "previous_remaining", english).Replace(".0%", "%") + " → " +
+                Percent(window, "remaining", english).Replace(".0%", "%")));
+        }
         public static List<string> Lines(Dictionary<string, object> item, bool english)
         {
             var lines = new List<string>(); if (!IsRestored(item)) return lines;
             var detail = Json.Child(item, "detail");
-            lines.Add(T(english, "根据余额、刷新时间和重置权益变化判定", "Inferred from balance, reset-time and reset-credit changes"));
-            lines.Add(T(english, "此分类为证据推断，并非官方直接原因说明。", "This classification is inferred from evidence, not a direct service explanation."));
+            lines.Add(T(english, "分类基于余额、时间及权益变化推断。", "Classification inferred from balance, time and credit changes."));
             if (Json.Text(detail, "category") == "user_reset") lines.Add(T(english, "依据权益变化判定", "Inferred from credit changes"));
             lines.Add(T(english, "观测时间：", "Observed: ") + Time(detail, "previous_observed_at", english) + " → " + Time(detail, "observed_at", english));
             var windows = Json.Rows(detail, "windows");
@@ -161,11 +168,12 @@ namespace CodexMissionManager
                 "reset_credits", Json.Values("previous_available_count", 2, "available_count", 1, "delta", -1));
             var item = Json.Values("state", "quota_restored", "thread_id", null, "name", "ghost task must stay hidden", "detail", detail);
             var lines = Lines(item, true);
+            if (Summary(item, true) != "5-hour quota 2% → 100%" || Summary(Json.Values("detail", Json.Values()), true) != "Balance change unverified") return false;
             if (!IsGlobal(item) || ScopeTitle(item, true) != "Global quota event" || lines.Any(line => line.Contains("ghost task"))) return false;
             if (!lines.Any(line => line.Contains("2.0% → 100.0%")) || !lines.Any(line => line == "Reset credits: 2 → 1") || !lines.Any(line => line == "Inferred from credit changes")) return false;
             foreach (string category in new[] { "user_reset", "official_scheduled_reset", "official_independent_reset", "unattributed", "future_category" })
                 if (Category(category, false).Length == 0 || Category(category, true).Length == 0) return false;
-            if (Category("future_category", true) != "Quota restored · cause unconfirmed") return false;
+            if (Category("future_category", true) != "Quota restored") return false;
             detail["reset_credits"] = Json.Values("previous_available_count", null, "available_count", 0);
             if (!Lines(item, true).Contains("Reset credits: Unavailable → 0")) return false;
             detail["reset_credits"] = Json.Values("previous_available_count", null, "available_count", null);
@@ -176,6 +184,28 @@ namespace CodexMissionManager
             task["thread_id"] = null; if (ScopeTitle(task, true) != "Global control") return false;
             task.Remove("thread_id"); return ScopeTitle(task, true) == "Existing task";
         }
+    }
+
+    static class NotificationCopy
+    {
+        public static string Title(string value, bool english)
+        {
+            string title = value ?? "";
+            foreach (string prefix in new[] { "榨汁机：", "任务管家：", "额度管家：" })
+                if (title.StartsWith(prefix, StringComparison.Ordinal)) { title = title.Substring(prefix.Length); break; }
+            if (!english) return "榨汁机：" + (title.Length == 0 ? "状态更新" : title);
+            var names = new Dictionary<string, string> {
+                {"任务需要检查", "Review needed"}, {"已暂停任务", "Tasks paused"}, {"已登记额度中断", "Quota interruption recorded"},
+                {"已恢复任务", "Tasks resumed"}, {"防睡眠保护未启动", "Keep-awake unavailable"}, {"额度不足", "Low quota"},
+                {"额度预警", "Quota warning"}, {"额度已恢复", "Quota restored"}, {"监测不可用", "Monitoring unavailable"},
+                {"已发送预约指令", "Scheduled instruction sent"}, {"即时发送需要处理", "Delivery needs attention"} };
+            string label; return names.TryGetValue(title, out label) ? "TokenMax: " + label : "TokenMax";
+        }
+        public static bool SelfTest()
+        { return Title("额度管家：额度已恢复", true) == "TokenMax: Quota restored"
+            && Title("任务管家：已暂停任务", false) == "榨汁机：已暂停任务"
+            && Title("榨汁机：即时发送需要处理", true) == "TokenMax: Delivery needs attention"
+            && Title("unknown", true) == "TokenMax"; }
     }
 
     // The API owns origin classification. Older or unknown values stay in the
@@ -460,6 +490,8 @@ namespace CodexMissionManager
         Process host;
         Uri baseUri;
         Forms.NotifyIcon tray;
+        JuicerLogo sidebarLogo;
+        readonly HashSet<string> expandedEvents = new HashSet<string>();
         System.Drawing.Icon trayBrandIcon;
         DispatcherTimer timer;
         bool refreshing, busy, quitting, firstNotices = true, lifecycleFixture;
@@ -524,7 +556,7 @@ namespace CodexMissionManager
             Width = 1380; Height = 900; MinWidth = 1080; MinHeight = 660;
             WindowStartupLocation = WindowStartupLocation.CenterScreen;
             FontFamily = new FontFamily("Segoe UI, Microsoft YaHei UI"); FontSize = 13;
-            Title = T("任务管家", "Mission Manager");
+            Title = T("榨汁机", "TokenMax");
             Closing += OnClosing;
             ApplyTheme(); BuildShell(); RenderSnapshot();
             if (!fixtureMode)
@@ -735,22 +767,22 @@ namespace CodexMissionManager
         {
             foreach (var pair in navButtons) pair.Value.Background = pair.Key == currentView ? sideSelected : Brushes.Transparent;
             if (navCount != null) navCount.Text = CodexChats().Count.ToString(CultureInfo.InvariantCulture);
-            if (breadcrumb != null) breadcrumb.Text = currentView == "events" ? T("操作记录", "Activity") : currentView == "rules" ? T("运行规则", "Rules") : T("任务控制", "Task control");
+            if (breadcrumb != null) breadcrumb.Text = currentView == "events" ? T("操作记录", "Activity") : currentView == "rules" ? T("运行规则", "Rules") : T("来一杯", "Juice Bar");
         }
         void BuildShell()
         {
-            Title = T("任务管家", "Mission Manager"); navButtons.Clear();
+            Title = T("榨汁机", "TokenMax"); navButtons.Clear();
             root = new Grid { Background = background }; root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(290) });
             root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) }); Content = root;
             var side = new Grid { Background = sideBackground }; side.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) }); side.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto }); root.Children.Add(side);
             sidebar = new StackPanel { Margin = new Thickness(22, 22, 22, 0) };
             var brand = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 38) };
-            brand.Children.Add(new Border { Width = 50, Height = 52, CornerRadius = new CornerRadius(12), Background = Tint(Brushes.White, 0.08), Padding = new Thickness(10), Child = Glyph("shield", Tint(Brushes.White, 0.88), 28) });
+            sidebarLogo = new JuicerLogo { Width = 52, Height = 52 }; sidebarLogo.SetPresentation(LogoState, true); brand.Children.Add(sidebarLogo);
             var brandText = new StackPanel { Margin = new Thickness(12, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
-            brandText.Children.Add(SideText(T("任务管家", "Mission Manager"), 17, true));
-            var signature = SideText("M I S S I O N  /  L O C A L", 9); signature.FontFamily = new FontFamily("Consolas"); signature.Margin = new Thickness(0, 5, 0, 0); brandText.Children.Add(signature); brand.Children.Add(brandText); sidebar.Children.Add(brand);
+            brandText.Children.Add(SideText(T("榨汁机", "TokenMax"), 17, true));
+            var signature = SideText("T O K E N M A X", 9); signature.FontFamily = new FontFamily("Consolas"); signature.Margin = new Thickness(0, 5, 0, 0); brandText.Children.Add(signature); brand.Children.Add(brandText); sidebar.Children.Add(brand);
             var workspace = SideText(T("工作空间", "Workspace"), 10); workspace.Margin = new Thickness(0, 0, 0, 22); sidebar.Children.Add(workspace);
-            sidebar.Children.Add(Navigation(T("任务控制", "Task control"), "grid", "tasks"));
+            sidebar.Children.Add(Navigation(T("来一杯", "Juice Bar"), "grid", "tasks"));
             sidebar.Children.Add(Navigation(T("操作记录", "Activity"), "history", "events"));
             sidebar.Children.Add(Navigation(T("运行规则", "Rules"), "rules", "rules"));
             sidebar.Children.Add(DividerLine(Tint(Brushes.White, 0.22), new Thickness(0, 16, 0, 22)));
@@ -797,7 +829,7 @@ namespace CodexMissionManager
             var row = new DockPanel(); var check = MakeButton(T("重新检查", "Check again"), async delegate { await RefreshAsync(); }); DockPanel.SetDock(check, Dock.Right); row.Children.Add(check);
             var icon = Glyph("warning", Brushes.DarkOrange, 15); icon.Margin = new Thickness(0, 2, 10, 0); icon.VerticalAlignment = VerticalAlignment.Top; DockPanel.SetDock(icon, Dock.Left); row.Children.Add(icon);
             var copy = new StackPanel(); var title = Text(connected ? T("检查状态待恢复", "Status check pending") : String.IsNullOrEmpty(connectionError) ? T("正在连接本机后台", "Connecting to the local service") : T("后台连接待恢复", "Backend connection unavailable"), 12, true); title.Margin = new Thickness(0, 0, 0, 4); copy.Children.Add(title);
-            var description = Text(String.IsNullOrEmpty(connectionError) ? T("正在核对账号、额度和聊天状态；取得可靠状态后才能自动续接。", "Checking the account, quota and chat status. Automatic recovery requires a reliable reading.") : ConnectionErrorText(), 12); description.Margin = new Thickness(0); copy.Children.Add(description); row.Children.Add(copy); connectionBanner.Child = row;
+            var description = Text(String.IsNullOrEmpty(connectionError) ? T("正在核对账号与额度…", "Checking account and quota…") : ConnectionErrorText(), 12); description.Margin = new Thickness(0); copy.Children.Add(description); row.Children.Add(copy); connectionBanner.Child = row;
         }
         void BuildContent()
         {
@@ -824,8 +856,8 @@ namespace CodexMissionManager
             var hero = new DockPanel();
             var controls = new StackPanel { HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
             stateBlock = Text("", 10); stateBlock.Foreground = secondary; stateBlock.TextAlignment = TextAlignment.Right; stateBlock.Margin = new Thickness(0, 0, 0, 8); controls.Children.Add(stateBlock);
-            globalButton = MakeButton(T("启用自动控制", "Enable automation"), delegate { ToggleGlobal(); }); globalButton.HorizontalAlignment = HorizontalAlignment.Right; controls.Children.Add(globalButton); DockPanel.SetDock(controls, Dock.Right); hero.Children.Add(controls);
-            var heading = new StackPanel(); var title = Text(T("任务控制", "Task control"), 28, true); title.Margin = new Thickness(0, 0, 0, 8); heading.Children.Add(title);
+            globalButton = MakeButton(T("开始榨汁", "Start Juicing"), delegate { ToggleGlobal(); }); globalButton.HorizontalAlignment = HorizontalAlignment.Right; controls.Children.Add(globalButton); DockPanel.SetDock(controls, Dock.Right); hero.Children.Add(controls);
+            var heading = new StackPanel(); var title = Text(T("来一杯", "Juice Bar"), 28, true); title.Margin = new Thickness(0, 0, 0, 8); heading.Children.Add(title);
             var subtitle = Text(T("根据可用额度管理任务暂停、恢复和预约执行。", "Manage pauses, recovery and scheduled instructions using available quota."), 13); subtitle.Foreground = secondary; subtitle.Margin = new Thickness(0); heading.Children.Add(subtitle); hero.Children.Add(heading); pageRoot.Children.Add(hero);
             var statistics = new Grid();
             string[] labels = { T("聊天目录", "Chats"), T("正在执行", "Running"), T("等待恢复 / 预约", "Recovery / Scheduled"), T("需要留意", "Needs attention") };
@@ -904,10 +936,24 @@ namespace CodexMissionManager
             }
             return String.Join("\n", lines);
         }
+        string LogoState
+        {
+            get
+            {
+                var usage = Json.Child(snapshot, "usage");
+                bool connected = fixtureMode || (baseUri != null && String.IsNullOrEmpty(connectionError));
+                return JuicerLogo.ResolveState(Json.Bool(snapshot, "control_paused", true), Json.Bool(snapshot, "running"),
+                    connected, Healthy && String.IsNullOrEmpty(Json.Text(snapshot, "desktop_connection_error")), ControlAvailable, Json.Text(snapshot, "service_error", Json.Text(Json.Child(snapshot, "compatibility"), "status") == "update_required" ? "update_required" : ""),
+                    Json.Bool(usage, "stale", true), Json.Text(usage, "quota_state", "unknown"),
+                    Json.Bool(usage, "blocked"), Json.Text(snapshot, "quota_phase", VisibleWindows(usage).Any(window => Json.Number(window, "remaining", Double.PositiveInfinity) <= (Json.Number(window, "minutes") == 10080 ? 0 : Json.Number(Json.Child(snapshot, "policy"), "pause", 10))) ? "low" : "normal"), Json.Bool(snapshot, "control_enabled"));
+            }
+        }
         void RenderSnapshot()
         {
             if (quitting) return;
             ApplyUiPollInterval(); RenderQuota(); UpdateNavigation(); UpdateNotices();
+            if (sidebarLogo != null) sidebarLogo.SetPresentation(LogoState, true);
+            if (tray != null) tray.Text = T("榨汁机", "TokenMax");
             if (lastSync != null) lastSync.Text = T("最近同步 ", "Last updated ") + FormatTime(Json.Number(snapshot, "observed_at"));
             if (currentView == "tasks") { RenderHeader(); RenderChats(); }
             else if (currentView == "events" && !busy) RenderEvents();
@@ -927,8 +973,8 @@ namespace CodexMissionManager
         {
             if (stateBlock == null || globalButton == null) return;
             bool enabled = Json.Bool(snapshot, "control_enabled") && String.IsNullOrEmpty(connectionError);
-            stateBlock.Text = enabled ? T("自动控制已启用", "Automation enabled") : T("自动控制未生效", "Automation inactive");
-            globalButton.Content = !Json.Bool(snapshot, "running") ? T("启动后台服务", "Start background service") : Json.Bool(snapshot, "control_paused", true) ? T("启用自动控制", "Enable automation") : T("暂停自动控制", "Pause automation");
+            stateBlock.Text = enabled ? T("榨汁已开启", "Juicing on") : T("榨汁已停止", "Juicing stopped");
+            globalButton.Content = !Json.Bool(snapshot, "running") ? T("启动后台服务", "Start background service") : Json.Bool(snapshot, "control_paused", true) ? T("开始榨汁", "Start Juicing") : T("暂停榨汁", "Pause Juicing");
             globalButton.IsEnabled = !busy && (fixtureMode || host == null || (baseUri != null && Json.Bool(snapshot, "running")
                 && (!Json.Bool(snapshot, "control_paused", true) || (ControlAvailable && Healthy))));
             var chats = CodexChats();
@@ -1069,7 +1115,7 @@ namespace CodexMissionManager
                 body.Children.Add(Text(T("立刻执行：", "Run now: ") + delivery, 13, true));
                 string receipt = T("发送标识：", "Dispatch ID: ") + Json.Text(immediate, "id", T("未提供", "Not provided"));
                 string turn = Json.Text(immediate, "turn_id"); if (turn.Length > 0) receipt += "\n" + T("确认回合：", "Confirmed turn: ") + turn;
-                string message = Json.Text(immediate, "message"); if (message.Length > 0) receipt += "\n" + message;
+                string message = Localized(immediate, "message"); if (message.Length > 0) receipt += "\n" + message;
                 body.Children.Add(new TextBox { Text = receipt, IsReadOnly = true, AcceptsReturn = true, TextWrapping = TextWrapping.Wrap,
                     BorderThickness = new Thickness(0), Padding = new Thickness(0), Background = Brushes.Transparent, Foreground = secondary,
                     FontFamily = new FontFamily("Consolas, Microsoft YaHei UI"), FontSize = 11, Margin = new Thickness(0, 4, 0, 18) });
@@ -1119,7 +1165,7 @@ namespace CodexMissionManager
                 activityFilter = selected; RenderEvents();
             };
             DockPanel.SetDock(choice, Dock.Right); filterLine.Children.Add(choice);
-            var description = Text(T("查看最近 200 条额度恢复、任务控制与指令发送记录。", "Review the latest 200 quota-recovery, task-control and instruction-delivery records."), 13); description.Foreground = secondary; description.Margin = new Thickness(0); filterLine.Children.Add(description); content.Children.Add(filterLine);
+            var description = Text(T("最近 200 条记录", "Latest 200 records"), 13); description.Foreground = secondary; description.Margin = new Thickness(0); filterLine.Children.Add(description); content.Children.Add(filterLine);
             eventRowsPanel = new StackPanel(); content.Children.Add(eventRowsPanel); RenderEvents();
         }
         void RenderEvents()
@@ -1136,13 +1182,21 @@ namespace CodexMissionManager
                 var stamp = Text(FormatTime(Json.Number(item, "created")), 10); stamp.Foreground = secondary; stamp.Margin = new Thickness(18, 1, 0, 0); DockPanel.SetDock(stamp, Dock.Right); row.Children.Add(stamp);
                 bool restored = QuotaRestorationEvents.IsRestored(item); bool english = preferences.Language == "en";
                 var labels = new StackPanel(); var heading = Text(restored ? QuotaRestorationEvents.Category(Json.Text(Json.Child(item, "detail"), "category"), english) : EventLabel(Json.Text(item, "state")), 13, true); heading.Margin = new Thickness(0, 0, 0, 5); labels.Children.Add(heading);
-                var name = Text(QuotaRestorationEvents.ScopeTitle(item, english), 13); name.Margin = new Thickness(0); labels.Children.Add(name);
                 if (restored)
                 {
-                    foreach (string line in QuotaRestorationEvents.Lines(item, english)) { var evidence = Text(line, 12); evidence.Foreground = secondary; evidence.Margin = new Thickness(0, 5, 0, 0); labels.Children.Add(evidence); }
+                    var summary = Text(QuotaRestorationEvents.Summary(item, english), 13); summary.Margin = new Thickness(0); labels.Children.Add(summary);
+                    var details = new StackPanel();
+                    foreach (string line in QuotaRestorationEvents.Lines(item, english)) { var evidence = Text(line, 12); evidence.Foreground = secondary; evidence.Margin = new Thickness(0, 5, 0, 0); details.Children.Add(evidence); }
+                    string eventKey = Convert.ToString(Json.Get(item, "id"), CultureInfo.InvariantCulture);
+                    if (String.IsNullOrEmpty(eventKey)) eventKey = Json.Stringify(item);
+                    var disclosure = new Expander { Header = T("详情", "Details"), Content = details, IsExpanded = expandedEvents.Contains(eventKey), Foreground = secondary, Margin = new Thickness(0, 7, 0, 0), FontSize = 11 };
+                    disclosure.Expanded += delegate { expandedEvents.Add(eventKey); };
+                    disclosure.Collapsed += delegate { expandedEvents.Remove(eventKey); };
+                    labels.Children.Add(disclosure);
                 }
                 else
                 {
+                var name = Text(QuotaRestorationEvents.ScopeTitle(item, english), 13); name.Margin = new Thickness(0); labels.Children.Add(name);
                 var eventDetail = Json.Child(item, "detail"); string reason = Json.Text(eventDetail, "reason"); string recovery = RecoveryLabel(Json.Text(eventDetail, "recovery_reason"));
                 if (recovery.Length > 0) { var evidence = Text(recovery, 12); evidence.Foreground = secondary; evidence.Margin = new Thickness(0, 5, 0, 0); labels.Children.Add(evidence); }
                 if (reason.Length > 0 && reason != recovery) { var detail = Text(reason, 12); detail.Foreground = secondary; detail.Margin = new Thickness(0, 5, 0, 0); labels.Children.Add(detail); }
@@ -1208,7 +1262,7 @@ namespace CodexMissionManager
         {
             content.Margin = new Thickness(30); content.MaxWidth = 880; content.HorizontalAlignment = HorizontalAlignment.Left;
             var title = Text(T("运行规则", "Rules"), 26, true); title.Margin = new Thickness(0, 0, 0, 10); content.Children.Add(title);
-            var introduction = Text(T("调整暂停与恢复条件、后台采集和界面刷新频率。服务返回的实际余额及刷新时间保持只读。", "Configure pause and recovery thresholds, background collection and interface refresh. Service-reported balances and reset times remain read-only."), 13); introduction.Foreground = secondary; introduction.Margin = new Thickness(0, 0, 0, 24); content.Children.Add(introduction);
+            var introduction = Text(T("设置暂停、恢复条件和刷新频率。", "Set pause, recovery and refresh intervals."), 13); introduction.Foreground = secondary; introduction.Margin = new Thickness(0, 0, 0, 24); content.Children.Add(introduction);
             if (!rulesDraftInitialized || (!rulesDirty && !rulesSaving)) LoadRulesDraft(); ruleInputs.Clear();
             var editor = new StackPanel(); var heading = Text(T("控制参数", "Control parameters"), 15, true); heading.Margin = new Thickness(0, 0, 0, 18); editor.Children.Add(heading);
             string[] labels = RuleLabels(); var bounds = Json.Child(Json.Child(snapshot, "rules"), "bounds");
@@ -1221,17 +1275,17 @@ namespace CodexMissionManager
                 input.TextChanged += delegate { if (!rulesUpdating) { rulesDraft[field] = input.Text; rulesDirty = true; rulesError = ""; RefreshRulesPresentation(); } };
                 var range = Text((i < 2 ? "%  ·  " : T("秒  ·  ", "sec  ·  ")) + lower + "–" + upper, 11); range.Foreground = secondary; range.Margin = new Thickness(12, 0, 0, 0); range.VerticalAlignment = VerticalAlignment.Center; Grid.SetColumn(range, 2); row.Children.Add(range); editor.Children.Add(row);
             }
-            var constraints = Text(T("恢复阈值至少高于暂停阈值 5 个百分点；临近阈值时的采集间隔不得长于正常间隔。", "The resume threshold must exceed the pause threshold by at least 5 percentage points. Near-limit collection cannot be slower than normal collection."), 11); constraints.Foreground = secondary; constraints.Margin = new Thickness(0, 0, 0, 16); editor.Children.Add(constraints);
+            var constraints = Text(T("恢复阈值至少高出 5 个百分点；临近阈值采集须更快或相同。", "Resume must be at least 5 points above pause; near-limit checks must be at least as frequent."), 11); constraints.Foreground = secondary; constraints.Margin = new Thickness(0, 0, 0, 16); editor.Children.Add(constraints);
             var actions = new WrapPanel(); rulesSave = MakeButton(T("保存规则", "Save rules"), async delegate { await SaveRulesAsync(); }, true); rulesSave.Margin = new Thickness(0, 0, 10, 0); actions.Children.Add(rulesSave);
             rulesReload = MakeButton(T("重新载入已保存值", "Reload saved values"), delegate { LoadRulesDraft(); RefreshRulesPresentation(); }); rulesReload.ToolTip = T("放弃当前未保存的修改，读取后台最新规则。", "Discard unsaved changes and load the latest saved rules."); actions.Children.Add(rulesReload); editor.Children.Add(actions);
             rulesStatus = Text("", 11); rulesStatus.Margin = new Thickness(0, 12, 0, 0); editor.Children.Add(rulesStatus); content.Children.Add(Card(editor, new Thickness(0, 0, 0, 22)));
             var liveQuota = new StackPanel(); var liveHeading = Text(T("服务额度 · 只读", "Service quota · Read-only"), 13, true); liveQuota.Children.Add(liveHeading); ruleQuotaSummary = Text("", 12); ruleQuotaSummary.Foreground = secondary; ruleQuotaSummary.Margin = new Thickness(0); liveQuota.Children.Add(ruleQuotaSummary); content.Children.Add(Card(liveQuota, new Thickness(0, 0, 0, 22)));
-            Rule(T("自动暂停与续接", "Automatic pause and recovery"), T("额度低于暂停阈值、周额度耗尽或服务限制使用时，暂停受管任务。额度窗口正常刷新或检测到余额提前恢复后，连续复核余额与账号，再按已有许可续接。余额变化本身不证明官方主动重置，恢复依据及发送结果分别记录。", "Managed chats pause when allowance reaches the pause threshold, weekly allowance is exhausted, or service access is restricted. A normal window reset or verified early balance recovery triggers consecutive quota and account checks, then resumption under existing permissions. A balance increase alone does not prove an official reset; recovery evidence and delivery outcomes are recorded separately."));
-            Rule(T("额度恢复后执行一次", "Run once after quota recovery"), T("一次性预约独立于单聊自动控制，可在正常窗口刷新或核验余额提前恢复后执行一次。保存指令不会立刻发送；关闭全局自动控制会阻止预约发送。", "A one-time schedule is independent of a chat's automatic-control switch. It can run after a normal window reset or verified early quota recovery. Saving does not send immediately. Pausing global automation blocks scheduled delivery."));
-            Rule(T("订阅与额度", "Subscription and quota"), T("订阅名称仅用于显示。缺失额度不会视为无限；未提供固定窗口时，只有服务明确允许使用才能发送。重置权益仅展示，不会自动兑换或消耗。", "Subscription names are display metadata. Missing quota is never treated as unlimited. Without a fixed window, sending requires explicit service permission. Reset credits are read-only and are never redeemed automatically."));
-            Rule(T("立刻执行", "Run now"), T("发送当前指令框内容，不等待刷新。发送后等待真实回执，不把提交成功当作已执行。执行中、等待审批、额度或账号异常时，后台会拒绝发送。结果不明确时不会自动重复发送。", "Send the current instruction without waiting for a reset, then wait for a real delivery receipt. Submission is not proof of execution. Busy chats, pending approvals, or quota and account issues can block delivery. An uncertain result is not retried automatically."));
-            Rule(T("手动操作优先", "Manual actions take priority"), T("人工新指令、审批与任务约束优先。聊天完成后等待下一条指令，不会无限续做。", "New user instructions, approvals and task constraints take priority. Completed chats wait for a new instruction and are not continued indefinitely."));
-            Rule(T("后台运行", "Background operation"), T("关闭主窗口后继续运行。退出应用停止管家和自身电源保护，不中断原客户端正在执行的聊天。锁屏、熄屏与合盖是不同的运行条件。", "Closing the window keeps the app running. Exiting stops Mission Manager and its own keep-awake request, without interrupting client chats. Locking, display-off and lid closure are different operating conditions."));
+            Rule(T("自动暂停与续接", "Automatic pause and recovery"), T("额度不足时暂停；恢复并复核后续接。恢复原因以操作记录中的证据为准。", "Pause on low quota; resume after verified recovery. Recovery evidence appears in Activity."));
+            Rule(T("额度恢复后执行一次", "Run once after quota recovery"), T("额度恢复后发送一次。预约独立于聊天开关；暂停榨汁也会暂停预约。", "Send once after quota recovers. Scheduling is separate from chat switches; Pause Juicing also pauses schedules."));
+            Rule(T("订阅与额度", "Subscription and quota"), T("额度未知时等待核验；无固定窗口时须获得服务许可。重置权益仅供查看。", "Unknown quota awaits verification. No fixed window requires service permission. Reset credits are read-only."));
+            Rule(T("立刻执行", "Run now"), T("立即发送当前指令，须通过状态与额度核验。结果不明确时不重复发送。", "Send now after status and quota checks. Unconfirmed deliveries are not retried."));
+            Rule(T("手动操作优先", "Manual actions take priority"), T("用户指令和审批优先。任务完成后等待新指令。", "User instructions and approvals take priority. Completed chats await new instructions."));
+            Rule(T("后台运行", "Background operation"), T("关窗后继续运行；退出仅停止榨汁机，不中断客户端聊天。", "Closing the window keeps running. Quitting stops TokenMax, not client chats."));
             var settings = MakeButton(T("后台运行与系统权限…", "Background operation and permissions…"), ShowSettingsWindow); settings.HorizontalAlignment = HorizontalAlignment.Left; content.Children.Add(settings); RefreshRulesPresentation();
         }
         void RefreshRulesPresentation()
@@ -1248,9 +1302,9 @@ namespace CodexMissionManager
             }
             bool conflict = rulesDirty && Json.Integer(rules, "revision") != rulesDraftRevision;
             rulesStatus.Text = rulesError.Length > 0 ? rulesError : rulesSaving ? T("正在保存规则…", "Saving rules…")
-                : !available ? T("连接后台后可保存规则；当前修改会保留。", "Rules can be saved when the background service connects. Current edits are retained.")
-                : conflict ? T("后台规则已更新。当前草稿已保留，请重新载入后再修改并保存。", "Saved rules changed. Your draft is retained; reload the saved values before editing and saving again.")
-                : rulesDirty ? T("有未保存的修改。", "There are unsaved changes.") : T("规则已保存。参数变更不会自动启用控制。", "Rules are saved. Changing parameters does not enable automation.");
+                : !available ? T("连接后可保存；草稿已保留。", "Connect to save. Draft retained.")
+                : conflict ? T("规则已更新；请重新载入。草稿已保留。", "Rules changed; reload to continue. Draft retained.")
+                : rulesDirty ? T("有未保存的修改。", "There are unsaved changes.") : T("规则已保存；不会自动开始榨汁。", "Rules saved. Juicing does not start automatically.");
             rulesStatus.Foreground = rulesError.Length > 0 || conflict ? Brushes.DarkOrange : secondary;
             rulesSave.IsEnabled = available && !fixtureMode && !rulesSaving && rulesDirty && !conflict; rulesReload.IsEnabled = !rulesSaving; foreach (var input in ruleInputs.Values) input.IsEnabled = !rulesSaving;
             var usage = Json.Child(snapshot, "usage"); var lines = new List<string>();
@@ -1285,7 +1339,7 @@ namespace CodexMissionManager
                         var body = Json.Parse(await response.Content.ReadAsStringAsync());
                         if (!response.IsSuccessStatusCode)
                         {
-                            rulesError = (int)response.StatusCode == 409 ? T("规则已在其他窗口更新，草稿已保留。请重新载入已保存值后再修改。", "Rules changed in another window. Your draft is retained; reload the saved values before editing again.")
+                            rulesError = (int)response.StatusCode == 409 ? T("规则已更新；请重新载入。草稿已保留。", "Rules changed; reload to continue. Draft retained.")
                                 : preferences.Language == "en" ? Json.Text(body, "message_en", T("规则未保存，草稿已保留。", "Rules could not be saved. Your draft is retained.")) : Json.Text(body, "message", T("规则未保存，草稿已保留。", "Rules could not be saved. Your draft is retained."));
                         }
                         else
@@ -1293,7 +1347,7 @@ namespace CodexMissionManager
                             var returnedRules = Json.Child(body, "rules"); var returnedValues = Json.Child(returnedRules, "values");
                             bool confirmed = returnedRules.Count > 0 && Json.Integer(returnedRules, "revision") > submittedRevision && RulesPolicy.Fields.All(field => Json.Integer(returnedValues, field, -1) == Json.Integer(values, field));
                             if (confirmed && Object.Equals(baseUri, requestedBase)) { snapshot["rules"] = returnedRules; LoadRulesDraft(); }
-                            else rulesError = T("保存回执待核对，草稿已保留。请重新载入确认。", "The save receipt needs verification. Your draft is retained; reload to confirm.");
+                            else rulesError = T("保存待确认；请重新载入。草稿已保留。", "Save unconfirmed; reload to verify. Draft retained.");
                         }
                     }
                 }
@@ -1339,7 +1393,7 @@ namespace CodexMissionManager
             if (state == "client_missing") return T("尚未检测到客户端", "Client not detected");
             if (value.Count == 0) return T("正在检查客户端兼容性", "Checking client compatibility");
             string version = Json.Text(value, "version", Json.Text(value, "build"));
-            string label = state == "supported" ? T("已适配", "Compatible") : state == "update_required" ? T("需要更新任务管家", "Mission Manager update required") : T("正在检查客户端兼容性", "Checking client compatibility");
+            string label = state == "supported" ? T("已适配", "Compatible") : state == "update_required" ? T("需要更新榨汁机", "TokenMax update required") : T("正在检查客户端兼容性", "Checking client compatibility");
             return version.Length > 0 ? version + " · " + label : label;
         }
         string[] AccentLabels() { return new[] { T("森林绿", "Forest"), T("蓝色", "Blue"), T("紫色", "Purple"), T("鹅蛋黄", "Egg yellow") }; }
@@ -1349,7 +1403,7 @@ namespace CodexMissionManager
         {
             var body = new StackPanel { Margin = new Thickness(28) };
             var title = Text(T("设置", "Settings"), 26, true); title.Margin = new Thickness(0, 0, 0, 8); body.Children.Add(title);
-            var description = Text(preferenceSaveFailed ? PreferenceFailureText() : T("管理外观、后台运行与系统权限。", "Manage appearance, background operation and system permissions."), 13); description.Foreground = preferenceSaveFailed ? Brushes.DarkOrange : secondary; description.Margin = new Thickness(0, 0, 0, 24); body.Children.Add(description);
+            var description = Text(preferenceSaveFailed ? PreferenceFailureText() : T("外观、后台运行与权限", "Appearance, background operation and permissions"), 13); description.Foreground = preferenceSaveFailed ? Brushes.DarkOrange : secondary; description.Margin = new Thickness(0, 0, 0, 24); body.Children.Add(description);
             var appearance = new StackPanel(); appearance.Children.Add(GroupHeading("palette", T("外观与语言", "Appearance and language")));
             appearance.Children.Add(SettingsChoiceRow(T("语言", "Language"), Segments(new[] { "简体中文", "English" }, new[] { "zh", "en" }, preferences.Language,
                 delegate(string value) { preferences.Language = value; SavePreferences(); RebuildPresentation(); }), 180));
@@ -1364,21 +1418,21 @@ namespace CodexMissionManager
             var hostStatus = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center }; bool connected = fixtureMode || (baseUri != null && String.IsNullOrEmpty(connectionError));
             var dot = new System.Windows.Shapes.Ellipse { Width = 8, Height = 8, Fill = connected ? accent : Brushes.DarkOrange, Margin = new Thickness(0, 0, 7, 0), VerticalAlignment = VerticalAlignment.Center }; hostStatus.Children.Add(dot);
             var statusText = Text(connected ? T("后台已连接", "Backend connected") : T("后台未连接", "Backend disconnected"), 12); statusText.Foreground = connected ? accent : Brushes.DarkOrange; statusText.Margin = new Thickness(0); hostStatus.Children.Add(statusText); statusLine.Children.Add(hostStatus); connection.Children.Add(statusLine);
-            var hint = Text(T("关闭窗口后，任务管家继续在系统托盘运行。", "Closing the window keeps Mission Manager running in the system tray."), 10); hint.Foreground = secondary; hint.Margin = new Thickness(0, 12, 0, 0); connection.Children.Add(hint);
+            var hint = Text(T("关窗后继续在托盘运行。", "Closing the window keeps running in the tray."), 10); hint.Foreground = secondary; hint.Margin = new Thickness(0, 12, 0, 0); connection.Children.Add(hint);
             if (!ControlAvailable) { var reason = Text(ControlConnectionNote(), 10); reason.Foreground = secondary; reason.Margin = new Thickness(0, 8, 0, 0); connection.Children.Add(reason); }
             body.Children.Add(SettingsGroup(connection));
             var permissions = new StackPanel();
-            permissions.Children.Add(PermissionRow(T("登录时启动", "Start at sign-in"), "power", T("登录 Windows 后自动启动任务管家。", "Start Mission Manager automatically after signing in to Windows."), fixtureMode ? T("尚未登记", "Not registered") : IsStartupEnabled() ? T("系统已允许", "Enabled in Windows") : T("尚未登记", "Not registered"), !fixtureMode && IsStartupEnabled(), SetStartup, "ms-settings:startupapps"));
+            permissions.Children.Add(PermissionRow(T("登录时启动", "Start at sign-in"), "power", T("登录 Windows 后启动。", "Launch at Windows sign-in."), fixtureMode ? T("尚未登记", "Not registered") : IsStartupEnabled() ? T("系统已允许", "Enabled in Windows") : T("尚未登记", "Not registered"), !fixtureMode && IsStartupEnabled(), SetStartup, "ms-settings:startupapps"));
             permissions.Children.Add(DividerLine(border, new Thickness(46, 0, 0, 0)));
-            permissions.Children.Add(PermissionRow(T("任务通知", "Task notifications"), "bell", T("通知暂停、续接、发送失败及需要处理的异常。", "Notify on pauses, resumptions, failed deliveries and actionable errors."), preferences.Notifications ? T("应用通知已启用；系统投递状态未核验", "App notifications enabled; system delivery permission is not verified") : T("通知已关闭", "Notifications off"), preferences.Notifications, delegate(bool value) { preferences.Notifications = value; SavePreferences(); }, "ms-settings:notifications"));
+            permissions.Children.Add(PermissionRow(T("任务通知", "Task notifications"), "bell", T("仅通知暂停、续接和异常。", "Notify on pauses, resumptions and errors."), preferences.Notifications ? T("已启用 · 系统投递待核验", "Enabled · System delivery unverified") : T("通知已关闭", "Notifications off"), preferences.Notifications, delegate(bool value) { preferences.Notifications = value; SavePreferences(); }, "ms-settings:notifications"));
             permissions.Children.Add(DividerLine(border, new Thickness(46, 0, 0, 0)));
-            permissions.Children.Add(PermissionRow(T("保持后台运行", "Keep running in the background"), "moon", T("防止空闲睡眠，允许屏幕关闭。此设置不保证合盖运行。", "Prevent idle sleep while allowing the display to turn off. This does not guarantee operation with the lid closed."), preferences.KeepAwake ? T("已保持系统清醒", "Keep-awake request active") : T("未启用防睡眠保护", "Keep-awake protection off"), preferences.KeepAwake, SetAwake, "ms-settings:powersleep")); body.Children.Add(SettingsGroup(permissions, new Thickness(8)));
+            permissions.Children.Add(PermissionRow(T("保持后台运行", "Keep running in the background"), "moon", T("防止空闲睡眠，允许熄屏；不保证合盖运行。", "Prevent idle sleep; allow display-off. Closed-lid operation is not guaranteed."), preferences.KeepAwake ? T("已保持系统清醒", "Keep-awake request active") : T("未启用防睡眠保护", "Keep-awake protection off"), preferences.KeepAwake, SetAwake, "ms-settings:powersleep")); body.Children.Add(SettingsGroup(permissions, new Thickness(8)));
             var lid = new StackPanel();
-            lid.Children.Add(PermissionRow(T("合盖运行辅助服务", "Closed-lid helper service"), "laptop", T("为无外接显示器的合盖运行提供电源管理支持。", "Provide power-management support for closed-lid operation without an external display."), T("当前 Windows 版本暂未提供此功能。", "This feature is not available in the current Windows preview."), false, delegate(bool value) { }, "ms-settings:powersleep", false));
+            lid.Children.Add(PermissionRow(T("合盖运行辅助服务", "Closed-lid helper service"), "laptop", T("无外接显示器时的合盖电源支持。", "Power support for closed-lid use without an external display."), T("Windows 版暂不支持", "Unavailable on Windows"), false, delegate(bool value) { }, "ms-settings:powersleep", false));
             lid.Children.Add(DividerLine(border, new Thickness(46, 0, 0, 0)));
-            lid.Children.Add(PermissionRow(T("合盖运行", "Closed-lid operation"), "laptop", T("合盖和手动睡眠仍按 Windows 系统电源策略处理。", "Lid closure and manual sleep still follow Windows system power policy."), T("未启用", "Not enabled"), false, delegate(bool value) { }, "ms-settings:powersleep", false));
+            lid.Children.Add(PermissionRow(T("合盖运行", "Closed-lid operation"), "laptop", T("遵循 Windows 电源设置。", "Uses Windows power settings."), T("未启用", "Not enabled"), false, delegate(bool value) { }, "ms-settings:powersleep", false));
             var battery = new DockPanel { Margin = new Thickness(20, 0, 20, 14) }; var batteryToggle = new CheckBox { Content = "", Width = 50, IsChecked = false, IsEnabled = false }; StyleSwitch(batteryToggle, false); DockPanel.SetDock(batteryToggle, Dock.Right); battery.Children.Add(batteryToggle); var batteryText = Text(T("允许使用电池", "Allow battery operation"), 12); batteryText.Margin = new Thickness(0); batteryText.VerticalAlignment = VerticalAlignment.Center; battery.Children.Add(batteryText); lid.Children.Add(battery);
-            var powerNote = Text(T("此预览不会修改系统电源计划，也不保证合盖或手动睡眠后执行。", "This preview does not change the system power plan or guarantee execution after lid closure or manual sleep."), 10); powerNote.Foreground = secondary; powerNote.TextAlignment = TextAlignment.Center; powerNote.Margin = new Thickness(20, 0, 20, 12); lid.Children.Add(powerNote); body.Children.Add(SettingsGroup(lid, new Thickness(8)));
+            var powerNote = Text(T("合盖和睡眠请在系统设置中管理。", "Manage lid and sleep behavior in Windows settings."), 10); powerNote.Foreground = secondary; powerNote.TextAlignment = TextAlignment.Center; powerNote.Margin = new Thickness(20, 0, 20, 12); lid.Children.Add(powerNote); body.Children.Add(SettingsGroup(lid, new Thickness(8)));
             var footer = new DockPanel(); var time = Text(T("最近检查：", "Last checked: ") + (fixtureMode ? FormatTime(Json.Number(snapshot, "now")) : DateTime.Now.ToString("HH:mm:ss")), 10); time.Foreground = secondary; DockPanel.SetDock(time, Dock.Right); footer.Children.Add(time);
             var power = Text(PowerLabel(), 10); power.Foreground = secondary; footer.Children.Add(power); body.Children.Add(footer);
             return new Border { Background = background, Child = Scroller(body) };
@@ -1447,12 +1501,13 @@ namespace CodexMissionManager
             else preferences.KeepAwake = enabled;
             SavePreferences();
         }
+        public string Localized(Dictionary<string, object> value, string field) { return preferences.Language == "en" ? Json.Text(value, field + "_en", Json.Text(value, field)) : Json.Text(value, field); }
         void SetNotice(string value) { notice = value; if (noticeBlock != null) noticeBlock.Text = notice; UpdateNotices(); BuildTrayMenu(); }
         public void ToggleGlobal()
         {
             if (fixtureMode) return;
             if (baseUri == null || !Json.Bool(snapshot, "running")) { StartHost(); SetNotice(T("正在连接本机后台。", "Connecting to the local service.")); return; }
-            if (Json.Bool(snapshot, "control_paused", true) && !ControlAvailable) { SetNotice(T("客户端控制尚未通过核验，暂不能启用自动控制。", "Client control has not passed verification. Automatic control cannot be enabled yet.")); return; }
+            if (Json.Bool(snapshot, "control_paused", true) && !ControlAvailable) { SetNotice(T("连接待核验，暂不能开始榨汁。", "Verify the connection before starting.")); return; }
             var action = Json.Bool(snapshot, "control_paused", true) ? "enable" : "pause";
             var ignored = PerformAsync(Json.Values("action", action, "revision", Json.Integer(snapshot, "control_revision")));
         }
@@ -1595,7 +1650,7 @@ namespace CodexMissionManager
         void BuildTray()
         {
             try { trayBrandIcon = System.Drawing.Icon.ExtractAssociatedIcon(Process.GetCurrentProcess().MainModule.FileName); } catch { }
-            tray = new Forms.NotifyIcon { Icon = trayBrandIcon ?? System.Drawing.SystemIcons.Application, Text = "Mission Manager", Visible = true };
+            tray = new Forms.NotifyIcon { Icon = trayBrandIcon ?? System.Drawing.SystemIcons.Application, Text = "TokenMax", Visible = true };
             tray.DoubleClick += delegate { PostWhileRunning(ShowMain); };
             tray.MouseUp += delegate(object sender, Forms.MouseEventArgs e) {
                 if (e.Button == Forms.MouseButtons.Left || e.Button == Forms.MouseButtons.Right) PostWhileRunning(ToggleTrayPanel);
@@ -1647,7 +1702,7 @@ namespace CodexMissionManager
         {
             var body = new StackPanel { Margin = new Thickness(20) };
             var heading = new DockPanel(); var plan = Text(Subscription(Json.Child(Json.Child(snapshot, "usage"), "account")), 10); plan.Foreground = secondary; plan.Margin = new Thickness(0); plan.VerticalAlignment = VerticalAlignment.Center; DockPanel.SetDock(plan, Dock.Right); heading.Children.Add(plan);
-            var brand = new StackPanel { Orientation = Orientation.Horizontal }; var shield = Glyph("shield", foreground, 18); shield.Margin = new Thickness(0, 0, 8, 0); brand.Children.Add(shield); var title = Text(T("任务管家", "Mission Manager"), 13, true); title.Margin = new Thickness(0); brand.Children.Add(title); heading.Children.Add(brand); body.Children.Add(heading);
+            var brand = new StackPanel { Orientation = Orientation.Horizontal }; var brandLogo = new JuicerLogo { Width = 32, Height = 32, Margin = new Thickness(0, 0, 8, 0) }; brandLogo.SetPresentation(LogoState, dark); brand.Children.Add(brandLogo); var title = Text(T("榨汁机", "TokenMax"), 13, true); title.Margin = new Thickness(0); brand.Children.Add(title); heading.Children.Add(brand); body.Children.Add(heading);
             var usage = Json.Child(snapshot, "usage"); var windows = VisibleWindows(usage);
             foreach (var window in windows)
             {
@@ -1671,9 +1726,9 @@ namespace CodexMissionManager
             if (UsageStale(usage)) { var stale = Text(T("◷  额度待同步", "◷  Quota awaiting update"), 10); stale.Foreground = Brushes.DarkOrange; stale.Margin = new Thickness(0, 14, 0, 0); body.Children.Add(stale); }
             var controls = new Grid { Margin = new Thickness(0, 16, 0, 0) }; controls.ColumnDefinitions.Add(new ColumnDefinition()); controls.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(8) }); controls.ColumnDefinitions.Add(new ColumnDefinition());
             string bulkState = Json.Text(Json.Child(snapshot, "bulk_pause"), "state"); bool bulkBusy = bulkState == "pending" || bulkState == "processing";
-            var automatic = MakeButton(Json.Bool(snapshot, "control_paused", true) ? T("恢复自动控制", "Resume automation") : T("暂停自动控制", "Pause automation"), ToggleGlobal); automatic.FontSize = 11;
+            var automatic = MakeButton(Json.Bool(snapshot, "control_paused", true) ? T("开始榨汁", "Start Juicing") : T("暂停榨汁", "Pause Juicing"), ToggleGlobal); automatic.FontSize = 11;
             automatic.IsEnabled = !busy && !bulkBusy && (fixtureMode || baseUri != null) && Json.Bool(snapshot, "running") && (!Json.Bool(snapshot, "control_paused", true) || (ControlAvailable && Healthy)); controls.Children.Add(automatic);
-            var pause = MakeButton(T("暂停所有任务", "Pause all tasks"), async delegate { await PerformAsync(Json.Values("action", "pause_all", "revision", Json.Integer(snapshot, "control_revision"))); }); pause.FontSize = 11; pause.ToolTip = T("暂停允许接管的执行中任务，并关闭全局自动控制。手动暂停的任务需手动恢复。", "Pause managed running tasks and disable global automation. Manually paused tasks require manual resumption."); pause.IsEnabled = !busy && !bulkBusy && Healthy && ControlAvailable && (fixtureMode || baseUri != null); Grid.SetColumn(pause, 2); controls.Children.Add(pause); body.Children.Add(controls);
+            var pause = MakeButton(T("暂停所有任务", "Pause all tasks"), async delegate { await PerformAsync(Json.Values("action", "pause_all", "revision", Json.Integer(snapshot, "control_revision"))); }); pause.FontSize = 11; pause.ToolTip = T("暂停受管任务和榨汁。需手动恢复任务。", "Pause managed tasks and juicing. Resume tasks manually."); pause.IsEnabled = !busy && !bulkBusy && Healthy && ControlAvailable && (fixtureMode || baseUri != null); Grid.SetColumn(pause, 2); controls.Children.Add(pause); body.Children.Add(controls);
             var bulk = Json.Child(snapshot, "bulk_pause"); if (bulk.Count > 0)
             {
                 var result = new DockPanel { Margin = new Thickness(0, 12, 0, 0) }; var details = MakePlainButton(T("查看结果", "View results"), ShowBulkResults); details.FontSize = 10; DockPanel.SetDock(details, Dock.Right); result.Children.Add(details);
@@ -1682,7 +1737,7 @@ namespace CodexMissionManager
             if (notice.Length > 0) { var message = Text(notice, 10); message.Foreground = secondary; message.Margin = new Thickness(0, 12, 0, 0); body.Children.Add(message); }
             if (connectionError.Length > 0) { var error = Text(ConnectionErrorText(), 10); error.Foreground = Brushes.DarkOrange; error.Margin = new Thickness(0, 12, 0, 0); body.Children.Add(error); }
             body.Children.Add(DividerLine(border, new Thickness(0, 16, 0, 16)));
-            body.Children.Add(TrayAction(T("打开任务管家", "Open Mission Manager"), "window", ShowMain));
+            body.Children.Add(TrayAction(T("打开榨汁机", "Open TokenMax"), "window", ShowMain));
             body.Children.Add(TrayAction(T("设置", "Settings"), "settings", delegate { CloseTrayPanel(); ShowSettingsWindow(); }));
             var language = Choice(new[] { "简体中文", "English" }); language.SelectedIndex = preferences.Language == "en" ? 1 : 0;
             language.SelectionChanged += delegate { preferences.Language = language.SelectedIndex == 1 ? "en" : "zh"; SavePreferences(); RebuildPresentation(); }; body.Children.Add(SettingsChoiceRow(T("语言", "Language"), language, 180));
@@ -1697,7 +1752,7 @@ namespace CodexMissionManager
         void ShowBulkResults()
         {
             if (fixtureMode) return; CloseTrayPanel(); var body = new StackPanel { Margin = new Thickness(24) }; var heading = Text(T("暂停所有任务", "Pause all tasks"), 17, true); body.Children.Add(heading);
-            var description = Text(T("暂停允许接管的执行中任务，并关闭全局自动控制。手动暂停的任务需手动恢复。", "Pause managed running tasks and disable global automation. Manually paused tasks require manual resumption."), 12); description.Foreground = secondary; description.Margin = new Thickness(0, 8, 0, 18); body.Children.Add(description);
+            var description = Text(T("暂停受管任务和榨汁。需手动恢复任务。", "Pause managed tasks and juicing. Resume tasks manually."), 12); description.Foreground = secondary; description.Margin = new Thickness(0, 8, 0, 18); body.Children.Add(description);
             foreach (var item in Json.Rows(Json.Child(snapshot, "bulk_pause"), "items"))
             {
                 string id = Json.Text(item, "thread_id"); var task = Json.Rows(snapshot, "tasks").FirstOrDefault(x => Json.Text(x, "id") == id);
@@ -1766,7 +1821,7 @@ namespace CodexMissionManager
             if (!fixtureMode) throw new InvalidOperationException("TextBox layout checks require isolated fixture mode.");
             double[] factors = { 1, 1.25, 1.5, 2 }; var measurements = new List<object>();
             bool fixedVisible = true, searchVisible = true, singlePadding = true, multilineScrolling = true, baselineReproduced = false;
-            var parameters = new System.Windows.Interop.HwndSourceParameters("Mission Manager offline TextBox layout") {
+            var parameters = new System.Windows.Interop.HwndSourceParameters("TokenMax offline TextBox layout") {
                 WindowStyle = unchecked((int)0x80000000), PositionX = -20000, PositionY = -20000, Width = 1500, Height = 1000 };
             double actualDpiX = 0, actualDpiY = 0;
             using (var source = new System.Windows.Interop.HwndSource(parameters))
@@ -1959,7 +2014,8 @@ namespace CodexMissionManager
                 {
                     var noticeValue = Json.Object(raw); string key = Json.Text(noticeValue, "key");
                     if (!notificationKeys.Add(key) || firstNotices || !preferences.Notifications || tray == null) continue;
-                    tray.ShowBalloonTip(5000, Json.Text(noticeValue, "title", "Mission Manager"), Json.Text(noticeValue, "body"), Forms.ToolTipIcon.Info);
+                    tray.ShowBalloonTip(5000, NotificationCopy.Title(Json.Text(noticeValue, "title"), preferences.Language == "en"),
+                        preferences.Language == "en" ? Json.Text(noticeValue, "body_en", "Open TokenMax for details.") : Json.Text(noticeValue, "body"), Forms.ToolTipIcon.Info);
                 }
                 firstNotices = false;
             }
@@ -1973,7 +2029,7 @@ namespace CodexMissionManager
         static void ExitAction(Action action)
         {
             try { action(); }
-            catch (Exception error) { Debug.WriteLine("Mission Manager exit cleanup: " + error.GetType().Name); }
+            catch (Exception error) { Debug.WriteLine("TokenMax exit cleanup: " + error.GetType().Name); }
         }
         void Quit() { BeginQuitAsync(); }
         Task BeginQuitAsync()
@@ -2022,7 +2078,7 @@ namespace CodexMissionManager
                 Task<ExitResult> process = fixtureMode ? ExitCleanup.StopAsync(work, 60, 40, 30) : ExitCleanup.StopAsync(work);
                 await Task.WhenAll(transport, trayCleanup, process); lastExitResult = process.Result;
             }
-            catch (Exception error) { Debug.WriteLine("Mission Manager bounded exit: " + error.GetType().Name); }
+            catch (Exception error) { Debug.WriteLine("TokenMax bounded exit: " + error.GetType().Name); }
             finally
             {
                 shutdownRequests++;
@@ -2116,7 +2172,7 @@ namespace CodexMissionManager
             var controlHeader = new Grid { Margin = new Thickness(0, 0, 0, 14) }; controlHeader.ColumnDefinitions.Add(new ColumnDefinition()); controlHeader.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             var bookingHeading = Label(owner.T("额度恢复后执行", "After quota recovery"), 11, true); bookingHeading.Foreground = owner.SecondaryBrush; bookingHeading.VerticalAlignment = VerticalAlignment.Center; bookingHeading.Margin = new Thickness(0, 0, 12, 0); controlHeader.Children.Add(bookingHeading);
             var autoBlock = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right };
-            autoHeading = Label(owner.T("自动控制", "Automatic control"), 10); autoHeading.Foreground = owner.SecondaryBrush; autoHeading.VerticalAlignment = VerticalAlignment.Center; autoHeading.Margin = new Thickness(0, 0, 9, 0); autoBlock.Children.Add(autoHeading);
+            autoHeading = Label(owner.T("榨汁状态", "Juicing"), 10); autoHeading.Foreground = owner.SecondaryBrush; autoHeading.VerticalAlignment = VerticalAlignment.Center; autoHeading.Margin = new Thickness(0, 0, 9, 0); autoBlock.Children.Add(autoHeading);
             auto = new CheckBox { Foreground = owner.ForegroundBrush, VerticalAlignment = VerticalAlignment.Center }; owner.StyleSwitch(auto);
             auto.Click += async delegate { if (!updating) await owner.PerformAsync(Json.Values("action", "set_auto", "key", Json.Text(chat, "key"), "enabled", auto.IsChecked == true, "revision", Json.Integer(chat, "revision"))); }; autoBlock.Children.Add(auto); Grid.SetColumn(autoBlock, 1); controlHeader.Children.Add(autoBlock); right.Children.Add(controlHeader);
             retry = owner.MakeButton(owner.T("重试连接", "Retry connection"), async delegate { await owner.PerformAsync(Json.Values("action", "set_auto", "key", Json.Text(chat, "key"), "enabled", true, "revision", Json.Integer(chat, "revision"))); }); retry.FontSize = 10; retry.Margin = new Thickness(0, 0, 0, 7); retry.HorizontalAlignment = HorizontalAlignment.Right; right.Children.Add(retry);
@@ -2156,7 +2212,7 @@ namespace CodexMissionManager
         async Task SavePlan(bool enabled)
         {
             var plan = Json.Child(chat, "plan"); int revision = enabled && dirty ? draftRevision : Json.Integer(plan, "revision");
-            string text = enabled ? prompt.Text : Json.Text(plan, "prompt", "继续任务");
+            string text = enabled ? prompt.Text : Json.Text(plan, "prompt", owner.T("继续任务", "Continue the task"));
             await owner.PerformAsync(Json.Values("action", "set_plan", "key", Json.Text(chat, "key"), "enabled", enabled, "prompt", text, "revision", revision));
             // A saved prompt is considered clean only after the refreshed plan
             // matches it, never merely because the HTTP request was attempted.
@@ -2179,11 +2235,14 @@ namespace CodexMissionManager
             status.Foreground = color; statusDot.Fill = color; statusBadge.Background = MissionWindow.Tint(color, 0.09);
             bool automatic = ChatControlPolicy.AutomaticOn(chat); auto.IsChecked = automatic;
             string connection = Json.Text(chat, "auto_connection");
-            auto.Content = !Json.Bool(chat, "can_control") ? owner.T("不可用", "Unavailable") : connection == "waiting_global" ? owner.T("等待启用", "Waiting") : connection == "failed" ? owner.T("未连接", "Not connected") : Json.Bool(chat, "auto_pending") ? owner.T("连接中", "Connecting") : automatic ? owner.T("已开启", "On") : owner.T("已关闭", "Off");
+            auto.Content = ""; auto.Width = 50;
+            string autoState = !Json.Bool(chat, "can_control") ? owner.T("不可用", "Unavailable") : connection == "waiting_global" ? owner.T("等待启用", "Waiting") : connection == "failed" ? owner.T("未连接", "Not connected") : Json.Bool(chat, "auto_pending") ? owner.T("连接中", "Connecting") : automatic ? owner.T("已开启", "On") : owner.T("已关闭", "Off");
+            System.Windows.Automation.AutomationProperties.SetName(auto, owner.T("榨汁状态", "Juicing") + " · " + autoState);
+            auto.ToolTip = autoState;
             bool controllable = Json.Bool(chat, "can_control") && owner.ControlAvailable, available = owner.Healthy && !owner.IsBusy;
             auto.IsEnabled = ChatControlPolicy.CanToggleAutomatic(chat, owner.Healthy, owner.ControlAvailable, owner.IsBusy, owner.CanSubmitLocalChange);
             retry.Visibility = connection == "failed" ? Visibility.Visible : Visibility.Collapsed; retry.IsEnabled = controllable && available;
-            autoError.Text = Json.Text(chat, "auto_error"); autoError.Visibility = connection == "failed" && autoError.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+            autoError.Text = owner.Localized(chat, "auto_error"); autoError.Visibility = connection == "failed" && autoError.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             var plan = Json.Child(chat, "plan"); string planState = Json.Text(plan, "state", "off"); bool scheduled = MissionWindow.Scheduled(plan); schedule.IsChecked = scheduled; schedule.Content = PlanLabel(planState);
             var usage = Json.Child(owner.Snapshot, "usage"); bool canSchedule = Json.Bool(usage, "scheduling_available", MissionWindow.VisibleWindows(usage).Count > 0);
             schedule.IsEnabled = ChatControlPolicy.CanToggleSchedule(chat, owner.Healthy, owner.ControlAvailable, owner.IsBusy, owner.CanSubmitLocalChange, canSchedule);
@@ -2196,13 +2255,13 @@ namespace CodexMissionManager
             planLabel.Text = minutes > 0 && reset > 0 && canSchedule ? owner.T("预约窗口：", "Schedule window: ") + owner.WindowTitle(minutes) + "\n" + owner.T("刷新时间 ", "Reset ") + MissionWindow.FormatTime(reset) : "";
             planLabel.Visibility = planLabel.Text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
             string draftText; int revision; if (owner.ReadDraft(Json.Text(chat, "key"), out draftText, out revision)) { dirty = true; draftRevision = revision; if (!prompt.IsKeyboardFocusWithin && prompt.Text != draftText) prompt.Text = draftText; }
-            else if (!dirty && !prompt.IsKeyboardFocusWithin) { string storedPrompt = Json.Text(plan, "prompt", "继续任务"); if (prompt.Text != storedPrompt) prompt.Text = storedPrompt; draftRevision = Json.Integer(plan, "revision"); }
+            else if (!dirty && !prompt.IsKeyboardFocusWithin) { string storedPrompt = Json.Text(plan, "prompt", owner.T("继续任务", "Continue the task")); if (prompt.Text != storedPrompt) prompt.Text = storedPrompt; draftRevision = Json.Integer(plan, "revision"); }
             prompt.IsReadOnly = !controllable || planState == "sending";
             save.Content = scheduled ? owner.T("保存指令", "Save instruction") : owner.T("保存并预约", "Save & schedule"); save.IsEnabled = controllable && available && canSchedule && planState != "sending";
             var immediate = Json.Child(chat, "immediate"); string receipt = Json.Text(immediate, "state");
             now.IsEnabled = controllable && available && Json.Text(runtime, "type") != "active" && !waitingInput && receipt != "pending" && receipt != "checking" && receipt != "sending" && planState != "sending" && PermitsImmediate(usage);
-            receiptLabel.Text = receipt.Length > 0 ? ReceiptLabel(receipt) + " " + Json.Text(immediate, "message") : !canSchedule ? owner.T("当前未提供可预约的刷新窗口。", "No schedulable reset window is available.") : "";
-            string reason = Json.Text(plan, "reason"); if (reason.Length > 0) receiptLabel.Text += (receiptLabel.Text.Length == 0 ? "" : "\n") + reason;
+            receiptLabel.Text = receipt.Length > 0 ? ReceiptLabel(receipt) + " " + owner.Localized(immediate, "message") : !canSchedule ? owner.T("暂无可预约窗口", "No reset window available") : "";
+            string reason = owner.Localized(plan, "reason"); if (reason.Length > 0) receiptLabel.Text += (receiptLabel.Text.Length == 0 ? "" : "\n") + reason;
             receiptLabel.Visibility = receiptLabel.Text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
             cancel.Visibility = planState == "needs_review" ? Visibility.Visible : Visibility.Collapsed; cancel.IsEnabled = !owner.IsBusy && owner.CanSubmitLocalChange && ChatControlPolicy.IsLocal(chat);
             bool editorVisible = Json.Bool(chat, "can_control") || (ChatControlPolicy.IsLocal(chat) && (planState == "armed" || planState == "needs_review"));
@@ -2273,11 +2332,11 @@ namespace CodexMissionManager
         {
             if (args.Length > 0 && args[0] == "--self-test")
             {
-                bool revocationChecks = ChatControlPolicy.SelfTest(); bool startupChecks = StartupDiagnostic.SelfTest(); bool paletteChecks = ThemePalette.SelfTest(); bool rulesChecks = RulesPolicy.SelfTest(); bool quotaEventChecks = QuotaRestorationEvents.SelfTest(); bool activityFilterChecks = ActivityEventFilter.SelfTest();
+                bool revocationChecks = ChatControlPolicy.SelfTest(); bool startupChecks = StartupDiagnostic.SelfTest(); bool paletteChecks = ThemePalette.SelfTest(); bool rulesChecks = RulesPolicy.SelfTest(); bool quotaEventChecks = QuotaRestorationEvents.SelfTest(); bool activityFilterChecks = ActivityEventFilter.SelfTest(); bool brandChecks = JuicerLogo.SelfTest() && NotificationCopy.SelfTest();
                 string result = Json.Stringify(Json.Values("version", AppVersion(), "platform", "windows", "native", true, "ui", "WPF", "webView", false,
-                    "hostStarted", false, "messagesSent", 0, "cacheRefreshSeconds", 5, "localRevocationChecks", revocationChecks, "startupDiagnosticFallbackChecks", startupChecks, "themePaletteChecks", paletteChecks, "rulesValidationChecks", rulesChecks, "quotaRestorationEventChecks", quotaEventChecks, "activityFilterChecks", activityFilterChecks));
+                    "hostStarted", false, "messagesSent", 0, "cacheRefreshSeconds", 5, "localRevocationChecks", revocationChecks, "startupDiagnosticFallbackChecks", startupChecks, "themePaletteChecks", paletteChecks, "rulesValidationChecks", rulesChecks, "quotaRestorationEventChecks", quotaEventChecks, "activityFilterChecks", activityFilterChecks, "brandPresentationChecks", brandChecks));
                 if (args.Length > 1) File.WriteAllText(args[1], result, new UTF8Encoding(false));
-                Console.WriteLine(result); return revocationChecks && startupChecks && paletteChecks && rulesChecks && quotaEventChecks && activityFilterChecks ? 0 : 1;
+                Console.WriteLine(result); return revocationChecks && startupChecks && paletteChecks && rulesChecks && quotaEventChecks && activityFilterChecks && brandChecks ? 0 : 1;
             }
             if (args.Length > 0 && args[0] == "--textbox-layout-self-test")
             {
@@ -2379,7 +2438,7 @@ namespace CodexMissionManager
             }
             bool created; using (var mutex = new Mutex(true, @"Local\CodexMissionManager-Windows", out created))
             {
-                if (!created) { MessageBox.Show("任务管家已在运行，请从系统托盘打开。\nMission Manager is already running. Open it from the system tray.", "Mission Manager"); return 0; }
+                if (!created) { MessageBox.Show("榨汁机已在运行，请从系统托盘打开。\nTokenMax is already running. Open it from the system tray.", "TokenMax"); return 0; }
                 var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
                 var window = new MissionWindow(false, null); app.MainWindow = window;
                 app.Startup += delegate { if (args.Contains("--background")) window.EnsureHostStarted(); else window.Show(); };

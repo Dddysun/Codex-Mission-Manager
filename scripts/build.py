@@ -55,7 +55,7 @@ def build(args):
     build_number = number if number.isdigit() else "1"
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
-    app = output / "Codex Mission Manager.app"
+    app = output / "TokenMax.app"
     if app.exists():
         if args.replace:
             shutil.rmtree(app)
@@ -79,7 +79,7 @@ def build(args):
     sdk = subprocess.check_output(["xcrun", "--show-sdk-path"], text=True).strip()
     common = ["swiftc", "-swift-version", "5", "-O", "-target", "arm64-apple-macos14.0", "-sdk", sdk,
               "-module-cache-path", module_cache, "-parse-as-library", shared_path]
-    run(common + [ROOT / "native/Localization.swift", ROOT / "native/NativeState.swift", ROOT / "native/NativeViews.swift", ROOT / "native/NativeSettings.swift", ROOT / "native/MenuPanel.swift", ROOT / "native/App.swift", "-o", contents / "MacOS/CodexMissionManager"])
+    run(common + [ROOT / "native/Localization.swift", ROOT / "native/NativeState.swift", ROOT / "native/JuicerLogo.swift", ROOT / "native/NativeViews.swift", ROOT / "native/NativeSettings.swift", ROOT / "native/MenuPanel.swift", ROOT / "native/App.swift", "-o", contents / "MacOS/CodexMissionManager"])
     run(common + [ROOT / "native/PowerHelper.swift", "-o", contents / "Library/HelperTools/PowerHelper"])
     icon = scratch / "draw-icon"
     run(["swiftc", "-module-cache-path", module_cache, ROOT / "scripts/Icon.swift", "-o", icon])
@@ -102,6 +102,8 @@ def build(args):
     info = plistlib.loads((ROOT / "packaging/Info.plist").read_bytes())
     info.update(CFBundleShortVersionString=version, CFBundleVersion=build_number)
     (contents / "Info.plist").write_bytes(plistlib.dumps(info))
+    for localized in (ROOT / "packaging").glob("*.lproj"):
+        shutil.copytree(localized, resources / localized.name)
     shutil.copyfile(ROOT / "packaging/com.dddysun.CodexMissionManager.PowerHelper.plist",
                     contents / "Library/LaunchDaemons/com.dddysun.CodexMissionManager.PowerHelper.plist")
     backend = resources / "backend"
@@ -136,7 +138,7 @@ def build(args):
     run(["codesign", "--verify", "--deep", "--strict", app])
     defaults = json.loads((ROOT / "backend/config.example.json").read_text(encoding="utf-8"))
     default_rules = {key: defaults[key] for key in ("pause_remaining", "resume_remaining", "poll_seconds", "near_limit_poll_seconds", "recovery_confirm_seconds", "ui_poll_seconds")}
-    manifest = {"version": version, "preview": "preview." + build_number, "build_number": build_number,
+    manifest = {"product_name": "TokenMax", "localized_name": "榨汁机", "version": version, "preview": "preview." + build_number, "build_number": build_number,
         "source_commit": os.environ.get("GITHUB_SHA"), "architecture": "arm64", "minimum_macos": "14.0",
         "python": pyversion, "signing": "developer-id" if team else "ad-hoc-local-preview",
         "notarized": False, "privileged_helper_enabled": bool(team), "live_closed_lid_verified": False,

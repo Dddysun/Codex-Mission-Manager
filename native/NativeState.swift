@@ -34,6 +34,10 @@ struct MissionSnapshot: Decodable {
     var control_paused: Bool
     var control_enabled: Bool
     var control_revision: Int
+    var control_available: Bool?
+    var service_error: String?
+    var desktop_connection_error: String?
+    var quota_phase: String?
     var tasks: [MissionChat]
     var events: [MissionEvent]
     var usage: MissionUsage?
@@ -264,9 +268,15 @@ struct MissionEvent: Decodable, Identifiable {
         if let allowed = detail?.automatic_control_allowed { return allowed ? L("允许自动控制") : L("保持任务") }
         return ["rules_updated":L("运行规则已更新"),"watching":L("纳入监测"), "pause_intent":L("开始暂停"), "paused":L("已确认暂停"), "resume_intent":L("提交续做"), "running":L("已续做"), "needs_review":L("需要核对"), "disabled":L("已撤销控制"), "held":L("保持任务"), "supervisor_paused":L("暂停自动控制"), "supervisor_enabled":L("启用自动控制"), "plan_armed":L("预约下一窗口执行"), "plan_sending":L("提交预约指令"), "plan_sent":L("预约指令已发送"), "plan_cancelled":L("取消预约"), "plan_needs_review":L("预约需要确认"), "immediate_pending":L("提交立刻执行"), "immediate_sent":L("立刻执行已确认发送"), "immediate_failed":L("立刻执行未发送"), "immediate_unknown":L("立刻执行结果待核对")][state] ?? state
     }
+    var restorationSummary: [String] {
+        guard isQuotaRestored else { return [] }
+        let windows=detail?.windows ?? []
+        guard !windows.isEmpty else { return [L("额度已恢复，详情待同步")] }
+        return windows.map { L("%@ %@ → %@",$0.title,MissionQuotaRestorationText.percent($0.previous_remaining),MissionQuotaRestorationText.percent($0.remaining)) }
+    }
     var restorationLines: [String] {
         guard isQuotaRestored else { return [] }
-        var lines=[L("根据余额、刷新时间和重置权益变化判定"),L("此分类为证据推断，并非官方直接原因说明。")]
+        var lines=[L("此分类为证据推断，并非官方直接原因说明。")]
         if detail?.category == "user_reset" { lines.append(L("依据权益变化判定")) }
         lines.append(L("观测时间：%@ → %@",MissionQuotaRestorationText.time(detail?.previous_observed_at),MissionQuotaRestorationText.time(detail?.observed_at)))
         let windows=detail?.windows ?? []
@@ -323,10 +333,10 @@ struct MissionQuotaRestorationCredits: Decodable {
 enum MissionQuotaRestorationText {
     static func category(_ value: String?) -> String {
         switch value {
-        case "user_reset":return L("用户主动恢复")
-        case "official_scheduled_reset":return L("官方正常周期重置")
-        case "official_independent_reset":return L("官方独立重置")
-        default:return L("额度恢复·原因待确认")
+        case "user_reset":return L("用户恢复（推断）")
+        case "official_scheduled_reset":return L("周期重置（推断）")
+        case "official_independent_reset":return L("额外重置（推断）")
+        default:return L("额度恢复")
         }
     }
     static func percent(_ value: Double?) -> String {
@@ -347,6 +357,37 @@ enum MissionQuotaRestorationText {
     }
 }
 struct MissionDraft { var text: String; var revision: Int }
+
+enum MissionLogoState: String, CaseIterable {
+    case idle, working, waiting, disconnected, error
+    var title: String {
+        switch self {
+        case .idle:return L("已停止")
+        case .working:return L("榨汁中")
+        case .waiting:return L("等待额度")
+        case .disconnected:return L("连接断开")
+        case .error:return L("服务异常")
+        }
+    }
+}
+
+// Display-only state: task errors never control the global brand animation.
+enum MissionLogoControl {
+    static func state(connected: Bool, paused: Bool, snapshot: MissionSnapshot?) -> MissionLogoState {
+        if paused || snapshot?.running == false { return .idle }
+        guard connected, let snapshot else { return .disconnected }
+        if snapshot.service_error?.isEmpty == false || snapshot.compatibility?.status == "update_required" { return .error }
+        if snapshot.stale || snapshot.usage?.stale == true || snapshot.desktop_connection_error?.isEmpty == false { return .disconnected }
+        if snapshot.quota_phase == "low" || snapshot.quota_phase == "blocked" || snapshot.usage?.blocked == true { return .waiting }
+        if snapshot.usage?.quota_state == "metered", snapshot.usage?.visibleWindows.contains(where: {
+            guard let remaining=$0.value.validRemaining else { return false }
+            return $0.minutes == 10080 ? remaining <= 0 : remaining <= snapshot.policy.pause
+        }) == true { return .waiting }
+        guard snapshot.healthy, snapshot.control_enabled, snapshot.control_available != false,
+              snapshot.usage?.quota_state != "unknown" else { return .disconnected }
+        return .working
+    }
+}
 
 func missionTime(_ stamp: Double?) -> String {
     guard let stamp, stamp.isFinite, stamp > 0 else { return L("尚未提供") }

@@ -86,7 +86,7 @@ import Foundation
         let service = try fixture("native-service-only.json")
         precondition(service.usage?.visibleWindows.isEmpty == true && service.usage?.canSchedule == false)
         precondition(service.usage?.scheduleWindow == nil)
-        precondition(service.usage?.availabilityNote == "服务已允许使用，未提供固定额度窗口")
+        precondition(service.usage?.availabilityNote == "服务可用，未提供固定窗口。")
         var serviceUsage = service.usage!
         precondition(serviceUsage.permitsImmediate(minimum:20))
         serviceUsage.service_allowed = false
@@ -98,7 +98,7 @@ import Foundation
         precondition(unknown.usage?.account?.subscription == "future-plan")
         precondition(unknown.usage?.visibleWindows.isEmpty == true && unknown.usage?.canSchedule == false)
         precondition(unknown.usage?.scheduleWindow == nil)
-        precondition(unknown.usage?.availabilityNote == "额度信息不完整，自动发送暂不可用")
+        precondition(unknown.usage?.availabilityNote == "额度待核验，暂不发送。")
         precondition(!unknown.healthy && !unknown.control_enabled)
         precondition(unknown.usage?.permitsImmediate(minimum:20) == false)
         var object = try JSONSerialization.jsonObject(with: data) as! [String: Any]
@@ -111,7 +111,7 @@ import Foundation
         NativeLocalization.testLanguage = "en"
         precondition(custom.usage?.visibleWindows.map { $0.title } == ["15-minute quota", "1-day quota"])
         precondition(weekly.usage?.visibleWindows.first?.title == "Weekly quota")
-        precondition(service.usage?.availabilityNote == "The service allows usage; no fixed quota window was provided.")
+        precondition(service.usage?.availabilityNote == "Service available; no fixed quota window.")
         precondition(state.codexTasks.allSatisfy { $0.isCodex }, "Only Codex tasks belong in the task UI")
         var directoryOnly=state.tasks[2];directoryOnly.category="chatgpt";directoryOnly.key="chatgpt:cloud:fixture-hidden"
         var mixed=state;mixed.tasks.append(directoryOnly)
@@ -171,23 +171,24 @@ import Foundation
         let quotaEvents=try fixture("native-quota-restored.json")
         let globalEvents=quotaEvents.events.filter(\.isQuotaRestored)
         precondition(globalEvents.count == 4 && globalEvents.allSatisfy { $0.isGlobal && $0.thread_id == nil && $0.scopeTitle == "Global quota event" })
-        precondition(globalEvents.map(\.label) == ["User-initiated reset","Scheduled service reset","Independent service reset","Quota restored · cause unconfirmed"])
+        precondition(globalEvents.map(\.label) == ["User reset (inferred)","Scheduled reset (inferred)","Extra reset (inferred)","Quota restored"])
+        precondition(globalEvents[0].restorationSummary == ["5-hour quota 2.0% → 100.0%"])
         precondition(globalEvents[0].restorationLines.contains("Reset credits: 2 → 1"))
         precondition(globalEvents[0].restorationLines.contains("Inferred from credit changes"))
         precondition(globalEvents[0].restorationLines.contains { $0.contains("2.0% → 100.0%") })
         precondition(globalEvents[0].restorationLines.contains { $0.hasPrefix("Reset time: ") && !$0.contains("Unavailable") })
-        precondition(globalEvents[3].restorationLines.contains("Reset-credit counts were not provided."))
-        precondition(globalEvents.allSatisfy { $0.restorationLines.contains("This classification is inferred from evidence, not a direct service explanation.") })
+        precondition(globalEvents[3].restorationLines.contains("Reset-credit counts unavailable."))
+        precondition(globalEvents.allSatisfy { $0.restorationLines.contains("Cause inferred from quota changes; not confirmed by the service.") })
         precondition(quotaEvents.events.last?.scopeTitle == "整理示例发布清单" && quotaEvents.events.last?.isGlobal == false && quotaEvents.events.last?.restorationLines.isEmpty == true)
         precondition(MissionQuotaRestorationText.percent(nil) == "Unavailable" && MissionQuotaRestorationText.percent(0) == "0.0%")
         precondition(MissionQuotaRestorationText.count(nil) == "Unavailable" && MissionQuotaRestorationText.count(0) == "0")
         precondition(MissionQuotaRestorationText.count(-1) == "Unavailable" && MissionQuotaRestorationText.count(0.5) == "Unavailable")
-        precondition(MissionQuotaRestorationText.category("future_category") == "Quota restored · cause unconfirmed")
+        precondition(MissionQuotaRestorationText.category("future_category") == "Quota restored")
         func decodeEvent(_ object:[String:Any]) throws -> MissionEvent {
             try JSONDecoder().decode(MissionEvent.self,from:JSONSerialization.data(withJSONObject:object))
         }
         let ghost=try decodeEvent(["id":900,"created":1793156400,"state":"quota_restored","thread_id":NSNull(),"name":"ghost task must stay hidden","detail":["category":"future_category","windows":[["minutes":300,"previous_reset":NSNull(),"reset":NSNull()]],"reset_credits":["previous_available_count":NSNull(),"available_count":0]]])
-        precondition(ghost.isGlobal && ghost.scopeTitle == "Global quota event" && ghost.label == "Quota restored · cause unconfirmed")
+        precondition(ghost.isGlobal && ghost.scopeTitle == "Global quota event" && ghost.label == "Quota restored")
         precondition(ghost.restorationLines.contains("Reset credits: Unavailable → 0") && !ghost.restorationLines.contains { $0.contains("ghost task") })
         precondition(ghost.restorationLines.contains("Reset time: Unavailable → Unavailable"))
         let globalRules=try decodeEvent(["id":901,"created":1793156400,"state":"rules_updated","thread_id":NSNull(),"name":"ghost task must stay hidden"])
@@ -210,9 +211,43 @@ import Foundation
         precondition(MissionActivityFilter.all.apply(to:[]).isEmpty && MissionActivityFilter.user.apply(to:[]).isEmpty && MissionActivityFilter.automatic.apply(to:[]).isEmpty)
         NativeLocalization.testLanguage="zh"
         precondition(MissionActivityFilter.all.title == "全部记录" && MissionActivityFilter.user.title == "用户操作" && MissionActivityFilter.automatic.title == "自动进程")
-        precondition(globalEvents.map(\.label) == ["用户主动恢复","官方正常周期重置","官方独立重置","额度恢复·原因待确认"])
+        precondition(globalEvents.map(\.label) == ["用户恢复（推断）","周期重置（推断）","额外重置（推断）","额度恢复"])
         precondition(globalEvents[0].scopeTitle == "全局额度事件" && globalEvents[0].restorationLines.contains("依据权益变化判定"))
+        precondition(L("任务管家") == "榨汁机" && L("任务控制") == "来一杯")
+        precondition(L("启用自动控制") == "开始榨汁" && L("恢复自动控制") == "开始榨汁")
+        precondition(L("暂停自动控制") == "暂停榨汁" && L("自动控制") == "榨汁状态")
+        precondition(L(L("关闭窗口后，任务管家继续在菜单栏运行。")) == "关闭窗口后仍在后台运行。")
+        precondition(NativeLocalization.notificationTitle("额度管家：额度已恢复") == "额度已恢复")
         NativeLocalization.testLanguage="en"
+        precondition(L("任务管家") == "TokenMax" && L("来一杯") == "Juice Bar")
+        precondition(L("开始榨汁") == "Start Juicing" && L("暂停榨汁") == "Pause Juicing")
+        precondition(L("%@：榨汁状态","Test task") == "Test task: juicing")
+        precondition(NativeLocalization.notificationTitle("榨汁机：已暂停任务") == "Tasks paused")
+        precondition(NativeLocalization.notificationTitle("额度管家：额度已恢复") == "Quota restored")
+        precondition(!NativeLocalization.english.values.contains { $0.contains("Mission Manager") })
+        var logo=state
+        logo.control_paused=false;logo.running=true;logo.healthy=true;logo.control_enabled=true;logo.stale=false
+        logo.control_available=true;logo.usage?.stale=false;logo.usage?.quota_state="metered"
+        logo.quota_phase="healthy";logo.service_error=nil;logo.desktop_connection_error=nil
+        logo.compatibility=nil;logo.usage?.blocked=false
+        precondition(MissionLogoControl.state(connected:true,paused:false,snapshot:logo) == .working)
+        logo.tasks[0].runtime?.type="systemError"
+        precondition(MissionLogoControl.state(connected:true,paused:false,snapshot:logo) == .working,"Individual task errors must not alter global branding")
+        precondition(MissionLogoControl.state(connected:true,paused:true,snapshot:logo) == .idle)
+        precondition(MissionLogoControl.state(connected:false,paused:false,snapshot:logo) == .disconnected)
+        logo.quota_phase="low";logo.healthy=false;logo.control_enabled=false
+        precondition(MissionLogoControl.state(connected:true,paused:false,snapshot:logo) == .waiting,"Confirmed low quota is a waiting state, even when controls cannot execute")
+        logo.stale=true
+        precondition(MissionLogoControl.state(connected:true,paused:false,snapshot:logo) == .disconnected,"Stale low readings must not imply a confirmed quota wait")
+        logo.stale=false;logo.service_error="quota_read_failed"
+        precondition(MissionLogoControl.state(connected:true,paused:false,snapshot:logo) == .error)
+        precondition(MissionLogoControl.state(connected:true,paused:true,snapshot:logo) == .idle,"Stopped control always shows a static idle logo")
+        logo.service_error=nil;logo.quota_phase=nil;logo.healthy=true;logo.control_enabled=true
+        logo.usage?.windows.five_hour?.remaining=logo.policy.pause
+        precondition(MissionLogoControl.state(connected:true,paused:false,snapshot:logo) == .waiting,"Older snapshots derive the waiting visual from known quota")
+        logo.running=false
+        precondition(MissionLogoControl.state(connected:true,paused:false,snapshot:logo) == .idle)
+        print("Native TokenMax copy / recovery summary / five-state logo checks passed")
         print("Native activity origin / three filters / immutable latest-200 cache checks passed")
         print("Native V0.3.0 rules / Codex filtering / theme / IME synchronization checks passed")
         print("Native snapshot / status / control contract checks passed")

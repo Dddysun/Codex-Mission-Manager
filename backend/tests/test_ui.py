@@ -67,6 +67,7 @@ class InterfaceTests(unittest.TestCase):
         data = json.loads(body)
         self.assertEqual(status, 200)
         self.assertTrue(data["healthy"])
+        self.assertEqual(data["quota_phase"], "normal")
         self.assertEqual(data["tasks"][0]["runtime"]["type"], "active")
         self.assertNotIn("quota", data)
         self.assertEqual(data["usage"]["windows"]["five_hour"]["remaining"], 8)
@@ -150,7 +151,8 @@ class InterfaceTests(unittest.TestCase):
         self.assertIn("SameSite=Strict", headers["Set-Cookie"])
         self.assertIn("HttpOnly", headers["Set-Cookie"])
         self.assertIn("frame-ancestors 'none'", headers["Content-Security-Policy"])
-        self.assertIn("任务管家", body.decode())
+        self.assertEqual(json.loads(body)["name"], "榨汁机")
+        self.assertEqual(json.loads(body)["service"], "TokenMax")
         self.assertEqual(json.loads(body)['interface'], 'native')
         for asset in ('/app.js', '/style.css', '/favicon.svg'):
             self.assertEqual(self.request(path=asset)[0], 404)
@@ -227,7 +229,8 @@ class InterfaceTests(unittest.TestCase):
         payload = {"action":"set_auto", "key":chat["key"], "enabled":True, "revision":0}
         status, _, body = self.request("POST", "/api/action", payload)
         self.assertEqual(status, 200)
-        self.assertIn("等待", json.loads(body)["message"])
+        self.assertEqual(json.loads(body)["message"], "已登记，请点击开始榨汁")
+        self.assertEqual(json.loads(body)["message_en"], "Saved. Select Start Juicing to begin.")
         task = self.chat_state(chat["key"])
         self.assertEqual(task["auto_connection"], "waiting_global")
         self.assertTrue(task["auto_pending"])

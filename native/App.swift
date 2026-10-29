@@ -78,6 +78,9 @@ final class MissionModel: ObservableObject {
     private var stopReceipt: MissionStopReceipt?
     private var stopCallbacks: [(MissionStopReceipt) -> Void] = []
 
+    var logoState: MissionLogoState {
+        MissionLogoControl.state(connected:connected,paused:paused,snapshot:snapshot)
+    }
     var signed: Bool { MissionIdentity.releaseSigned }
     var service: SMAppService { SMAppService.daemon(plistName: MissionIdentity.helperPlist) }
     var support: URL { FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/CodexMissionManager") }
@@ -421,8 +424,8 @@ final class MissionModel: ObservableObject {
             guard let key = record["key"] as? String else { continue }
             if notificationDelivery, notificationsEnabled, !notificationKeys.contains(key), !firstNoticeRead {
                 let content = UNMutableNotificationContent()
-                content.title = L(record["title"] as? String ?? "任务管家").replacingOccurrences(of:"额度管家：",with:"")
-                content.body = record["body"] as? String ?? ""
+                content.title = NativeLocalization.notificationTitle(record["title"] as? String ?? "榨汁机")
+                content.body = NativeLocalization.language == "en" ? ((record["body_en"] as? String) ?? L("打开榨汁机查看详情。")) : L(record["body"] as? String ?? "")
                 UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: key, content: content, trigger: nil))
             }
             notificationKeys.insert(key)
@@ -514,7 +517,13 @@ final class MissionApp: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         rebuildMainMenu()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "checkmark.shield", accessibilityDescription: L("任务管家"))
+        if let button=statusItem.button {
+            let artwork=JuicerStatusHostingView(rootView:JuicerStatusIcon(model:model))
+            artwork.frame=button.bounds
+            artwork.autoresizingMask=[.width,.height]
+            button.addSubview(artwork)
+            button.setAccessibilityLabel(L("榨汁机"))
+        }
         statusItem.button?.toolTip = L("任务管家")
         statusItem.button?.target = self
         statusItem.button?.action = #selector(togglePanel)
@@ -555,6 +564,7 @@ final class MissionApp: NSObject, NSApplicationDelegate {
         window?.title = L("任务管家")
         settingsWindow?.title = L("设置")
         statusItem?.button?.toolTip = L("任务管家")
+        statusItem?.button?.setAccessibilityLabel(L("榨汁机"))
     }
     @objc func togglePanel() {
         guard termination.phase == .running else { return }

@@ -51,7 +51,7 @@ def main():
         mount.mkdir()
         subprocess.run(["hdiutil", "attach", "-readonly", "-nobrowse", "-mountpoint", str(mount), str(image)], check=True, capture_output=True)
         try:
-            app = mount / "Codex Mission Manager.app"
+            app = mount / "TokenMax.app"
             subprocess.run(["codesign", "--verify", "--deep", "--strict", str(app)], check=True, capture_output=True)
             binary = app / "Contents/MacOS/CodexMissionManager"
             helper = app / "Contents/Library/HelperTools/PowerHelper"

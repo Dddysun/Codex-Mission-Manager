@@ -77,7 +77,7 @@ class ImmediateRunner:
                  json.dumps(origin_detail('immediate_' + state,
                     {"reason": message, "request_id": row["id"], "turn_id": turn_id}, 'user'))))
         if state in ("failed", "unknown"):
-            self.store.notice("immediate:" + row["id"], "任务管家：即时发送需要处理", value["name"] + "；" + message)
+            self.store.notice("immediate:" + row["id"], "榨汁机：即时发送需要处理", value["name"] + "；" + message)
 
     async def view(self, value):
         return await self.controller.view(value["thread_id"])
@@ -168,7 +168,7 @@ class ImmediateRunner:
                 sending = True
                 reply = await self.rpc.call("turn/start", {"threadId": value["thread_id"],
                     "clientUserMessageId": row["id"], "input": [{"type": "text", "text": value["prompt"] +
-                    "\n\n（任务管家：这是你点击“立刻执行”发送的指令；请先核对已有进度，避免重复执行。发送标识：" + row["id"] + "）", "text_elements": []}],
+                    "\n\n（榨汁机：这是你点击“立刻执行”发送的指令；请先核对已有进度，避免重复执行。发送标识：" + row["id"] + "）", "text_elements": []}],
                     **({"_guardian_expected_turn_id": latest.get("id")} if getattr(self.rpc, "supports_expected_previous_turn", False) else {})})
                 if reply["turn"].get("status") not in ("inProgress", "completed"):
                     raise RuntimeError("unconfirmed dispatch")

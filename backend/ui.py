@@ -162,6 +162,7 @@ class Application:
                 "desktop_connection_error": report.get('desktop_connection_error'),
                 "control_revision": global_revision,
                 "service_error": report.get("stage") if report.get("phase") == "unknown" else None,
+                "quota_phase": report.get("phase"),
                 "tasks": tasks, "events": events,
                 "usage": usage, "compatibility": compatibility, "rules": rules,
                 "bulk_pause": store.get("bulk_pause_result"),
@@ -185,14 +186,14 @@ class Application:
         try:
             if action == 'set_rules':
                 return {'rules': update_rules(store, cfg, payload.get('rules'), payload.get('rules_revision')),
-                        'message': '运行规则已保存', 'message_en': 'Operating rules saved.'}
+                        'message': '规则已保存', 'message_en': 'Rules saved.'}
             cfg = effective_config(store, cfg)
             if action == "start":
                 runtime = Path(cfg.get("runtime_root", ROOT))
                 result = subprocess.run(python_command(runtime / "guardian.py", "--config", self.config_path, "start"), capture_output=True, text=True, timeout=10)
                 if result.returncode:
                     raise ValueError("后台启动失败，请查看服务日志")
-                return {"message": "已请求启动后台服务，正在等待首次检查"}
+                return {"message": "后台启动中", "message_en": "Starting service…"}
             if IS_WINDOWS:
                 disabling = action in ('pause','hold') or (action in ('set_auto','set_plan') and payload.get('enabled') is False)
                 if not disabling:
@@ -225,7 +226,7 @@ class Application:
                     store.db.execute('INSERT INTO requests VALUES(?,?,?,?,NULL)',(request_id,'pause_all',json.dumps({'ids':ids,'scope':(store.get('last_report',{}).get('quota') or {}).get('scope')}),'pending'))
                     for key,value in [('supervisor_paused',True),('control_revision',revision+1),('bulk_pause_result',{'state':'pending','total':len(ids),'paused':0,'skipped':0,'failed':0})]:
                         store.db.execute('INSERT OR REPLACE INTO kv VALUES(?,?)',(key,json.dumps(value)))
-                return {'message':'已提交暂停，正在逐项核对受管任务','message_en':'Pause requested. Checking managed tasks individually.'}
+                return {'message':'正在暂停受管任务','message_en':'Pausing managed tasks…'}
             if action in ("set_plan", "set_auto", "execute_now"):
                 try:
                     report = json.loads((store.directory / "status.json").read_text(encoding="utf-8"))
@@ -251,7 +252,7 @@ class Application:
                         raise ValueError("后台发送服务尚未就绪，未提交指令")
                     request_id = enqueue_dispatch(store, chat, payload.get("prompt"), payload.get("request_id"),
                         revision, sample, cfg)
-                    return {"message": "已提交立刻执行，正在核对并确认发送结果", "request_id": request_id}
+                    return {"message": "已提交，等待发送确认", "message_en": "Submitted. Awaiting delivery confirmation.", "request_id": request_id}
                 enabled = payload.get("enabled")
                 if not isinstance(enabled, bool):
                     raise ValueError("开关值无效")
@@ -272,7 +273,7 @@ class Application:
                         preferences = store.get("auto_preferences", {})
                         preferences.setdefault(chat["id"], False)
                         store.put("auto_preferences", preferences)
-                    return {"message": "已预约下一次额度恢复后执行，发送一次后自动关闭" if enabled else "已取消预约"}
+                    return {"message": "已预约，额度恢复后执行一次" if enabled else "已取消预约", "message_en": "Scheduled once after quota recovery." if enabled else "Schedule cancelled."}
                 task = store.get_task(chat["id"])
                 if task:
                     if task.get("scope") != sample.get("scope"):
@@ -292,14 +293,14 @@ class Application:
                         for record in same:
                             store.db.execute("UPDATE requests SET state='cancelled',result=? WHERE id=? AND state='pending'",(json.dumps({'error':'Cancelled by user'}),record['id']))
                 if enabled and not task and store.get('supervisor_paused',False):
-                    return {'message':'已登记，等待启用全局自动控制','message_en':'Saved. Waiting for global automatic control to be enabled.'}
-                return {"message": "已允许自动控制，正在连接原聊天" if enabled else "已关闭自动控制；独立预约计划保留"}
+                    return {'message':'已登记，请点击开始榨汁','message_en':'Saved. Select Start Juicing to begin.'}
+                return {"message": "已开启榨汁，正在连接" if enabled else "已关闭榨汁，预约保留", "message_en": "Juicing enabled. Connecting…" if enabled else "Juicing off. Schedule retained."}
             if action in ("hold", "release"):
                 tid = payload.get("thread_id")
                 if not isinstance(tid, str) or len(tid) > 100:
                     raise ValueError("无效任务")
                 store.permission(tid, action == "release", expected_revision=revision)
-                return {"message": "已允许该任务自动控制" if action == "release" else "已保持该任务，暂停其自动控制"}
+                return {"message": "已开启任务榨汁" if action == "release" else "已暂停任务榨汁", "message_en": "Task juicing enabled." if action == "release" else "Task juicing paused."}
             with store.db:
                 store.db.execute("BEGIN IMMEDIATE")
                 if revision != store.get("control_revision", 0):
@@ -311,7 +312,7 @@ class Application:
                     (time.time(), "supervisor_paused" if paused else "supervisor_enabled",
                      json.dumps(origin_detail("supervisor_paused" if paused else "supervisor_enabled",
                                               {"source": "local_ui"}, 'user'))))
-            return {"message": "已暂停自动控制，当前聊天继续执行" if paused else "已启用自动控制，将按规则检查任务"}
+            return {"message": "榨汁已暂停，运行中任务继续" if paused else "已开始榨汁", "message_en": "Juicing paused. Active tasks continue." if paused else "Juicing started."}
         finally:
             store.close()
 
@@ -359,7 +360,7 @@ class Handler(BaseHTTPRequestHandler):
                 return self.reply(503, {"error": "暂时无法读取服务状态，请稍后刷新"})
         if self.path != '/':
             return self.reply(404, {"error": "页面不存在"})
-        return self.reply(200, {'service': 'Codex Mission Manager', 'name': '任务管家',
+        return self.reply(200, {'service': 'TokenMax', 'name': '榨汁机',
                                'interface': 'native'}, session=True)
 
     def do_POST(self):
@@ -426,7 +427,7 @@ def main():
     elif args.command == "stop":
         if running:
             stop_path.touch(mode=0o600)
-        print("已请求界面退出；后台任务管家继续运行")
+        print("已关闭界面，榨汁机仍在后台运行")
     elif running:
         print(info.get("url", "界面正在启动"))
     else:

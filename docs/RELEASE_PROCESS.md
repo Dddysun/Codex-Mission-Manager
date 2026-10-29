@@ -48,6 +48,10 @@ V0.3.4 highlights the Activity source dropdown on both platforms: Chinese/light 
 
 V0.3.4 重点展示两平台操作记录来源下拉筛选：Mac 中文浅色与 Windows 英文深色。六图还包括两平台主窗、Windows 设置及 Mac 菜单，共四类页面。操作记录继续使用带来源字段的模拟额度恢复数据，不连接真实客户端。
 
+V0.4.0 highlights TokenMax branding, native juicer controls, and concise Activity summaries on both platforms. The six-image selection covers Home, Activity, Settings, and the menu. The pictures use the same release build and synthetic data.
+
+V0.4.0 重点展示两平台榨汁机品牌、原生开关及简洁的操作记录；六图覆盖主窗、操作记录、设置和菜单，均使用同版构建与模拟数据。
+
 Images come from the release build's native fixture-render mode, using repository demo data. They do not show a real account or establish live-client acceptance. PNGs stay out of source control. `release-gallery.json` records the tag, source commit, original run, build manifests, image hashes, dimensions, and allowlisted receipt metadata. Older render receipts do not cryptographically bind an individual PNG to a commit; that limitation is stated in the gallery manifest.
 
 图片来自同版原生应用的示例渲染，不展示真实账号，也不代表真实客户端控制已通过验收。PNG 不提交源码仓库。`release-gallery.json` 保存标签、源码提交、原构建运行、清单、图片摘要、尺寸及允许公开的回执信息；旧回执不能为单张 PNG 提供源码提交的密码学绑定，此限制在清单中明确说明。
@@ -76,11 +80,11 @@ Before uploading, every existing same-name asset is downloaded and compared: ide
 
 ## Release contents / 发行文件
 
-For V0.3.4 the user-facing packages are:
+For V0.4.0 the user-facing packages are:
 
-- `Codex-Mission-Manager-0.3.4-arm64-preview.dmg`
-- `Codex-Mission-Manager-0.3.4-windows-x64-setup.exe`
-- `Codex-Mission-Manager-0.3.4-windows-x64-preview.zip`
+- `TokenMax-0.4.0-arm64-preview.dmg`
+- `TokenMax-0.4.0-windows-x64-setup.exe`
+- `TokenMax-0.4.0-windows-x64-preview.zip`
 
 The same release includes platform build manifests, verification/self-test receipts, `USER_GUIDE.md`, and `SHA256SUMS`. Manifests identify the version, architecture, bundled runtime, source commit, and signing state. Test receipts describe their own scope; packaging success does not prove live delivery.
 

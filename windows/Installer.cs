@@ -144,10 +144,10 @@ namespace CodexMissionManagerSetup
                     catch (System.ComponentModel.Win32Exception)
                     {
                         if (process.ProcessName == "python") continue;
-                        throw new InvalidOperationException(T("无法核对正在运行的任务管家。请先退出程序后再继续。", "A running Mission Manager could not be checked. Close it before continuing."));
+                        throw new InvalidOperationException(T("请先退出榨汁机，再继续安装。", "Quit TokenMax before continuing."));
                     }
                     if (String.Equals(Path.GetFullPath(path), expected, StringComparison.OrdinalIgnoreCase) || String.Equals(Path.GetFullPath(path), python, StringComparison.OrdinalIgnoreCase))
-                        throw new InvalidOperationException(T("任务管家仍在运行，请从托盘菜单退出并等待后台停止后再继续。", "Mission Manager is still running. Quit it from its tray menu and wait for its background process to stop before continuing."));
+                        throw new InvalidOperationException(T("请从托盘菜单退出榨汁机后继续。", "Quit TokenMax from its tray menu before continuing."));
                 }
             }
         }
@@ -165,7 +165,7 @@ namespace CodexMissionManagerSetup
                 Type shortcutType = shortcut.GetType();
                 shortcutType.InvokeMember("TargetPath", BindingFlags.SetProperty, null, shortcut, new object[] { executable });
                 shortcutType.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, shortcut, new object[] { Path.GetDirectoryName(executable) });
-                shortcutType.InvokeMember("Description", BindingFlags.SetProperty, null, shortcut, new object[] { "Codex Mission Manager" });
+                shortcutType.InvokeMember("Description", BindingFlags.SetProperty, null, shortcut, new object[] { "TokenMax" });
                 shortcutType.InvokeMember("IconLocation", BindingFlags.SetProperty, null, shortcut, new object[] { executable + ",0" });
                 shortcutType.InvokeMember("Save", BindingFlags.InvokeMethod, null, shortcut, new object[0]);
             }
@@ -191,6 +191,62 @@ namespace CodexMissionManagerSetup
                 if (shortcut != null && Marshal.IsComObject(shortcut)) Marshal.FinalReleaseComObject(shortcut);
                 if (shell != null && Marshal.IsComObject(shell)) Marshal.FinalReleaseComObject(shell);
             }
+        }
+        static string ShortcutName { get { return T("榨汁机.lnk", "TokenMax.lnk"); } }
+        static IEnumerable<string> KnownShortcutPaths()
+        {
+            string desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+            string programs = Environment.GetFolderPath(Environment.SpecialFolder.Programs);
+            foreach (string name in new[] { "任务管家.lnk", "榨汁机.lnk", "TokenMax.lnk" })
+            {
+                yield return Path.Combine(desktop, name);
+                foreach (string folder in new[] { "Codex Mission Manager", "TokenMax" }) yield return Path.Combine(programs, folder, name);
+            }
+        }
+        static bool MatchesShortcut(string path, string executable)
+        {
+            try { return String.Equals(ShortcutTarget(path), executable, StringComparison.OrdinalIgnoreCase); }
+            catch (System.Runtime.InteropServices.COMException) { return false; }
+            catch (IOException) { return false; }
+            catch (UnauthorizedAccessException) { return false; }
+        }
+        static void RemoveEmptyShortcutFolders()
+        {
+            foreach (string name in new[] { "Codex Mission Manager", "TokenMax" })
+            {
+                string folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), name);
+                if (Directory.Exists(folder) && Directory.GetFileSystemEntries(folder).Length == 0) Directory.Delete(folder);
+            }
+        }
+        static void RemoveMatchingShortcuts(IEnumerable<string> paths, string executable, string desktop, string menu)
+        {
+            foreach (string path in paths)
+            {
+                if (String.Equals(path, desktop, StringComparison.OrdinalIgnoreCase) || String.Equals(path, menu, StringComparison.OrdinalIgnoreCase)) continue;
+                if (MatchesShortcut(path, executable))
+                { try { File.Delete(path); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
+            }
+        }
+        static void MigrateOwnedShortcuts(string executable, string desktop, string menu)
+        {
+            RemoveMatchingShortcuts(KnownShortcutPaths(), executable, desktop, menu);
+            try { RemoveEmptyShortcutFolders(); } catch (IOException) { } catch (UnauthorizedAccessException) { }
+        }
+        static bool ShortcutMigrationSelfTest()
+        {
+            // A private temporary fixture: never inspect or modify real shortcuts.
+            string root = Path.Combine(Path.GetTempPath(), "TokenMax-shortcut-test-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(root);
+            try
+            {
+                string executable = Path.Combine(root, "CodexMissionManager.exe"), other = Path.Combine(root, "Other.exe");
+                string legacy = Path.Combine(root, "任务管家.lnk"), current = Path.Combine(root, "TokenMax.lnk"), foreign = Path.Combine(root, "榨汁机.lnk");
+                Shortcut(legacy, executable); Shortcut(current, executable); Shortcut(foreign, other);
+                if (!MatchesShortcut(legacy, executable) || MatchesShortcut(foreign, executable)) return false;
+                RemoveMatchingShortcuts(new[] { legacy, current, foreign }, executable, current, Path.Combine(root, "Menu.lnk"));
+                return !File.Exists(legacy) && File.Exists(current) && MatchesShortcut(current, executable) && File.Exists(foreign) && MatchesShortcut(foreign, other);
+            }
+            finally { Directory.Delete(root, true); }
         }
         sealed class RegistrySnapshot
         {
@@ -221,9 +277,9 @@ namespace CodexMissionManagerSetup
             foreach (string path in Directory.GetFiles(target, "*", SearchOption.AllDirectories)) size += new FileInfo(path).Length;
             using (RegistryKey key = Registry.CurrentUser.CreateSubKey(UninstallRegistryKey))
             {
-                key.SetValue("DisplayName", "任务管家 · Codex Mission Manager");
+                key.SetValue("DisplayName", T("榨汁机 · TokenMax", "TokenMax"));
                 key.SetValue("DisplayVersion", ProductVersion + "-" + ProductPreview);
-                key.SetValue("Publisher", "Codex Mission Manager contributors");
+                key.SetValue("Publisher", "TokenMax contributors");
                 key.SetValue("InstallLocation", target);
                 key.SetValue("DisplayIcon", Path.Combine(target, "CodexMissionManager.exe") + ",0");
                 key.SetValue("UninstallString", "\"" + uninstall + "\" --uninstall");
@@ -237,7 +293,7 @@ namespace CodexMissionManagerSetup
         {
             string target = InstallationDirectory;
             string markerPath = Path.Combine(target, "installation.json");
-            if (!Directory.Exists(target) || !File.Exists(markerPath)) throw new InvalidOperationException("No registered Mission Manager installation was found.");
+            if (!Directory.Exists(target) || !File.Exists(markerPath)) throw new InvalidOperationException("No registered TokenMax installation was found.");
             var marker = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(markerPath, Encoding.UTF8));
             object product, id, path;
             if (marker == null || !marker.TryGetValue("product_marker", out product) || !String.Equals(product as string, ProductMarker, StringComparison.Ordinal) ||
@@ -274,7 +330,7 @@ namespace CodexMissionManagerSetup
             Payload(); // Authenticate the installed uninstaller before starting cleanup.
             var marker = InstalledMarker();
             EnsureStopped(InstallationDirectory);
-            if (!quiet && MessageBox.Show(T("仅移除任务管家程序和快捷方式。账号登录、任务账本及私人配置将保留。是否继续？", "Remove the Mission Manager application and shortcuts? Account sign-in, task ledger and private configuration will be preserved."), T("卸载任务管家", "Uninstall Mission Manager"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 2;
+            if (!quiet && MessageBox.Show(T("卸载榨汁机？账号和任务数据将保留。", "Uninstall TokenMax? Account and task data will be kept."), T("卸载榨汁机", "Uninstall TokenMax"), MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return 2;
             string cleanup = Path.Combine(Path.GetTempPath(), "CodexMissionManager-Cleanup-" + Guid.NewGuid().ToString("N") + ".exe");
             CopyCleanupStub(cleanup);
             string arguments = "--complete-uninstall --parent-pid " + Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + " --installation-id " + (string)marker["installation_id"];
@@ -304,13 +360,11 @@ namespace CodexMissionManagerSetup
                 EnsureStopped(target);
                 // Record only links that still point to this exact installation.
                 string executable = Path.Combine(target, "CodexMissionManager.exe");
-                string menuFolder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Codex Mission Manager");
                 var links = new List<string>();
-                foreach (string path in new[] { Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "任务管家.lnk"), Path.Combine(menuFolder, "任务管家.lnk") })
-                    if (String.Equals(ShortcutTarget(path), executable, StringComparison.OrdinalIgnoreCase)) links.Add(path);
+                foreach (string path in KnownShortcutPaths()) if (MatchesShortcut(path, executable)) links.Add(path);
                 Directory.Delete(target, true);
                 foreach (string link in links) if (File.Exists(link)) File.Delete(link);
-                if (Directory.Exists(menuFolder) && Directory.GetFileSystemEntries(menuFolder).Length == 0) Directory.Delete(menuFolder);
+                RemoveEmptyShortcutFolders();
                 using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RunRegistryKey, true))
                 {
                     string value = key == null ? null : key.GetValue("CodexMissionManager") as string;
@@ -323,7 +377,7 @@ namespace CodexMissionManagerSetup
                 }
             }
             Report(args, new Dictionary<string, object> { { "uninstalled", true }, { "private_data_directory_preserved", true }, { "other_applications_modified", false }, { "cleanup_stub_retained_in_temp", true } });
-            if (!quiet) MessageBox.Show(T("任务管家已卸载，私人数据已保留。", "Mission Manager was removed. Private data was preserved."), T("任务管家", "Mission Manager"), MessageBoxButtons.OK, MessageBoxIcon.Information);
+            if (!quiet) MessageBox.Show(T("榨汁机已卸载，私人数据已保留。", "TokenMax was removed. Private data was preserved."), T("榨汁机", "TokenMax"), MessageBoxButtons.OK, MessageBoxIcon.Information);
             return 0;
         }
         static Dictionary<string, object> Install(byte[] payload, bool launch, Action<string> progress)
@@ -351,8 +405,10 @@ namespace CodexMissionManagerSetup
                     progress(T("正在创建快捷方式…", "Creating shortcuts…"));
                     string executable = Path.Combine(target, "CodexMissionManager.exe");
                     File.Copy(Assembly.GetExecutingAssembly().Location, Path.Combine(target, "Uninstall.exe"), true);
-                    Shortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), "任务管家.lnk"), executable);
-                    Shortcut(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "Codex Mission Manager", "任务管家.lnk"), executable);
+                    string desktopLink = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory), ShortcutName);
+                    string menuLink = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Programs), "TokenMax", ShortcutName);
+                    Shortcut(desktopLink, executable);
+                    Shortcut(menuLink, executable);
                     var result = new Dictionary<string, object> {
                         { "version", ProductVersion }, { "preview", ProductPreview }, { "installed", true },
                         { "product_marker", ProductMarker }, { "installation_id", Guid.NewGuid().ToString("N") },
@@ -368,6 +424,7 @@ namespace CodexMissionManagerSetup
                         Process.Start(new ProcessStartInfo(executable) { WorkingDirectory = target, UseShellExecute = true });
                         result["app_launched"] = true;
                     }
+                    MigrateOwnedShortcuts(executable, desktopLink, menuLink);
                     return result;
                 }
                 catch
@@ -388,11 +445,11 @@ namespace CodexMissionManagerSetup
         {
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            var form = new Form { Text = T("任务管家安装", "Mission Manager Setup"), ClientSize = new Size(560, 305), StartPosition = FormStartPosition.CenterScreen, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, Font = new Font("Segoe UI", 10F), BackColor = Color.White };
-            var title = new Label { Text = T("安装任务管家", "Install Mission Manager"), Location = new Point(28, 24), AutoSize = true, Font = new Font("Segoe UI", 19F, FontStyle.Bold) };
-            var description = new Label { Text = T("V" + ProductVersion + " · Windows 预览版\n包含原生窗口及 Python 运行环境。现有聊天、预约及账号登录数据保留。", "V" + ProductVersion + " · Windows preview\nIncludes the native app and Python runtime. Existing chats, plans and sign-in data are preserved."), Location = new Point(30, 76), Size = new Size(500, 62) };
+            var form = new Form { Text = T("榨汁机安装", "TokenMax Setup"), ClientSize = new Size(560, 305), StartPosition = FormStartPosition.CenterScreen, FormBorderStyle = FormBorderStyle.FixedDialog, MaximizeBox = false, Font = new Font("Segoe UI", 10F), BackColor = Color.White };
+            var title = new Label { Text = T("安装榨汁机", "Install TokenMax"), Location = new Point(28, 24), AutoSize = true, Font = new Font("Segoe UI", 19F, FontStyle.Bold) };
+            var description = new Label { Text = T("V" + ProductVersion + " · Windows 预览版\n包含所需运行环境；保留账号和任务数据。", "V" + ProductVersion + " · Windows preview\nIncludes required runtime. Keeps account and task data."), Location = new Point(30, 76), Size = new Size(500, 62) };
             var pathLabel = new Label { Text = InstallationDirectory, Location = new Point(30, 148), Size = new Size(500, 42), ForeColor = Color.DimGray };
-            var launch = new CheckBox { Text = T("安装后打开任务管家", "Open Mission Manager after installation"), Location = new Point(30, 195), AutoSize = true, Checked = Array.IndexOf(args, "--no-launch") < 0 };
+            var launch = new CheckBox { Text = T("安装后打开榨汁机", "Open TokenMax after installation"), Location = new Point(30, 195), AutoSize = true, Checked = Array.IndexOf(args, "--no-launch") < 0 };
             var status = new Label { Text = "", Location = new Point(30, 231), Size = new Size(340, 50) };
             var install = new Button { Text = T("安装", "Install"), Location = new Point(408, 235), Size = new Size(120, 37), FlatStyle = FlatStyle.System };
             bool busy = false, success = false;
@@ -435,7 +492,9 @@ namespace CodexMissionManagerSetup
                 if (selfTest)
                 {
                     int count = ValidateArchive(payload, Path.Combine(Path.GetTempPath(), "MissionManagerValidation-" + Guid.NewGuid().ToString("N")), false);
-                    Report(args, new Dictionary<string, object> { { "version", ProductVersion }, { "preview", ProductPreview }, { "native_installer", true }, { "payload_verified", true }, { "payload_sha256", ExpectedSha256 }, { "payload_bytes", payload.Length }, { "files", count }, { "installed", false }, { "host_started", false }, { "private_data_loaded", false }, { "per_user_uninstaller_available", true } });
+                    bool shortcutChecks = ShortcutMigrationSelfTest();
+                    if (!shortcutChecks) throw new InvalidOperationException("Shortcut migration safety checks failed.");
+                    Report(args, new Dictionary<string, object> { { "shortcut_migration_checks", shortcutChecks }, { "version", ProductVersion }, { "preview", ProductPreview }, { "native_installer", true }, { "payload_verified", true }, { "payload_sha256", ExpectedSha256 }, { "payload_bytes", payload.Length }, { "files", count }, { "installed", false }, { "host_started", false }, { "private_data_loaded", false }, { "per_user_uninstaller_available", true } });
                     return 0;
                 }
                 if (!quiet) return ShowInstaller(payload, args);
@@ -445,7 +504,7 @@ namespace CodexMissionManagerSetup
             catch (Exception error)
             {
                 Console.Error.WriteLine(error.Message);
-                if (!quiet) MessageBox.Show(error.Message, T("任务管家安装", "Mission Manager Setup"), MessageBoxButtons.OK, MessageBoxIcon.Error);
+                if (!quiet) MessageBox.Show(error.Message, T("榨汁机安装", "TokenMax Setup"), MessageBoxButtons.OK, MessageBoxIcon.Error);
                 try { Report(args, new Dictionary<string, object> { { "installed", false }, { "error", error.Message } }); } catch { }
                 return 1;
             }

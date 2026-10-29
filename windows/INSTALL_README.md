@@ -1,4 +1,4 @@
-# Codex Mission Manager — Windows preview
+# TokenMax — Windows preview
 
 The setup EXE installs the native WPF application, its Python backend and the pinned Python runtime for the current Windows user. Python, Node.js and a .NET SDK do not need to be installed separately. Windows must provide .NET Framework 4.8 or later.
 
@@ -6,23 +6,23 @@ The setup EXE installs the native WPF application, its Python backend and the pi
 
 ## Install / 安装
 
-Run `Codex-Mission-Manager-0.3.2-windows-x64-setup.exe`, select **Install**, then open **任务管家** from the desktop or Start menu. The default application directory is `%LOCALAPPDATA%\Programs\CodexMissionManager`.
+Run `TokenMax-0.4.0-windows-x64-setup.exe`, select **Install**, then open **榨汁机** from the desktop or Start menu. The default application directory is `%LOCALAPPDATA%\Programs\CodexMissionManager`.
 
-运行安装 EXE，点击“安装”，然后从桌面或开始菜单打开“任务管家”。默认程序目录为 `%LOCALAPPDATA%\Programs\CodexMissionManager`。
+运行安装 EXE，点击“安装”，然后从桌面或开始菜单打开“榨汁机”。默认程序目录为 `%LOCALAPPDATA%\Programs\CodexMissionManager`。
 
 Install and open the application normally with your Windows account. **Run as administrator** is not required. The backend checks that its data folder is writable before starting; it does not request elevation or automatically change folder permissions. If access is denied, check the current user's access to the displayed application data folder.
 
 请使用当前 Windows 账户正常安装和打开，无需“以管理员身份运行”。后台启动前会检查应用数据目录是否可写，不会自动提权或重置目录权限。如提示无法访问，请检查当前用户对提示中应用数据目录的访问权限。
 
-The application requires a compatible official Codex desktop client and the user's own sign-in. Credentials and chat histories are not included in the distribution. New installations start with global automatic control paused; check the displayed account and chats before enabling it.
+The application requires a compatible official Codex desktop client and the user's own sign-in. Credentials and chat histories are not included in the distribution. New installations start with global automatic control paused; check the displayed account and chats before selecting **Start Juicing**.
 
-应用需要兼容的官方 Codex 桌面客户端及用户本人登录。发行包不含凭据或聊天历史。首次安装默认暂停全局自动控制，请核对账号及聊天后再启用。
+应用需要兼容的官方 Codex 桌面客户端及用户本人登录。发行包不含凭据或聊天历史。首次安装默认暂停全局自动控制，请核对账号及聊天后选择“开始榨汁”。
 
 ## Background behavior / 后台行为
 
-Closing the main window keeps the app in the system tray. Use **Quit** in the tray menu to stop the app-owned background process. Quitting Mission Manager does not intentionally interrupt chats in the official client.
+Closing the main window keeps the app in the system tray. Use **Quit** in the tray menu to stop the app-owned background process. Quitting TokenMax does not intentionally interrupt chats in the official client.
 
-关闭主窗口后应用继续在托盘运行。通过托盘菜单“退出”停止应用自己的后台；退出管家不主动中断官方客户端中的聊天。
+关闭主窗口后应用继续在托盘运行。通过托盘菜单“退出”停止应用自己的后台；退出榨汁机不主动中断官方客户端中的聊天。
 
 By default, the UI reads cached state every 5 seconds. Normal collection waits 30 seconds after each round; near-limit or pending-plan collection waits 10 seconds. These intervals and the pause/resume thresholds are editable in Operating Rules. Processing time is additional.
 
@@ -30,16 +30,22 @@ By default, the UI reads cached state every 5 seconds. Normal collection waits 3
 
 ## Data and upgrades / 数据与更新
 
-Private configuration, ledger and native preferences live separately at `%LOCALAPPDATA%\CodexMissionManager`. The installer preserves this directory and retains the preceding application directory when updating. Quit Mission Manager before installing an update. The portable ZIP contains the same program files and runtime; extract it to a dedicated application folder before opening `CodexMissionManager.exe`.
+Private configuration, ledger and native preferences live separately at `%LOCALAPPDATA%\CodexMissionManager`. The installer preserves this directory and retains the preceding application directory when updating. Quit TokenMax before installing an update. The portable ZIP contains the same program files and runtime; extract it to a dedicated application folder before opening `CodexMissionManager.exe`.
 
-私人配置、账本及界面偏好独立保存在 `%LOCALAPPDATA%\CodexMissionManager`。安装器保留此目录；更新时也保留上一版程序目录。更新前请先退出管家。便携 ZIP 包含相同程序及运行环境，解压到专用目录后打开 `CodexMissionManager.exe`。
+私人配置、账本及界面偏好独立保存在 `%LOCALAPPDATA%\CodexMissionManager`。安装器保留此目录；更新时也保留上一版程序目录。更新前请先退出榨汁机。便携 ZIP 包含相同程序及运行环境，解压到专用目录后打开 `CodexMissionManager.exe`。
 
 ## Uninstall / 卸载
 
-Quit Mission Manager from its tray menu, then find **任务管家 · Codex Mission Manager** in Windows **Apps & features / Installed apps** and select **Uninstall**. The per-user uninstaller removes this installation and its matching shortcuts/startup entry. It preserves `%LOCALAPPDATA%\CodexMissionManager`, official Codex sign-in data, other applications and preceding application backups. A small cleanup program may remain in the Windows temporary folder after self-removal.
+Quit TokenMax from its tray menu, then find **榨汁机 · TokenMax** in Windows **Apps & features / Installed apps** and select **Uninstall**. The per-user uninstaller removes this installation and its matching shortcuts/startup entry. It preserves `%LOCALAPPDATA%\CodexMissionManager`, official Codex sign-in data, other applications and preceding application backups. A small cleanup program may remain in the Windows temporary folder after self-removal.
 
-先从托盘菜单退出管家，再在 Windows“应用和功能／已安装的应用”中找到“任务管家 · Codex Mission Manager”并卸载。每用户卸载器仅移除此程序及目标匹配的快捷方式、启动项，保留 `%LOCALAPPDATA%\CodexMissionManager` 数据、官方 Codex 登录数据、其他应用和之前保留的程序备份。自删除后，Windows 临时目录中可能保留一个小型清理程序。
+先从托盘菜单退出榨汁机，再在 Windows“应用和功能／已安装的应用”中找到“榨汁机 · TokenMax”并卸载。每用户卸载器仅移除此程序及目标匹配的快捷方式、启动项，保留 `%LOCALAPPDATA%\CodexMissionManager` 数据、官方 Codex 登录数据、其他应用和之前保留的程序备份。自删除后，Windows 临时目录中可能保留一个小型清理程序。
 
 This is an unsigned preview. No installer step changes firewall rules, antivirus, execution policy, system PATH or system power settings. Refer to `USER_GUIDE.md`, when included, for verified capabilities and remaining limitations.
 
 当前为未签名预览版。安装器不会修改防火墙、防病毒、执行策略、系统 PATH 或系统电源设置。已验证能力及剩余限制见随包提供的 `USER_GUIDE.md`。
+
+## Interface / 界面
+
+**Juice Bar / 来一杯** lists chats. The juicing switch has no adjacent on/off label; its position and accessible name report the state. The native logo uses a gray idle state, a breathing gold bolt with orbiting arcs when working, and in-cup symbols for quota wait, disconnection and errors. Windows animation preferences stop all motion.
+
+“来一杯”列出聊天。榨汁开关不再重复显示“已开启／已关闭”。停止时图标为灰色；工作时闪电呼吸、电弧环绕；等待额度、断连和错误在杯内显示对应符号，并遵循 Windows 的动画偏好。额度恢复记录默认只显示摘要，“详情”保留完整证据。

@@ -2,12 +2,14 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleIdentifier</key><string>com.dddysun.CodexMissionManager</string>
-<key>CFBundleName</key><string>Codex Mission Manager</string>
-<key>CFBundleDisplayName</key><string>任务管家</string>
+<key>CFBundleName</key><string>TokenMax</string>
+<key>CFBundleDisplayName</key><string>TokenMax</string>
 <key>CFBundleExecutable</key><string>CodexMissionManager</string>
 <key>CFBundleIconFile</key><string>AppIcon</string>
-<key>CFBundleShortVersionString</key><string>0.3.4</string>
+<key>CFBundleShortVersionString</key><string>0.4.0</string>
 <key>CFBundleVersion</key><string>1</string>
+<key>CFBundleDevelopmentRegion</key><string>en</string>
+<key>CFBundleLocalizations</key><array><string>en</string><string>zh-Hans</string></array>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>LSMinimumSystemVersion</key><string>14.0</string>
 <key>NSHighResolutionCapable</key><true/>

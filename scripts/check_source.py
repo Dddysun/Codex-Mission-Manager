@@ -45,7 +45,7 @@ def main():
                 json.loads(path.read_text(encoding="utf-8"))
             except (ValueError, UnicodeError) as error:
                 errors.append(str(relative) + ": " + str(error))
-        if path.suffix in (".py", ".swift", ".cs", ".json", ".md", ".ps1", ".yml", ".plist"):
+        if path.suffix in (".py", ".swift", ".cs", ".json", ".md", ".ps1", ".yml", ".plist", ".strings", ".js", ".cjs", ".html", ".svg"):
             source = path.read_text(encoding="utf-8")
             checks = (
                 r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----",

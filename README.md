@@ -1,82 +1,65 @@
-# Codex Mission Manager · 任务管家
+# TokenMax · 榨汁机
 
-面向 macOS 和 Windows 的原生 Codex 任务管理应用。在额度不足时暂停已授权任务，核验额度恢复后续接，并支持一次性预约指令、即时发送及操作记录。
+额度不足时暂停，恢复后继续。面向 macOS 和 Windows 的原生 Codex 任务管理应用。
 
-A native macOS and Windows companion for Codex. Pause authorized tasks when quota runs low, resume after verified recovery, schedule one-time instructions, and inspect delivery records.
+Pause when quota is low. Continue when it returns. A native Codex companion for macOS and Windows.
 
-**V0.3.4 公开预览 / Public preview.** [发行下载 / Downloads](https://github.com/Dddysun/Codex-Mission-Manager/releases) · [使用指南 / User guide](docs/USER_GUIDE.md) · [V0.3.4 发行说明 / Release notes](docs/releases/0.3.4.md)
+**V0.4.0 公开预览 / Public preview** · [下载 / Downloads](https://github.com/Dddysun/Codex-Mission-Manager/releases) · [使用指南 / User guide](docs/USER_GUIDE.md) · [更新说明 / Release notes](docs/releases/0.4.0.md)
 
 ## 中文
 
-### 能做什么
+- 按聊天授权暂停与续接，支持恢复后执行一次性指令及“立刻执行”。
+- 显示额度、刷新时间、执行阶段和操作记录；规则可调整。
+- “来一杯 / Juice Bar”集中管理聊天与指令。
+- “开始榨汁”启用全局调度，“榨汁状态”开关选择需要管理的聊天。
+- 新榨汁机 Logo：停用时灰色静止，启用时金色闪电与轻量动画。支持减少动态效果。
+- 中英文、深浅外观，以及绿、蓝、紫、鹅蛋黄主题色。
 
-- 原生聊天列表显示 Codex 聊天、当前状态和最近执行阶段；两列卡片集中呈现任务信息、自动控制和预约指令。
-- 为指定聊天启用自动控制，在可用额度不足时暂停符合条件的任务，恢复后核对账号、原会话和人工接管状态再续做。
-- 安排一次性“额度恢复后执行”指令，或使用“立刻执行”发送当前指令；发送结果单独记录。
-- 按服务实际返回的数据展示额度窗口、剩余额度、刷新时间和账号信息，不根据订阅名称推断固定额度。
-- 编辑六项运行规则，选择绿、蓝、紫、鹅蛋黄主题色，使用中英文及跟随系统、浅色、深色外观。
-- 若服务提供重置权益，展示数量和详情；权益仅供查看，不自动兑换。
-- 独立记录观察到的额度恢复，即使没有受管任务或自动控制已暂停。操作记录展示恢复前后的余额、刷新时间与权益数量，并明确标示来源推断及证据不足的情况。
-- 操作记录提供“全部记录／用户操作／自动进程”来源筛选，作用于最近载入的 200 条总记录。
+### 安装
 
-### 下载与安装
+从 [Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases) 下载 `v0.4.0-preview.N`：
 
-在 [Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases) 选择 V0.3.4 预览发行。预览标签形式为 `v0.3.4-preview.N`；请以该发行页的文件和说明为准。
+- **Mac：**`TokenMax-0.4.0-arm64-preview.dmg`。Apple Silicon，macOS 14+。
+- **Windows：**`TokenMax-0.4.0-windows-x64-setup.exe`，另有便携 ZIP。Windows 10 build 19041+、x64、.NET Framework 4.8+。
 
-- **Mac：**Apple Silicon、macOS 14 或更新版本。下载 `Codex-Mission-Manager-0.3.4-arm64-preview.dmg`，将应用拖到 Applications。
-- **Windows：**Windows 10 build 19041 或更新版本、x64、.NET Framework 4.8 或更新版本。下载 `Codex-Mission-Manager-0.3.4-windows-x64-setup.exe`，安装到当前用户；另提供便携 ZIP。
-- 两种安装包都包含后端和独立 Python 运行环境，使用者无需另装 Python、Node.js 或开发工具。
-- 需要自行安装、登录兼容的官方 Codex 桌面客户端。发行包不包含原客户端、凭据或个人聊天数据。
+安装包包含后端和 Python 环境。另需安装并登录兼容的官方 Codex 桌面客户端。首次使用先核对账号与聊天，再点击“开始榨汁”。关闭窗口后继续后台运行；“退出”停止应用。
 
-新安装默认暂停全局自动控制。先核对账号和聊天，再开启全局及所需聊天的自动控制。关闭主窗口后继续在菜单栏或系统托盘运行；通过“退出”停止管家后台。
+原名为“任务管家 / Codex Mission Manager”。升级保留数据和设置。Mac 升级前退出旧版，将 `TokenMax.app` 拖入 Applications，再移除旧名应用，勿同时运行两份。Windows 安装器沿用原安装目录。
 
-### 预览版边界
+### 预览限制
 
-客户端控制依赖版本敏感的本机通信适配，并非稳定公开的客户端控制 API。未知客户端版本会停止控制；连接成功也不代表完整暂停、恢复和发送流程已通过验收。
-
-当前 Mac 预览为本机临时签名、未经过 Apple 公证；Windows 预览未签名。系统可能阻止打开。预览版不提供无外屏合盖运行保证，Mac 合盖辅助服务暂未开放；防止空闲睡眠不等于阻止手动睡眠或合盖睡眠。完整实机验收及待验证项目见 [发行说明](docs/releases/0.3.4.md)。
+Mac 预览为临时签名、未公证；Windows 预览未签名。客户端控制依赖版本敏感的本机适配；未知版本暂停控制。无外屏合盖运行不作保证。真实发送、锁屏和电源行为需单独实测，详见[发行说明](docs/releases/0.4.0.md)。
 
 ## English
 
-### Features
-
-- Native Codex chat list with current status and recent execution stage. Two-column cards group task details, automatic control, and scheduled instructions.
-- Per-chat authorization for automatic pause and recovery. Resumption rechecks quota, account, the original chat, and manual intervention.
-- One-time instructions after quota recovery, plus **Run now** with separate delivery records.
-- Quota windows, remaining allowance, reset times, and account details from service data. Subscription names do not determine assumed limits.
-- Six editable operating rules; green, blue, purple, and egg-yellow accents; Chinese and English; system, light, and dark appearance.
-- Read-only reset-credit counts and details when supplied by the service. Credits are never redeemed automatically.
-- Independent records of observed quota restoration, including when there are no managed tasks or automatic control is paused. Activity shows before/after allowance, reset times, and credit counts, with explicit inferred attribution and insufficient-evidence cases.
-- Filter Activity by **All records / User actions / Automatic processes**, within the latest 200 loaded records in total.
+- Authorize chats for quota-aware pause and resume. Schedule one-time instructions or use **Run now**.
+- View quota, reset times, task progress, and activity. Adjust operating rules.
+- **Juice Bar** brings chats and instructions together.
+- **Start Juicing** enables scheduling; each chat's **Juicing** switch selects managed chats.
+- The new juicer logo is gray and static while stopped, with a gold bolt and subtle motion while enabled. Reduced motion is supported.
+- Chinese/English, light/dark/system appearance, and four accent colors.
 
 ### Install
 
-Choose a V0.3.4 preview from [Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases). Preview tags use `v0.3.4-preview.N`; the selected release page is the source of truth for its files and limitations.
+Choose `v0.4.0-preview.N` from [Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases):
 
-- **Mac:** Apple Silicon, macOS 14 or later. Download `Codex-Mission-Manager-0.3.4-arm64-preview.dmg` and drag the app to Applications.
-- **Windows:** Windows 10 build 19041 or later, x64, .NET Framework 4.8 or later. Use `Codex-Mission-Manager-0.3.4-windows-x64-setup.exe` for a current-user installation, or extract the portable ZIP.
-- Both distributions bundle the backend and an isolated Python runtime. Users do not need Python, Node.js, or development tools.
-- Install a compatible official Codex desktop client and sign in separately. Client software, credentials, and personal chat data are not included.
+- **Mac:** `TokenMax-0.4.0-arm64-preview.dmg`. Apple Silicon, macOS 14+.
+- **Windows:** `TokenMax-0.4.0-windows-x64-setup.exe`, or the portable ZIP. Windows 10 build 19041+, x64, .NET Framework 4.8+.
 
-Global automatic control starts paused on a new installation. Verify the account and chats before enabling global and per-chat control. Closing the main window leaves Mission Manager running in the menu bar or system tray. **Quit** stops its background process.
+The backend and Python runtime are bundled. Install a compatible official Codex desktop client and sign in separately. Verify the account and chats before selecting **Start Juicing**. Closing the window keeps the app running; **Quit** stops it.
 
-### Preview limitations
+Previously named Codex Mission Manager. Settings and history are retained. On Mac, quit the old version, install `TokenMax.app`, then remove the old-named app; do not run both. The Windows installer retains the existing installation directory.
 
-Live-client control uses a version-sensitive local adapter, rather than a stable public client-control API. Unknown client versions block control. A successful connection does not establish that live pause, recovery, and delivery have passed acceptance testing.
+### Preview limits
 
-The Mac preview is ad-hoc signed and not Apple-notarized; the Windows preview is unsigned. The operating system may block opening it. Closed-lid operation without an external display is not guaranteed; the Mac closed-lid helper is unavailable in this preview. Idle-sleep prevention does not prevent manual sleep or guarantee operation with the lid closed. See [release notes](docs/releases/0.3.4.md) for verified scope and outstanding checks.
+Mac builds are ad-hoc signed and unnotarized; Windows builds are unsigned. Live control uses a version-sensitive local adapter; unknown versions block control. Closed-lid operation is not guaranteed. Live delivery, lock, and power behavior require separate testing; see [release notes](docs/releases/0.4.0.md).
 
-## Project information / 项目信息
+## Project / 项目
 
-- [User guide / 使用指南](docs/USER_GUIDE.md)
-- [Build from source / 从源码构建](docs/BUILDING.md)
-- [Release process / 发行流程](docs/RELEASE_PROCESS.md)
-- [Changelog / 版本记录](CHANGELOG.md)
+[使用指南 / User guide](docs/USER_GUIDE.md) · [源码构建 / Build](docs/BUILDING.md) · [发行流程 / Releases](docs/RELEASE_PROCESS.md) · [版本记录 / Changelog](CHANGELOG.md)
 
-The Mac interface uses SwiftUI and AppKit; Windows uses WPF with a native system tray. Neither embeds a web interface. The backend uses the Python standard library and stores local state in SQLite. Configuration and task records stay in the user's application-data directory and are excluded from source and release packages.
+Native SwiftUI/AppKit on Mac and WPF on Windows; no embedded web interface. Local SQLite state and configuration are excluded from releases. Internal identifiers retain the original name for upgrade compatibility.
 
-Mac 界面使用 SwiftUI / AppKit，Windows 使用 WPF 和原生托盘，均不内嵌网页。后端使用 Python 标准库和 SQLite；用户配置及任务记录位于本机应用数据目录，不随源码或安装包分发。
+Mac 使用 SwiftUI/AppKit，Windows 使用 WPF，不内嵌网页。数据保留在本机，不随发行包上传；内部标识沿用旧名以兼容升级。
 
-Scheduling rules include adaptations from [cat2mao/codex-quota-monitor](https://github.com/cat2mao/codex-quota-monitor). Notices and bundled-runtime licenses are retained in [third-party](third-party/). This is an independent project and is not affiliated with OpenAI.
-
-部分调度规则改编自 [cat2mao/codex-quota-monitor](https://github.com/cat2mao/codex-quota-monitor)，相关声明与运行环境许可证保留于 [third-party](third-party/)。本项目独立开发，与 OpenAI 无隶属关系。
+Scheduling includes adaptations from [cat2mao/codex-quota-monitor](https://github.com/cat2mao/codex-quota-monitor). [Third-party notices](third-party/) are retained. This independent project is not affiliated with OpenAI.
