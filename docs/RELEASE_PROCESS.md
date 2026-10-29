@@ -28,7 +28,7 @@ The [release workflow](../.github/workflows/release.yml) runs on selected change
 4. **Gallery:** each platform stages only its configured PNGs and offline-render receipts. The publisher checks both build manifests, validates the selected images and receipts, and generates the gallery assets and release-note section.
 5. **Publish:** require both platform jobs and every selected gallery image, combine packages, reports, images, and gallery metadata into one verified `SHA256SUMS`, create a new immutable preview tag, upload to a draft, verify every asset, then publish one GitHub prerelease with both platforms and illustrated notes.
 
-[统一工作流](../.github/workflows/release.yml) 在 `main` 的指定路径更新后或通过 GitHub Actions 手动触发。它先核验版本、文档和图库配置，再分别构建 Mac 和 Windows，最后仅在两平台任务及所有必选预览图均成功时合并文件、校验来源和摘要、创建新标签并发布附图说明。Mac 执行完整隔离后端／宿主测试；Windows 执行有限的平台／宿主冒烟测试，不能称为完整 Windows 验收。无窗口服务或缺少必选图时如实记录，并阻止该次发行。
+[统一工作流](../.github/workflows/release.yml) 在 `main` 的指定路径更新后或通过 GitHub Actions 手动触发。它先核验版本、文档和图库配置，再分别构建 Mac 和 Windows，最后仅在两平台任务及所有必选预览图均成功时合并文件、校验来源和摘要、创建新标签并发布附图说明。Mac 执行完整隔离后端／宿主测试；Windows 执行完整隔离后端／宿主测试；离线结果不能称为完整 Windows 实机验收。无窗口服务或缺少必选图时如实记录，并阻止该次发行。
 
 Assets are uploaded to a draft first. Missing, incomplete, or mismatched uploads leave the draft unpublished, rather than exposing notes with unavailable images.
 
@@ -94,9 +94,19 @@ On Mac, compare `shasum -a 256 <downloaded-file>` with `SHA256SUMS`. On Windows,
 
 Mac 可用 `shasum -a 256 <下载文件>`，Windows 可用 `Get-FileHash -Algorithm SHA256 <下载文件>`，与发行中的摘要比较。摘要一致不代表具备正式发行签名或 Apple 公证。
 
-Use the repository's [Releases page](https://github.com/Dddysun/Codex-Mission-Manager/releases) for preview downloads. GitHub's `/releases/latest` can exclude prereleases and must not be used as the preview download target.
+## Latest release / 最新发行入口
 
-预览下载指向 [Releases 页面](https://github.com/Dddysun/Codex-Mission-Manager/releases)；`/releases/latest` 可能排除预发布，不用作预览下载入口。
+The [promotion workflow](../.github/workflows/promote-release.yml) verifies the existing tag, both platform manifests, all assets and their checksums before removing the prerelease flag and selecting that release as GitHub Latest. It changes release metadata only. Existing packages, notes and tags retain their identity. Run it manually with an explicit tag; a newer unpublished preview does not automatically replace Latest.
+
+[提升流程](../.github/workflows/promote-release.yml) 先验证既有标签、两平台构建清单、全部资产和校验值，再取消该发行的预发布标记并设为 GitHub Latest。只修改发行元数据，保留原安装包、说明与标签。后续手动运行时明确选择标签；新的预发布不会自动替换 Latest。
+
+The initial `[promote-latest]` commit promotes `v0.4.2-preview.13`. The tag and installed build number remain unchanged. GitHub Latest selection does not add Apple notarization, Developer ID, Authenticode signing or further live acceptance.
+
+首次 `[promote-latest]` 提交提升 `v0.4.2-preview.13`；标签及已安装构建号保持不变。GitHub Latest 标记不代表新增了公证、正式签名或其他实机验收。
+
+Use [/releases/latest](https://github.com/Dddysun/Codex-Mission-Manager/releases/latest) for the selected release. For preview builds, use [all Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases) or an explicit tag. The Latest API excludes releases still marked as prereleases.
+
+使用 [/releases/latest](https://github.com/Dddysun/Codex-Mission-Manager/releases/latest) 获取已选定的最新发行；仍为预发布的版本通过 [全部 Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases) 或明确标签获取。
 
 ## Signing and manual acceptance / 签名与人工验收
 
