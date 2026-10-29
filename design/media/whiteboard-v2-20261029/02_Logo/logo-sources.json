@@ -1,0 +1,82 @@
+[
+  {
+    "slug": "youku",
+    "name": "优酷视频-《嫁金钗》全网独播",
+    "publisher": "Youku.com Inc.",
+    "source": "https://apps.apple.com/cn/app/%E4%BC%98%E9%85%B7%E8%A7%86%E9%A2%91-%E5%AB%81%E9%87%91%E9%92%97-%E5%85%A8%E7%BD%91%E7%8B%AC%E6%92%AD/id336141475?uo=4",
+    "asset": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/41/84/bb/4184bb12-cd4f-704b-3fc0-12fa9fc35b53/AppIcon-0-0-1x_U007emarketing-0-9-0-85-220.png/512x512bb.jpg",
+    "file": "youku.jpg",
+    "size": 15948,
+    "used_asset": "youku.jpg",
+    "used_source": "https://apps.apple.com/cn/app/%E4%BC%98%E9%85%B7%E8%A7%86%E9%A2%91-%E5%AB%81%E9%87%91%E9%92%97-%E5%85%A8%E7%BD%91%E7%8B%AC%E6%92%AD/id336141475?uo=4"
+  },
+  {
+    "slug": "iqiyi",
+    "name": "爱奇艺-《小城良方》肖战领衔全网独播",
+    "publisher": "Beijing IQIYI Science & Technology Co., Ltd.",
+    "source": "https://apps.apple.com/cn/app/%E7%88%B1%E5%A5%87%E8%89%BA-%E5%B0%8F%E5%9F%8E%E8%89%AF%E6%96%B9-%E8%82%96%E6%88%98%E9%A2%86%E8%A1%94%E5%85%A8%E7%BD%91%E7%8B%AC%E6%92%AD/id393765873?uo=4",
+    "asset": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/13/16/4d/13164d45-98c1-7d30-cfb9-4f2cd112cf0d/AppIcon-0-0-1x_U007epad-0-0-0-1-0-0-sRGB-85-220.png/512x512bb.jpg",
+    "file": "iqiyi.jpg",
+    "size": 36898,
+    "used_asset": "iqiyi.jpg",
+    "used_source": "https://apps.apple.com/cn/app/%E7%88%B1%E5%A5%87%E8%89%BA-%E5%B0%8F%E5%9F%8E%E8%89%AF%E6%96%B9-%E8%82%96%E6%88%98%E9%A2%86%E8%A1%94%E5%85%A8%E7%BD%91%E7%8B%AC%E6%92%AD/id393765873?uo=4"
+  },
+  {
+    "slug": "qqmusic",
+    "name": "QQ音乐 - 听我想听",
+    "publisher": "Tencent Technology (Shenzhen) Company Limited",
+    "source": "https://apps.apple.com/cn/app/qq%E9%9F%B3%E4%B9%90-%E5%90%AC%E6%88%91%E6%83%B3%E5%90%AC/id414603431?uo=4",
+    "asset": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/b7/54/05/b75405bc-f82e-d9ec-4149-dc1a1b37e304/AppIcon-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg",
+    "file": "qqmusic.jpg",
+    "size": 29040,
+    "used_asset": "qqmusic.jpg",
+    "used_source": "https://apps.apple.com/cn/app/qq%E9%9F%B3%E4%B9%90-%E5%90%AC%E6%88%91%E6%83%B3%E5%90%AC/id414603431?uo=4"
+  },
+  {
+    "slug": "tencentvideo",
+    "name": "腾讯视频-《尚公主》上头爽嗑",
+    "publisher": "Tencent Technology (Shenzhen) Company Limited",
+    "source": "https://apps.apple.com/cn/app/%E8%85%BE%E8%AE%AF%E8%A7%86%E9%A2%91-%E5%B0%9A%E5%85%AC%E4%B8%BB-%E4%B8%8A%E5%A4%B4%E7%88%BD%E5%97%91/id458318329?uo=4",
+    "asset": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/90/c2/4e/90c24e3a-df60-3463-9aae-b64fcaa48c16/AppIcon-0-0-1x_U007epad-0-1-0-0-sRGB-85-220.png/512x512bb.jpg",
+    "file": "tencentvideo.jpg",
+    "size": 46024,
+    "used_asset": "tencentvideo-brand.png",
+    "used_source": "https://vfiles.gtimg.cn/wuji_dashboard/xy/starter/4ea79867.png",
+    "discovery": "v.qq.com homepage apple-touch-icon"
+  },
+  {
+    "slug": "bilibili",
+    "name": "哔哩哔哩-弹幕番剧直播高清视频",
+    "publisher": "Shanghai Bilibili Animation Co.,Ltd",
+    "source": "https://apps.apple.com/cn/app/%E5%93%94%E5%93%A9%E5%93%94%E5%93%A9-%E5%BC%B9%E5%B9%95%E7%95%AA%E5%89%A7%E7%9B%B4%E6%92%AD%E9%AB%98%E6%B8%85%E8%A7%86%E9%A2%91/id736536022?uo=4",
+    "asset": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/40/4e/b4/404eb4f0-3eb9-344c-6c11-2198c2959f4e/AppIcon-0-0-1x_U007epad-0-1-0-sRGB-85-220.png/512x512bb.jpg",
+    "file": "bilibili.jpg",
+    "size": 52726,
+    "used_asset": "bilibili-brand.png",
+    "used_source": "https://github.com/simple-icons/simple-icons/blob/develop/icons/bilibili.svg",
+    "license": "CC0-1.0, trademarks remain with their owners",
+    "modification": "Applied pink fill to SVG; rendered with macOS Quick Look"
+  },
+  {
+    "slug": "neteasemusic",
+    "name": "网易云音乐-数亿音乐畅听",
+    "publisher": "Hangzhou Netease Cloud Music Technology Co., Ltd.",
+    "source": "https://apps.apple.com/cn/app/%E7%BD%91%E6%98%93%E4%BA%91%E9%9F%B3%E4%B9%90-%E6%95%B0%E4%BA%BF%E9%9F%B3%E4%B9%90%E7%95%85%E5%90%AC/id590338362?uo=4",
+    "asset": "https://is1-ssl.mzstatic.com/image/thumb/Purple221/v4/7b/ae/3a/7bae3a3e-2581-10f8-aa40-8bb0cd961c8e/appIconNew-0-0-1x_U007epad-0-1-0-85-220.png/512x512bb.jpg",
+    "file": "neteasemusic.jpg",
+    "size": 36238,
+    "used_asset": "neteasemusic.jpg",
+    "used_source": "https://apps.apple.com/cn/app/%E7%BD%91%E6%98%93%E4%BA%91%E9%9F%B3%E4%B9%90-%E6%95%B0%E4%BA%BF%E9%9F%B3%E4%B9%90%E7%95%85%E5%90%AC/id590338362?uo=4"
+  },
+  {
+    "slug": "chatgpt",
+    "name": "ChatGPT",
+    "publisher": "OpenAI OpCo, LLC",
+    "source": "https://apps.apple.com/us/app/chatgpt/id6448311069?uo=4",
+    "asset": "https://is1-ssl.mzstatic.com/image/thumb/Purple211/v4/72/2d/27/722d272a-9d6f-d186-8a92-6a884107df8f/AppIcon-0-0-1x_U007epad-0-0-0-1-0-85-220.png/512x512bb.jpg",
+    "file": "chatgpt.jpg",
+    "size": 40870,
+    "used_asset": "chatgpt.jpg",
+    "used_source": "https://apps.apple.com/us/app/chatgpt/id6448311069?uo=4"
+  }
+]
