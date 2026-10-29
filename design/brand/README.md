@@ -55,3 +55,9 @@ logo.animated = false;
 [Figma 品牌组件](https://www.figma.com/design/7wMwtHSiNjouhypR669J8P?node-id=7-1036) · [动效画板](https://www.figma.com/design/7wMwtHSiNjouhypR669J8P?node-id=7-1468)
 
 链接的 Figma 画板为 1.1.0 归档；1.2.0 以本目录 SVG 和原生实现为准。应用源文件为 `native/JuicerLogo.swift` 和 `windows/JuicerLogo.cs`。
+
+## 动效提案 / Motion proposal
+
+[内核放电 01 / Core-origin discharge 01](proposals/core-discharge-v1/README.md)（`1.3.0-proposal.1`）提供由杯内闪电向外分叉放电的独立预览，包含动图、视频及深浅色静帧。当前正式组件仍为 1.2.0，提案尚未应用到 Mac、Windows 或正式 SVG。
+
+The [core-origin discharge proposal](proposals/core-discharge-v1/README.md) includes GIF, video, and light/dark stills. The production component remains 1.2.0; this preview has not replaced native renderers or production SVG assets.

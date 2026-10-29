@@ -1,0 +1,26 @@
+{
+  "proposal": "1.3.0-proposal.1",
+  "checks": [
+    "six-trunks-rooted-inside-bolt",
+    "branches-rooted-at-trunk-vertices",
+    "no-perimeter-energy-groups",
+    "visible-discharge-changes",
+    "pause-freezes-current-frame",
+    "system-reduced-motion-disables-discharge",
+    "manual-reduced-motion-disables-discharge",
+    "nonworking-states-remain-static",
+    "light-dark-rendered",
+    "small-size-previews",
+    "mobile-no-horizontal-overflow",
+    "browser-no-errors"
+  ],
+  "result": "pass",
+  "cycle_seconds": 3.6,
+  "video_frames": 108,
+  "video_fps": 30,
+  "gif_fps": 20,
+  "application_code_changed": false,
+  "live_backend_started": false,
+  "private_data_loaded": false,
+  "reference_image_copied": false
+}
