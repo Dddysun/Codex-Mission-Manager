@@ -16,7 +16,7 @@ python3 -B design/media/tiktok-recorder/scenes.py /tmp/tokenmax-media-plan.json 
 python3 -B design/media/tiktok-recorder/finalize.py /tmp/tokenmax-media-plan.json /tmp/tokenmax-media-output
 ```
 
-使用新的输出目录；已有视频不会被覆盖。可以传 `--scene 04` 只生成预约镜头，或增加 `--preview` 仅生成该镜头的原生检查帧。完整收尾检查需要十九组视频齐全。`finalize.py` 将视频索引移至文件头、生成 76 秒总览和 190 秒完整串联、逐帧解码检查全部视频，并写出 SHA-256 与机器可读清单。
+使用新的输出目录；已有视频不会被覆盖。可以传 `--scene 10` 只生成预约镜头，或增加 `--preview` 仅生成该镜头的原生检查帧。完整收尾检查需要十九组视频齐全。`finalize.py` 将视频索引移至文件头、生成 76 秒总览和 190 秒完整串联、逐帧解码检查全部视频，并写出 SHA-256 与机器可读清单。
 
 ## 镜头
 
