@@ -6,10 +6,11 @@
       #qj-4 .handle{stroke:var(--qj-blue)}#qj-4 .bolt{fill:var(--qj-gray)}
       #qj-4[data-state="working"] .bolt{fill:var(--qj-gold)}
       #qj-4[data-state="disconnected"],#qj-4[data-state="idle"]{--qj-blue:var(--qj-muted)}
-      #qj-4 .arcs{stroke:var(--qj-gold)}#qj-4 .energy-trace{stroke-dasharray:62 18 14 36}#qj-4 .energy-glow{opacity:.12}#qj-4 .energy-halo{opacity:.28}#qj-4 .energy-filament{opacity:.92}#qj-4 .energy-core{stroke:var(--qj-core);opacity:.95}#qj-4 .branches{opacity:.65}#qj-4 .branches .energy-trace{stroke-dasharray:18 10 5 22}
+
       #qj-4 .pause-mark{stroke:var(--qj-gold)}
       #qj-4 .disconnect-mark{stroke:var(--qj-gray)}#qj-4 .error-mark{fill:var(--qj-red)}
-      </style>
+
+    </style>
 
 
       <g data-layer="handle"><path class="handle" d="M180 78H199Q229 78 226 110L223 128Q220 156 176 153" fill="none" stroke-width="15" stroke-linejoin="round"/></g>

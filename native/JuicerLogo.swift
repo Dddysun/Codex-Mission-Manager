@@ -3,18 +3,33 @@ import SwiftUI
 
 // Native geometry mirrors the layered brand SVG. Animation describes global
 // control readiness, never the progress of an individual task.
+// Geometry is generated once per cosmetic cycle, never once per frame.
+final class JuicerMotionSession: ObservableObject {
+    private var sequence=JuicerMotion.sequence(seed:UInt32.random(in:1...UInt32.max))
+    private var started:Double?
+    func frame(at time:Double)->[JuicerStrokeFrame] {
+        if started == nil { started=time }
+        if time-started! >= sequence.cycleSeconds || time < started! {
+            sequence=JuicerMotion.sequence(seed:UInt32.random(in:1...UInt32.max));started=time
+        }
+        return JuicerMotion.frame(sequence,at:time-started!)
+    }
+}
+
 struct JuicerLogo: View {
     var state: MissionLogoState
     var darkSurface = false
     var animated = true
     var compact = false
+    @StateObject private var motion=JuicerMotionSession()
     @Environment(\.colorScheme) private var scheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var animating: Bool { state == .working && animated && !reduceMotion && !compact }
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !animating)) { timeline in
             JuicerArtwork(state:state,dark:darkSurface || scheme == .dark,
-                          time:animating ? timeline.date.timeIntervalSinceReferenceDate : nil,compact:compact)
+                          time:animating ? timeline.date.timeIntervalSinceReferenceDate : nil,compact:compact,
+                          discharge:animating ? motion.frame(at:timeline.date.timeIntervalSinceReferenceDate):[])
         }
         .accessibilityElement(children:.ignore)
         .accessibilityLabel(L("TOKEN榨汁机"))
@@ -22,21 +37,22 @@ struct JuicerLogo: View {
     }
 }
 
-private struct JuicerArtwork: View {
+struct JuicerArtwork: View {
     let state: MissionLogoState
     let dark: Bool
     let time: TimeInterval?
     var compact = false
     func color(_ light:String,_ darkValue:String) -> Color { Color(nsColor:MissionPalette.color(dark ? darkValue : light)) }
-    func electricPath(_ points:[CGPoint]) -> Path { var p=Path();p.addLines(points);return p }
-    func energy(_ path:Path,context:GraphicsContext,gold:Color,offset:Double=0,branch:Bool=false) {
-        // Broad amber trail, saturated filament, and a warm bright core.
-        // Continuous flow, with no flashes or rotating circular outline.
-        let phase=time.map { -130 * ($0/1.8+offset).truncatingRemainder(dividingBy:1) } ?? -20
-        let dash: [CGFloat] = branch ? [18,10,5,22] : [62,18,14,36]
-        for (width,alpha,ink) in [(9.0,0.12,gold),(4.5,0.28,gold),(2.4,0.92,gold),(0.85,0.95,color("FFF2C9","FFE6A8"))] {
-            var layer=context; layer.opacity=branch ? alpha*0.65 : alpha
-            layer.stroke(path,with:.color(ink),style:StrokeStyle(lineWidth:width,lineCap:.round,lineJoin:.round,dash:dash,dashPhase:phase))
+    var discharge:[JuicerStrokeFrame] = []
+    func drawDischarge(_ context:GraphicsContext,gold:Color) {
+        for frame in discharge where frame.opacity>0 && frame.progress>0 {
+            var path=Path();path.addLines(frame.stroke.detailed.map{CGPoint(x:$0.x,y:$0.y)})
+            let partial=path.trimmedPath(from:0,to:frame.progress),level=frame.stroke.level
+            for (width,alpha,ink) in [(6.5,0.17,gold),(level==0 ? 2.4:level==1 ? 1.6:1.2,0.98,gold),
+                                    (level==0 ? 1.3:level==1 ? 0.86:0.62,1.0,color("FFF8E7","FFF5DD"))] {
+                var layer=context;layer.opacity=frame.opacity*alpha
+                layer.stroke(partial,with:.color(ink),style:StrokeStyle(lineWidth:width,lineCap:.round,lineJoin:.round))
+            }
         }
     }
     var body: some View {
@@ -47,10 +63,6 @@ private struct JuicerArtwork: View {
             let blue=compact ? Color(nsColor:MissionPalette.color(muted ? "889EB8" : "4599F5")) : (muted ? color("758598","637285") : color("2168D5","5386BF"))
             let glass=compact ? Color(nsColor:MissionPalette.color("DFEEFF")) : (state == .idle ? color("EFF1F4","202A38") : color("EAF3FF","20344C"))
             let gray=color("8795A8","7F8C9C"), gold=color("F5B82E","F2BA42")
-            if state == .working && !compact {
-                energy(electricPath([CGPoint(x:74,y:214),CGPoint(x:57,y:197),CGPoint(x:61,y:184),CGPoint(x:43,y:169),CGPoint(x:49,y:154),CGPoint(x:33,y:137),CGPoint(x:42,y:123),CGPoint(x:35,y:103),CGPoint(x:51,y:89),CGPoint(x:46,y:73),CGPoint(x:64,y:61)]),context:context,gold:gold,offset:0.35)
-                energy(electricPath([CGPoint(x:49,y:154),CGPoint(x:62,y:144),CGPoint(x:58,y:131)]),context:context,gold:gold,offset:0.35,branch:true)
-            }
             var handle=Path()
             handle.move(to:CGPoint(x:180,y:78));handle.addLine(to:CGPoint(x:199,y:78))
             handle.addQuadCurve(to:CGPoint(x:226,y:110),control:CGPoint(x:229,y:78))
@@ -68,9 +80,7 @@ private struct JuicerArtwork: View {
             context.fill(inner,with:.color(glass))
             context.fill(Path(roundedRect:CGRect(x:57,y:48,width:142,height:22),cornerRadius:11),with:.color(blue))
             context.fill(Path(roundedRect:CGRect(x:110,y:29,width:35,height:14),cornerRadius:6),with:.color(blue))
-            var knob=context
-            let angle=time.map { $0.truncatingRemainder(dividingBy:3.2)/3.2*360 } ?? 0
-            knob.translateBy(x:127,y:36);knob.rotate(by:.degrees(angle));knob.translateBy(x:-127,y:-36)
+            let knob=context
             knob.fill(Path(ellipseIn:CGRect(x:122,y:31,width:10,height:10)),with:.color(glass))
             var tick=Path();tick.move(to:CGPoint(x:127,y:32));tick.addLine(to:CGPoint(x:127,y:36))
             knob.stroke(tick,with:.color(blue),style:StrokeStyle(lineWidth:2.5,lineCap:.round))
@@ -81,6 +91,7 @@ private struct JuicerArtwork: View {
             context.fill(base,with:.color(blue));context.fill(Path(ellipseIn:CGRect(x:117,y:192,width:20,height:20)),with:.color(glass))
             var power=Path();power.move(to:CGPoint(x:127,y:196));power.addLine(to:CGPoint(x:127,y:201))
             context.stroke(power,with:.color(blue),style:StrokeStyle(lineWidth:3,lineCap:.round))
+            if state == .working && !compact { drawDischarge(context,gold:gold) }
             var symbol=context
             switch state {
             case .waiting:
@@ -101,18 +112,10 @@ private struct JuicerArtwork: View {
                 symbol.fill(mark,with:.color(red));symbol.fill(Path(ellipseIn:CGRect(x:122,y:129,width:12,height:12)),with:.color(red))
             case .idle,.working:
                 if state == .working, let time {
-                    let pulse=(1-cos(time*2*Double.pi/2.4))/2
-                    let scale=0.985+0.03*pulse
-                    symbol.opacity=0.78+0.22*pulse
-                    symbol.translateBy(x:128,y:122);symbol.scaleBy(x:scale,y:scale);symbol.translateBy(x:-128,y:-122)
+                    symbol.opacity=JuicerMotion.breath(time)
                 }
                 var bolt=Path();bolt.addLines([CGPoint(x:129,y:91),CGPoint(x:151,y:91),CGPoint(x:133,y:116),CGPoint(x:153,y:116),CGPoint(x:113,y:153),CGPoint(x:124,y:126),CGPoint(x:104,y:126)]);bolt.closeSubpath()
                 symbol.fill(bolt,with:.color(state == .working ? gold : gray))
-            }
-            if state == .working && !compact {
-                energy(electricPath([CGPoint(x:153,y:38),CGPoint(x:177,y:46),CGPoint(x:174,y:55),CGPoint(x:203,y:66),CGPoint(x:213,y:83),CGPoint(x:205,y:96),CGPoint(x:229,y:113),CGPoint(x:220,y:127),CGPoint(x:230,y:143),CGPoint(x:216,y:157),CGPoint(x:221,y:175),CGPoint(x:199,y:187),CGPoint(x:202,y:199),CGPoint(x:178,y:208),CGPoint(x:153,y:215),CGPoint(x:137,y:207),CGPoint(x:109,y:221),CGPoint(x:90,y:214)]),context:context,gold:gold)
-                energy(electricPath([CGPoint(x:213,y:83),CGPoint(x:232,y:78),CGPoint(x:237,y:59)]),context:context,gold:gold,branch:true)
-                energy(electricPath([CGPoint(x:199,y:187),CGPoint(x:215,y:199),CGPoint(x:226,y:195)]),context:context,gold:gold,offset:0.6,branch:true)
             }
         }.aspectRatio(1,contentMode:.fit)
     }

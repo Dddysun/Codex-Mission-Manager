@@ -735,12 +735,18 @@ enum MissionLifecycleChecks {
             } catch { fputs("Native UI self-test failed: \(error)\n", stderr); exit(1) }
             return
         }
+        if let index=CommandLine.arguments.firstIndex(of:"--logo-self-test"),CommandLine.arguments.count>index+1 {
+            do { try JuicerPreview.export(to:CommandLine.arguments[index+1]) }
+            catch { fputs("Logo verification failed: \(error)\n",stderr);exit(1) }
+            return
+        }
         if CommandLine.arguments.contains("--self-test") {
             let report: [String: Any] = ["version": MissionIdentity.version, "architecture": "arm64", "native": true, "ui": "SwiftUI-AppKit", "webView": false,
                 "releaseSigned": MissionIdentity.releaseSigned, "helperPreviewFailsClosed": !MissionIdentity.releaseSigned,
-                "hardwareReadOnly": true, "privateDataLoaded": false]
+                "brandIdentityVersion":"1.3.0","brandMotionChecks":JuicerMotion.selfTest(), "hardwareReadOnly": true, "privateDataLoaded": false]
             let data = try! JSONSerialization.data(withJSONObject: report, options: .sortedKeys)
             print(String(data: data, encoding: .utf8)!)
+            if !JuicerMotion.selfTest() {exit(1)}
             return
         }
         let app = NSApplication.shared

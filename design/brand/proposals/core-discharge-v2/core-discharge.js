@@ -2,7 +2,7 @@
 (function (root) {
   'use strict';
   const base = typeof module !== 'undefined' && module.exports
-    ? require('../../quota-juicer.js') : root.QuotaJuicer;
+    ? require('../../juicer-artwork.js') : root.QuotaJuicerArtwork;
   const stroke = (points, parent = null) => ({points, parent});
 
   // Macro paths turn and fold before fine electrical fractures are added.

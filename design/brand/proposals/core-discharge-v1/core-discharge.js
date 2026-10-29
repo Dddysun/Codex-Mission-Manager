@@ -2,7 +2,7 @@
 (function (root) {
   'use strict';
   const base = typeof module !== 'undefined' && module.exports
-    ? require('../../quota-juicer.js') : root.QuotaJuicer;
+    ? require('../../juicer-artwork.js') : root.QuotaJuicerArtwork;
 
   // Each trunk starts inside the existing bolt. Every branch begins at an
   // actual trunk vertex. The paths never connect around the cup perimeter.

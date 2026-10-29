@@ -1,5 +1,8 @@
 // TokenMax native vector identity. Display-only; never controls a chat.
 using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Windows.Media.Imaging;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
@@ -22,11 +25,15 @@ namespace CodexMissionManager
         static readonly Geometry Pause = Shape("M115,94 V135 M139,94 V135");
         static readonly Geometry Disconnect = Shape("M119,98 L115,94 C110,89 102,91 100,98 C99,102 100,106 104,109 L113,118 M136,111 L145,120 C150,125 150,132 145,136 C140,140 134,138 130,134 L126,130 M111,135 L143,94");
         static readonly Geometry Error = Shape("M122,89 H134 L132,122 H124 Z");
-        static readonly Geometry EnergyBack = Shape("M74,214 L57,197 L61,184 L43,169 L49,154 L33,137 L42,123 L35,103 L51,89 L46,73 L64,61");
-        static readonly Geometry EnergyFront = Shape("M153,38 L177,46 L174,55 L203,66 L213,83 L205,96 L229,113 L220,127 L230,143 L216,157 L221,175 L199,187 L202,199 L178,208 L153,215 L137,207 L109,221 L90,214");
-        static readonly Geometry BranchLeft = Shape("M49,154 L62,144 L58,131");
-        static readonly Geometry BranchTop = Shape("M213,83 L232,78 L237,59");
-        static readonly Geometry BranchBase = Shape("M199,187 L215,199 L226,195");
+        JuicerSequence sequence;
+        double cycleStarted;
+        double? fixtureTime;
+        readonly Random cosmeticRandom = new Random();
+        void EnsureSequence(double seconds) {
+            if (sequence == null || seconds-cycleStarted >= sequence.CycleSeconds || seconds<cycleStarted) {
+                sequence=JuicerMotion.Sequence((uint)cosmeticRandom.Next(1,Int32.MaxValue));cycleStarted=seconds;
+            }
+        }
         public JuicerLogo()
         {
             Width = 52; Height = 52; IsHitTestVisible = false;
@@ -78,49 +85,72 @@ namespace CodexMissionManager
                 && ResolveState(false, true, true, true, true, "sampling", false, "metered", false, "normal", true) == "error"
                 && ResolveState(false, true, true, true, true, "", true, "metered", false, "normal", true) == "disconnected"
                 && ResolveState(false, true, true, true, false, "", false, "metered", false, "normal", true) == "disconnected"
-                && BodyColor(true, "working") == "#5386BF" && BodyColor(true, "idle") == "#637285";
+                && JuicerMotion.SelfTest() && BodyColor(true, "working") == "#5386BF" && BodyColor(true, "idle") == "#637285";
         }
-        static void DrawEnergy(DrawingContext dc, Geometry path, Brush gold, Brush core, double seconds, double offset = 0, bool branch = false)
-        {
-            double phase = -130 * ((seconds / 1.8 + offset) % 1);
-            double[] widths = { 9, 4.5, 2.4, 0.85 }, opacity = { 0.12, 0.28, 0.92, 0.95 };
-            double[] pattern = branch ? new double[] { 18, 10, 5, 22 } : new double[] { 62, 18, 14, 36 };
-            for (int i = 0; i < widths.Length; i++)
-            {
-                double w = widths[i]; var dashes = new DoubleCollection(); foreach (double value in pattern) dashes.Add(value / w);
-                var trace = new Pen(i == 3 ? core : gold, w) { DashStyle = new DashStyle(dashes, phase / w),
-                    StartLineCap = PenLineCap.Round, EndLineCap = PenLineCap.Round, DashCap = PenLineCap.Round, LineJoin = PenLineJoin.Round };
-                trace.Freeze(); dc.PushOpacity(opacity[i] * (branch ? 0.65 : 1)); dc.DrawGeometry(null, trace, path); dc.Pop();
+        static Geometry Partial(JuicerStroke stroke, double progress) {
+            var geometry=new StreamGeometry();
+            using(var path=geometry.Open()) {
+                var points=stroke.Detailed;path.BeginFigure(new Point(points[0].X,points[0].Y),false,false);
+                double remaining=stroke.Length*progress;
+                for(int i=1;i<points.Count && remaining>0;i++) {
+                    var a=points[i-1];var b=points[i];double span=JuicerMotion.Distance(a,b);
+                    double fraction=span>0 ? Math.Min(1,remaining/span):1;
+                    path.LineTo(new Point(a.X+(b.X-a.X)*fraction,a.Y+(b.Y-a.Y)*fraction),true,false);remaining-=span;
+                }
+            }
+            geometry.Freeze();return geometry;
+        }
+        void DrawDischarge(DrawingContext dc, Brush gold, Brush core, double seconds) {
+            EnsureSequence(seconds);
+            foreach(var frame in JuicerMotion.Frame(sequence,seconds-cycleStarted)) {
+                if(frame.Opacity<=0 || frame.Progress<=0)continue;
+                var path=Partial(frame.Stroke,frame.Progress);int level=frame.Stroke.Level;
+                double[] widths={6.5,level==0 ? 2.4:level==1 ? 1.6:1.2,level==0 ? 1.3:level==1 ? .86:.62};
+                double[] alphas={.17,.98,1};
+                for(int i=0;i<widths.Length;i++) {
+                    dc.PushOpacity(frame.Opacity*alphas[i]);dc.DrawGeometry(null,Stroke(i==2 ? core:gold,widths[i]),path);dc.Pop();
+                }
+            }
+        }
+        // Offline native rendering: no tray, backend, user preferences or chats.
+        public static void ExportMotion(string directory) {
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(Path.Combine(directory,"motion.json"),Json.Stringify(JuicerMotion.Samples()),new System.Text.UTF8Encoding(false));
+            var logo=new JuicerLogo();logo.state="working";logo.dark=true;
+            logo.sequence=JuicerMotion.Sequence(20261029);logo.cycleStarted=0;
+            var times=new List<double>{0,1,2};foreach(var ev in logo.sequence.Events)times.Add(ev.Start+ev.Rise);
+            for(int i=0;i<times.Count;i++) {
+                logo.fixtureTime=times[i];logo.Measure(new Size(384,384));logo.Arrange(new Rect(0,0,384,384));logo.InvalidateVisual();logo.UpdateLayout();
+                var bitmap=new RenderTargetBitmap(384,384,96,96,PixelFormats.Pbgra32);bitmap.Render(logo);
+                var png=new PngBitmapEncoder();png.Frames.Add(BitmapFrame.Create(bitmap));
+                using(var file=File.Create(Path.Combine(directory,"frame-"+i+".png")))png.Save(file);
             }
         }
         protected override void OnRender(DrawingContext dc)
         {
             base.OnRender(dc);
             double size = Math.Min(ActualWidth, ActualHeight); if (size <= 0) return;
-            bool working = state == "working", moving = working && SystemParameters.ClientAreaAnimation;
+            bool working = state == "working", moving = working && (fixtureTime.HasValue || SystemParameters.ClientAreaAnimation);
             var body = Color(BodyColor(dark, state)); var glass = Color(state == "idle" ? (dark ? "#202A38" : "#EFF1F4") : (dark ? "#20344C" : "#EAF3FF"));
             var gray = Color(dark ? "#7F8C9C" : "#8795A8"); var gold = Color(dark ? "#F2BA42" : "#F5B82E");
-            var core = Color(dark ? "#FFE6A8" : "#FFF2C9");
-            double seconds = moving ? clock.Elapsed.TotalSeconds : 0;
+            var core = Color(dark ? "#FFF5DD" : "#FFF8E7");
+            double seconds = fixtureTime ?? (moving ? clock.Elapsed.TotalSeconds : 0);
             dc.PushTransform(new TranslateTransform((ActualWidth - size) / 2, (ActualHeight - size) / 2));
             dc.PushTransform(new ScaleTransform(size / 256, size / 256));
-            if (working) { DrawEnergy(dc, EnergyBack, gold, core, seconds, 0.35); DrawEnergy(dc, BranchLeft, gold, core, seconds, 0.35, true); }
             dc.DrawGeometry(null, Stroke(body, 15), Handle); dc.DrawGeometry(body, null, Cup); dc.DrawGeometry(glass, null, Glass);
             dc.DrawRoundedRectangle(body, null, new Rect(57, 48, 142, 22), 11, 11);
             dc.DrawRoundedRectangle(body, null, new Rect(110, 29, 35, 14), 6, 6);
-            dc.PushTransform(new RotateTransform(seconds / 3.2 * 360, 127, 36)); dc.DrawEllipse(glass, null, new Point(127, 36), 5, 5); dc.DrawLine(Stroke(body, 2.5), new Point(127, 32), new Point(127, 36)); dc.Pop();
+            dc.DrawEllipse(glass, null, new Point(127, 36), 5, 5); dc.DrawLine(Stroke(body, 2.5), new Point(127, 32), new Point(127, 36));
             dc.DrawGeometry(body, null, Base); dc.DrawEllipse(glass, null, new Point(127, 202), 10, 10); dc.DrawLine(Stroke(body, 3), new Point(127, 196), new Point(127, 201));
+            if (moving) DrawDischarge(dc,gold,core,seconds);
             if (state == "waiting") dc.DrawGeometry(null, Stroke(gold, 10), Pause);
             else if (state == "disconnected") dc.DrawGeometry(null, Stroke(gray, 6), Disconnect);
             else if (state == "error") { var red = Color(dark ? "#D67A80" : "#CD5058"); dc.DrawGeometry(red, null, Error); dc.DrawEllipse(red, null, new Point(128, 135), 6, 6); }
             else
             {
-                double breath = moving ? (1 - Math.Cos(seconds / 2.4 * Math.PI * 2)) / 2 : 1;
-                dc.PushOpacity(moving ? 0.78 + 0.22 * breath : 1);
-                double scale = moving ? 0.985 + 0.03 * breath : 1;
-                dc.PushTransform(new ScaleTransform(scale, scale, 128, 122)); dc.DrawGeometry(working ? gold : gray, null, Bolt); dc.Pop(); dc.Pop();
+                dc.PushOpacity(moving ? JuicerMotion.Breath(seconds):1);
+                dc.DrawGeometry(working ? gold : gray, null, Bolt);dc.Pop();
             }
-            if (working) { DrawEnergy(dc, EnergyFront, gold, core, seconds); DrawEnergy(dc, BranchTop, gold, core, seconds, 0, true); DrawEnergy(dc, BranchBase, gold, core, seconds, 0.6, true); }
             dc.Pop(); dc.Pop();
         }
     }

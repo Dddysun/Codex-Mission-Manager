@@ -88,3 +88,9 @@ The first two commands are portable; the Swift contract check requires macOS. On
 Native self-tests and fixture-render options are exercised by [the release workflow](../.github/workflows/release.yml). Fixture renders and editor/lifecycle checks start no live backend and send no chat messages. GUI rendering depends on an available desktop/window server; unavailable checks must be recorded as skipped. See [release validation](releases/0.4.2.md) for the distinction between offline checks and live acceptance.
 
 原生自检、界面渲染和编辑器／窗口生命周期检查由 [发行工作流](../.github/workflows/release.yml) 执行。示例渲染不启动真实后台、不发送聊天消息。图形渲染依赖可用桌面或窗口服务，无法执行时须记录为跳过。离线检查与实机验收的区别见 [发行说明](releases/0.4.2.md)。
+
+## Brand 1.3.0 / 品牌组件
+
+Run `node design/brand/build.cjs` after editing `design/brand/juicer-motion.js`. Commit its generated Swift/C# constants, SVGs, bundle and parity fixtures together. Native builds provide `--logo-self-test OUTPUT_DIRECTORY`; verify the resulting `motion.json` with `python3 scripts/verify_brand_motion.py OUTPUT_DIRECTORY/motion.json`. This offline path renders the production painter without starting a host or loading private data.
+
+修改路径后运行上述品牌构建，生成文件随源码一起提交。两端原生自检导出同一组固定种子，发行流程逐项核对；此检查不操作真实聊天。

@@ -24,7 +24,7 @@ The [release workflow](../.github/workflows/release.yml) runs on selected change
 
 1. **Prepare:** validate `VERSION` and required documentation; derive the preview tag.
 2. **macOS:** fetch the pinned runtime, run the full isolated backend/host suite and native contracts, build the app, check native marked-text handling, render fixture pages when a window server is available, then create and verify the DMG.
-3. **Windows:** build the native app and current-user EXE, check payload integrity, run limited Windows platform/host smoke checks, native editor/lifecycle checks, and fixture renders. This is not full Windows acceptance testing.
+3. **Windows:** build the native app and current-user EXE, check payload integrity, run the full isolated backend and packaging-host suites, native brand parity checks, native editor/lifecycle checks, and fixture renders. Offline coverage does not replace live Windows acceptance testing.
 4. **Gallery:** each platform stages only its configured PNGs and offline-render receipts. The publisher checks both build manifests, validates the selected images and receipts, and generates the gallery assets and release-note section.
 5. **Publish:** require both platform jobs and every selected gallery image, combine packages, reports, images, and gallery metadata into one verified `SHA256SUMS`, create a new immutable preview tag, upload to a draft, verify every asset, then publish one GitHub prerelease with both platforms and illustrated notes.
 

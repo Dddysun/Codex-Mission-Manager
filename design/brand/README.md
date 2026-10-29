@@ -1,11 +1,11 @@
-# TOKEN榨汁机 / TokenMax · 品牌组件 1.2.0
+# TOKEN榨汁机 / TokenMax · 品牌组件 1.3.0
 
 透明背景的分层 SVG 和无依赖 Web Component。打开 `index.html` 查看双主题、五状态、暂停和减少动态效果。
 
 | 状态 | 杯内符号 | 动效 |
 | --- | --- | --- |
 | idle | 灰色闪电，灰色杯体 | 静止 |
-| working | 金黄色闪电 | 闪电呼吸、细电弧环绕、旋钮轻转 |
+| working | 金黄色闪电 | 2 秒闪电呼吸、十种随机分叉放电 |
 | waiting | 金色暂停符号 | 静止 |
 | disconnected | 灰色断开符号 | 静止 |
 | error | 红色感叹号 | 静止 |
@@ -30,19 +30,25 @@ logo.theme = 'dark';
 logo.animated = false;
 ```
 
-`QuotaJuicer.renderSVG({state:'working', theme:'dark', animated:true})` 返回独立作用域 SVG；`static:true` 去掉动画规则。分层：energy-back、handle、cup、lid、top-knob、base、control、status-symbol、energy-front。
+`QuotaJuicer.renderSVG({state:'working', theme:'dark', animated:true})` 返回独立作用域 SVG；`static:true` 去掉动画规则。分层：handle、cup、lid、top-knob、base、control、discharge-1…10、status-symbol。
 
 ## 动效与颜色
 
-闪电下移 8 个设计单位，2.4 秒呼吸（不透明度 0.78–1、缩放 0.985–1.015）；旋钮 3.2 秒一圈；分叉电流 1.8 秒循环，含宽拖尾、金色细丝和暖白亮芯。无杯内旋涡。浅色杯体 `#2168D5`、金色 `#F5B82E`；深色杯体 `#5386BF`、金色 `#F2BA42`。
+中心金色闪电以 2 秒为一周期：1 秒渐强、1 秒渐弱，不透明度 0.58–1，不旋转或缩放。十种独立的弯折、多级分叉结构从闪电符号内部发出，部分末端略微越过杯壁。每轮重新随机顺序、长度、强弱、持续时间和间隔；放电不打断呼吸。
+
+The central gold bolt brightens for one second and dims for one second, with opacity 0.58–1. Ten independent bent, branching structures originate inside the bolt. Each cycle varies order, length, intensity, duration and spacing. There is no orbital or rotating motion.
 
 `svg/` 包含双主题共 10 份静态 SVG，以及 light / dark / auto 三份工作态动画 SVG。原生图片控件不保证播放 SVG 动画；应用在 SwiftUI / WPF 中单独实现同一套造型与时序。
 
 ## 构建与验证
 
-运行 `node build.cjs` 重建 SVG。浏览器测试需 Playwright 与 Chromium：`npm install --no-save playwright`、`npx playwright install chromium`、`node test.cjs`。可用 `QJ_BROWSER_PATH` 指定浏览器。
+运行 `node build.cjs` 重建 SVG、Web Component、原生路径常量和四组校验样本。`juicer-motion.js` 是路径与随机模型的唯一编辑入口；Swift 和 C# 实现按样本校验坐标、分支关系、顺序和时序。浏览器测试需 Playwright 与 Chromium：`npm install --no-save playwright`、`npx playwright install chromium`、`node test.cjs`。可用 `QJ_BROWSER_PATH` 指定浏览器。
 
 测试覆盖五状态、闪电呼吸、暂停冻结、换状态保留暂停、非工作态静止、减少动态效果、系统主题、多实例隔离、标签转义和窄屏布局。
+
+## 1.3.0
+
+十种内核放电和 2 秒呼吸同步接入 SVG、SwiftUI 和 WPF。原生界面直接绘制，不使用 WebView；每轮生成一次路径。菜单栏小图标保持静态。
 
 ## 1.2.0
 
@@ -54,14 +60,10 @@ logo.animated = false;
 
 [Figma 品牌组件](https://www.figma.com/design/7wMwtHSiNjouhypR669J8P?node-id=7-1036) · [动效画板](https://www.figma.com/design/7wMwtHSiNjouhypR669J8P?node-id=7-1468)
 
-链接的 Figma 画板为 1.1.0 归档；1.2.0 以本目录 SVG 和原生实现为准。应用源文件为 `native/JuicerLogo.swift` 和 `windows/JuicerLogo.cs`。
+链接的 Figma 画板为 1.1.0 归档；1.3.0 以本目录 SVG 和原生实现为准。应用源文件为 `native/JuicerLogo.swift` 和 `windows/JuicerLogo.cs`。
 
-## 动效提案 / Motion proposal
+## 提案归档 / Proposal archive
 
-[随机放电 02 / Irregular discharge 02](proposals/core-discharge-v2/README.md)（`1.3.0-proposal.2.1`）为最新提案：十种独立的弯折与多级分叉结构，长短、强弱、持续时间和停顿不同；连续预览每轮重新随机。中心闪电保留 2 秒呼吸（1 秒渐强、1 秒渐弱）。包含组合动图、十种动态总览、十个独立 GIF 及视频。正式组件仍为 1.2.0，尚未替换原生应用。
+[随机放电 02](proposals/core-discharge-v2/README.md) 是 1.3.0 的已采纳设计依据，保留动图、十种动态总览和视频。[内核放电 01](proposals/core-discharge-v1/README.md) 为早期归档。提案标签保留历史身份；产品实现以本目录和原生代码为准。
 
-The latest [irregular discharge proposal](proposals/core-discharge-v2/README.md) combines a two-second central-bolt breathing cycle with ten independent bent, branching structures, varied lengths/timing, a reshuffling live preview, ten individual GIFs and a video. Production remains unchanged.
-
-[内核放电 01 / Core-origin discharge 01](proposals/core-discharge-v1/README.md)（`1.3.0-proposal.1`）提供由杯内闪电向外分叉放电的独立预览，包含动图、视频及深浅色静帧。当前正式组件仍为 1.2.0，提案尚未应用到 Mac、Windows 或正式 SVG。
-
-The [core-origin discharge proposal](proposals/core-discharge-v1/README.md) includes GIF, video, and light/dark stills. The production component remains 1.2.0; this preview has not replaced native renderers or production SVG assets.
+[Proposal 02](proposals/core-discharge-v2/README.md) is the accepted design reference for production 1.3.0. Earlier proposal assets retain their historical labels.

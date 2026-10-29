@@ -1,3 +1,4 @@
+require('./sync-motion.cjs');
 const fs = require('node:fs');
 const path = require('node:path');
 const {renderSVG,states,palettes} = require('./quota-juicer.js');
@@ -12,7 +13,7 @@ for(const theme of ['light','dark']) for(const state of states) {
   const p = {...palettes[theme]};if(state==='disconnected'||state==='idle')p.blue=p.muted;
   const fill = {blue:p.blue,glass:p.glass,bolt:state==='working'?p.gold:p.gray,'error-mark':p.red};
   const stroke = {handle:p.blue,arcs:p.gold,'pause-mark':p.gold,'disconnect-mark':p.gray,'energy-core':p.core};
-  let figma = svg.replace(/<style>[\s\S]*?<\/style>/,'').replace(/var\(--qj-(\w+)\)/g,(_,k)=>p[k]);
+  let figma = svg.replace(/<style>[\s\S]*?<\/style>/g,'').replace(/var\(--qj-(\w+)\)/g,(_,k)=>p[k]);
   figma = figma.replace(/class="([^"]+)"/g,(all,classes)=>{
     const cl=classes.split(' ');let attributes='';
     for(const c of cl){if(fill[c])attributes+=` fill="${fill[c]}"`;if(stroke[c])attributes+=` stroke="${stroke[c]}"`;}

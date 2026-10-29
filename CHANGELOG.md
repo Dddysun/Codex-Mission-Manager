@@ -1,6 +1,8 @@
 # Changelog / 版本记录
 
-## 0.4.2 — Runtime resource integrity / 运行资源完整性
+## 0.4.2 — Runtime fixes and core discharge / 运行修复与内核放电
+
+- Brand 1.3.0: ten irregular core-origin discharges and independent two-second bolt breathing in native Mac, Windows and SVG. / 品牌 1.3.0：两端原生及 SVG 同步十种随机内核放电，保留独立 2 秒呼吸。
 
 - Disable Python bytecode writes explicitly in both native launchers and owned subprocesses. / 两平台原生启动器和后台子进程显式禁止生成 Python 字节码缓存。
 - Verify cold imports on a writable application copy, then recheck unchanged resources and the Mac signature. / 在可写应用副本中验证冷导入，再核对资源未变及 Mac 签名完整性。

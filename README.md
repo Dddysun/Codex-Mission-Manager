@@ -6,7 +6,7 @@ Pause when quota is low. Continue when it returns. A native Codex companion for 
 
 **源码版本 V0.4.2 / Source version V0.4.2** · [下载 / Downloads](https://github.com/Dddysun/Codex-Mission-Manager/releases) · [使用指南 / User guide](docs/USER_GUIDE.md) · [更新说明 / Release notes](docs/releases/0.4.2.md)
 
-0.4.2 为开发候选，包含资源完整性、通信期限、并发许可和输入边界修复；追加源码尚未重新打包。2026-10-29 核对的公开版本仍为 v0.4.1-preview.11，安装包以 Releases 为准。 / 0.4.2 is a development candidate with resource-integrity, deadline, permission-concurrency and input-boundary fixes; the latest source additions have not been repackaged. The published version verified on 2026-10-29 remains v0.4.1-preview.11. Use Releases for available packages. [0.4.2 notes](docs/releases/0.4.2.md)
+0.4.2 集成资源完整性、通信期限、并发许可和输入边界修复，以及十种内核放电与 2 秒呼吸 Logo。下载时核对发布标签、构建号和校验文件。 / 0.4.2 combines resource-integrity, deadline, permission-concurrency and input-boundary fixes with ten core-origin discharges and two-second bolt breathing. Verify the release tag, build number and checksums. [0.4.2 notes](docs/releases/0.4.2.md)
 
 ## 中文
 
@@ -19,10 +19,10 @@ Pause when quota is low. Continue when it returns. A native Codex companion for 
 
 ### 安装
 
-从 [Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases) 选择已发布的预览标签；本次核对为 `v0.4.1-preview.11`：
+从 [Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases) 选择已发布的预览标签，并核对 0.4.2 对应的构建号：
 
-- **Mac：**`TokenMax-0.4.1-arm64-preview.dmg`。Apple Silicon，macOS 14+。
-- **Windows：**`TokenMax-0.4.1-windows-x64-setup.exe`，另有便携 ZIP。Windows 10 build 19041+、x64、.NET Framework 4.8+。
+- **Mac：**`TokenMax-0.4.2-arm64-preview.dmg`。Apple Silicon，macOS 14+。
+- **Windows：**`TokenMax-0.4.2-windows-x64-setup.exe`，另有便携 ZIP。Windows 10 build 19041+、x64、.NET Framework 4.8+。
 
 安装包包含后端和 Python 环境。另需安装并登录兼容的官方 Codex 桌面客户端。首次使用先核对账号与聊天，再点击“开始榨汁”。关闭窗口后继续后台运行；“退出”停止应用。
 
@@ -43,10 +43,10 @@ Mac 预览为临时签名、未公证；Windows 预览未签名。客户端控�
 
 ### Install
 
-Choose a published preview tag from [Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases). The version verified for this review is `v0.4.1-preview.11`:
+Choose a published preview tag from [Releases](https://github.com/Dddysun/Codex-Mission-Manager/releases). Check the build number associated with 0.4.2:
 
-- **Mac:** `TokenMax-0.4.1-arm64-preview.dmg`. Apple Silicon, macOS 14+.
-- **Windows:** `TokenMax-0.4.1-windows-x64-setup.exe`, or the portable ZIP. Windows 10 build 19041+, x64, .NET Framework 4.8+.
+- **Mac:** `TokenMax-0.4.2-arm64-preview.dmg`. Apple Silicon, macOS 14+.
+- **Windows:** `TokenMax-0.4.2-windows-x64-setup.exe`, or the portable ZIP. Windows 10 build 19041+, x64, .NET Framework 4.8+.
 
 The backend and Python runtime are bundled. Install a compatible official Codex desktop client and sign in separately. Verify the account and chats before selecting **Start Juicing**. Closing the window keeps the app running; **Quit** stops it.
 

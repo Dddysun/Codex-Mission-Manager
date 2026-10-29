@@ -2330,11 +2330,15 @@ namespace CodexMissionManager
         [STAThread]
         public static int Main(string[] args)
         {
+            if (args.Length==2 && args[0]=="--logo-self-test") {
+                try { JuicerLogo.ExportMotion(args[1]);return JuicerMotion.SelfTest()?0:1; }
+                catch(Exception error) { Console.Error.WriteLine(error);return 1; }
+            }
             if (args.Length > 0 && args[0] == "--self-test")
             {
                 bool revocationChecks = ChatControlPolicy.SelfTest(); bool startupChecks = StartupDiagnostic.SelfTest(); bool paletteChecks = ThemePalette.SelfTest(); bool rulesChecks = RulesPolicy.SelfTest(); bool quotaEventChecks = QuotaRestorationEvents.SelfTest(); bool activityFilterChecks = ActivityEventFilter.SelfTest(); bool brandChecks = JuicerLogo.SelfTest() && NotificationCopy.SelfTest();
                 string result = Json.Stringify(Json.Values("version", AppVersion(), "platform", "windows", "native", true, "ui", "WPF", "webView", false,
-                    "hostStarted", false, "messagesSent", 0, "cacheRefreshSeconds", 5, "localRevocationChecks", revocationChecks, "startupDiagnosticFallbackChecks", startupChecks, "themePaletteChecks", paletteChecks, "rulesValidationChecks", rulesChecks, "quotaRestorationEventChecks", quotaEventChecks, "activityFilterChecks", activityFilterChecks, "brandPresentationChecks", brandChecks));
+                    "hostStarted", false, "messagesSent", 0, "cacheRefreshSeconds", 5, "localRevocationChecks", revocationChecks, "startupDiagnosticFallbackChecks", startupChecks, "themePaletteChecks", paletteChecks, "rulesValidationChecks", rulesChecks, "quotaRestorationEventChecks", quotaEventChecks, "activityFilterChecks", activityFilterChecks, "brandIdentityVersion", "1.3.0", "brandPresentationChecks", brandChecks));
                 if (args.Length > 1) File.WriteAllText(args[1], result, new UTF8Encoding(false));
                 Console.WriteLine(result); return revocationChecks && startupChecks && paletteChecks && rulesChecks && quotaEventChecks && activityFilterChecks && brandChecks ? 0 : 1;
             }

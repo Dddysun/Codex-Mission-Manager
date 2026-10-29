@@ -244,12 +244,12 @@
     "0.4.2": {
       "images": [
         {
-          "id": "runtime-integrity-home",
+          "id": "core-discharge-home",
           "platform": "macos",
           "kind": "home",
           "view": "home",
-          "file": "green-light.png",
-          "receipt": "green-light.json",
+          "file": "brand-light.png",
+          "receipt": "brand-light.json",
           "dimensions": [
             [
               1380,
@@ -265,17 +265,17 @@
           "language": "zh",
           "highlight": true,
           "caption": {
-            "zh": "0.4.2 原生界面 · 模拟数据；运行完整性修复见校验记录",
-            "en": "0.4.2 native UI · demo data; runtime integrity verified separately"
+            "zh": "0.4.2 · 内核放电与 2 秒闪电呼吸（模拟数据）",
+            "en": "0.4.2 · Core discharge and two-second bolt breathing (demo data)"
           }
         },
         {
-          "id": "runtime-integrity-home",
+          "id": "core-discharge-home",
           "platform": "windows",
           "kind": "home",
           "view": "home",
-          "file": "home-zh-light-native-state-green.png",
-          "receipt": "home-zh-light-native-state-green.png.json",
+          "file": "home-zh-light-native-brand-green.png",
+          "receipt": "home-zh-light-native-brand-green.png.json",
           "dimensions": [
             [
               2760,
@@ -287,8 +287,8 @@
           "language": "zh",
           "highlight": true,
           "caption": {
-            "zh": "0.4.2 原生界面 · 模拟数据；运行完整性修复见校验记录",
-            "en": "0.4.2 native UI · demo data; runtime integrity verified separately"
+            "zh": "0.4.2 · 内核放电与 2 秒闪电呼吸（模拟数据）",
+            "en": "0.4.2 · Core discharge and two-second bolt breathing (demo data)"
           }
         },
         {
