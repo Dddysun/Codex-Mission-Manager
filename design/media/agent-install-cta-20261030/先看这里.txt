@@ -1,0 +1,38 @@
+TokenMax — 功能介绍后的安装引导镜头
+
+主视频：01_镜头/00_完整安装引导_24秒_无旁白.mp4
+前6秒：箭头指向画面下方，提示打开视频简介、复制指令。
+后18秒：完整静止的截图卡，展示仓库 URL、Agent 安装指令与两端支持。
+这18秒不使用打字机效果，不在画面结束前淡出，便于暂停截图与延长停留。
+所有视频1080×1920、30fps、无音轨；保留白底风格。
+
+单独剪辑：01_箭头指向视频简介.mp4 和 02_截图给Agent_静止指令卡.mp4。
+静态截图卡：02_截图卡/给Agent的安装指令_1080x1920.png。
+文字：一句话安装指令用于直接复制；视频简介_可复制完整版适合放在简介，补充动态获取 Release、资产匹配和安装检查要求。
+
+插入位置：软件功能介绍结束后、最终收尾之前。
+箭头按未指定平台处理，指向画面底部中央；如平台简介入口位置不同，可在剪辑软件里调整这个片段的位置。
+这是展示给观众的指令，不是在用户本机执行安装。本次没有安装、更新或启动 TokenMax，没有控制用户的 Codex 聊天。
+
+已核对的仓库事实（2026-10-30本地时间）
+
+仓库：https://github.com/Dddysun/TokenMax-Zhazhiji
+核对时最新发布：v0.4.2-preview.13，发布时间2026-10-29T16:46:46Z。
+当前标签名包含preview，但GitHub prerelease字段为false；对外仍按预览版描述，不据此称正式稳定版。
+macOS资产：TokenMax-0.4.2-arm64-preview.dmg；README要求Apple Silicon、macOS14+。
+Windows资产：TokenMax-0.4.2-windows-x64-setup.exe，另有便携ZIP；README要求Windows10 build19041+、x64、.NET Framework4.8+。
+安装包含后端和Python环境；需要兼容的官方Codex客户端及用户本人登录。
+当前未发现Intel Mac或Windows ARM原生安装资产，因此画面准确写Windows x64与macOS Apple Silicon。
+画面不固定展示版本号或资产文件名，指令要求Agent执行时重新查询，防止视频发布后过期。
+安装说明windows/INSTALL_README.md里仍有0.4.1文件名示例，因此完整版明确以所选Release的实际Assets为准。
+
+参考：
+https://github.com/Dddysun/TokenMax-Zhazhiji/blob/main/README.md
+https://github.com/Dddysun/TokenMax-Zhazhiji/releases
+https://api.github.com/repos/Dddysun/TokenMax-Zhazhiji/releases
+https://github.com/Dddysun/TokenMax-Zhazhiji/releases/tag/v0.4.2-preview.13
+
+“截图发给Agent”需要Agent具备看图、联网与本机安装能力；系统授权和登录仍可能需要本人操作。文字引导使用“帮你安装”，不承诺任何Agent都能全程无人值守安装。
+本地原生OS权限和安全提示遵循系统提示，不在视频指令里要求关闭保护措施。
+
+制作脚本使用已验证的Pillow+FFmpeg方式，中文字体为本机Hiragino Sans GB，网址使用42px Helvetica以保持连续、清晰；字体文件不随包分发。

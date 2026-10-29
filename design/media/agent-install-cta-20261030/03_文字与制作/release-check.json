@@ -1,0 +1,36 @@
+{
+  "checked_on": "2026-10-30 Asia/Dubai",
+  "latest_tag": "v0.4.2-preview.13",
+  "url": "https://github.com/Dddysun/TokenMax-Zhazhiji/releases/tag/v0.4.2-preview.13",
+  "published_at": "2026-10-29T16:46:46Z",
+  "github_prerelease_field": false,
+  "preview_name": true,
+  "assets": [
+    {
+      "name": "SHA256SUMS",
+      "url": "https://github.com/Dddysun/TokenMax-Zhazhiji/releases/download/v0.4.2-preview.13/SHA256SUMS",
+      "digest": "sha256:d3c10abc9b72041e79bfabccc6ed5d2a264c788769f796a7405b6b12903920fa",
+      "size": 2362
+    },
+    {
+      "name": "TokenMax-0.4.2-arm64-preview.dmg",
+      "url": "https://github.com/Dddysun/TokenMax-Zhazhiji/releases/download/v0.4.2-preview.13/TokenMax-0.4.2-arm64-preview.dmg",
+      "digest": "sha256:9ccc41a1f6025d84cebe6e06cddaeb73bb0be997c08337fc930720fc90072f66",
+      "size": 25303313
+    },
+    {
+      "name": "TokenMax-0.4.2-windows-x64-preview.zip",
+      "url": "https://github.com/Dddysun/TokenMax-Zhazhiji/releases/download/v0.4.2-preview.13/TokenMax-0.4.2-windows-x64-preview.zip",
+      "digest": "sha256:759a7f28ae4264fe2606562bd9ff3088bc7e4219eb91ecd13b2d2dc26ed74566",
+      "size": 11675090
+    },
+    {
+      "name": "TokenMax-0.4.2-windows-x64-setup.exe",
+      "url": "https://github.com/Dddysun/TokenMax-Zhazhiji/releases/download/v0.4.2-preview.13/TokenMax-0.4.2-windows-x64-setup.exe",
+      "digest": "sha256:af6c71197a75e5d5f7fc89d6df6389a58334a3ae737211c9b81f6c78763e7f9a",
+      "size": 11730922
+    }
+  ],
+  "prompt_resolves_at_execution_time": true,
+  "no_installation_performed": true
+}

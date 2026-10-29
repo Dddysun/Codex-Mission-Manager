@@ -1,0 +1,1 @@
+请读取 https://github.com/Dddysun/TokenMax-Zhazhiji 的安装说明，查询执行时最新已发布的 Release（含预览版），按我的系统和芯片架构下载匹配的安装包，校验后安装，并保留已有数据；需要授权或登录时提示我。

@@ -1,0 +1,9 @@
+请帮我安装 TokenMax（额度榨汁机）：https://github.com/Dddysun/TokenMax-Zhazhiji
+
+先识别我的操作系统版本和 CPU 架构，再读取仓库安装说明及执行时最新已发布的 GitHub Release；包含预览版，按发布时间判断，排除草稿，不要把文档中的旧版本文件名当作最新版本。
+
+请实时检查 https://github.com/Dddysun/TokenMax-Zhazhiji/releases 。如果使用 GitHub API，请读取 https://api.github.com/repos/Dddysun/TokenMax-Zhazhiji/releases 并按需翻页；不要只依赖可能不包含预发布版本的 /releases/latest。选定最新发布后，阅读该版本的安装说明，使用该 Release 的真实 Assets 下载地址和与我的系统、架构匹配的安装包，不拼猜版本号或下载链接。
+
+下载后使用该 Release 的 SHA256SUMS（或 GitHub 提供的资产 SHA-256 摘要）校验安装包，按说明安装并检查应用能否启动。若是升级，请保留已有设置和数据。若最新发布没有匹配安装包或我的系统不满足要求，请说明原因，不要静默安装旧版本或改为源码编译。
+
+需要系统授权、处理安全提示、登录 Codex 或确认受管聊天时，请提示我操作；不要擅自绕过系统安全保护，也不要自动开启对现有聊天的控制。结束后告诉我实际安装的 Release 标签、下载的文件名和启动检查结果。
