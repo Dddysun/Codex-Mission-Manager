@@ -153,46 +153,67 @@ namespace CodexMissionManagerSetup
                 }
             }
         }
+        // Explicit Unicode shell COM contract. WScript.Shell can lose Chinese
+        // .lnk names through ANSI conversion on an English Windows installation.
+        // The complete IShellLinkW vtable order must be preserved, even for unused methods.
+        // https://learn.microsoft.com/windows/win32/api/shobjidl_core/nn-shobjidl_core-ishelllinkw
+        [ComImport, Guid("00021401-0000-0000-C000-000000000046")]
+        sealed class ShellLink { }
+        [ComImport, Guid("000214F9-0000-0000-C000-000000000046"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+        interface IShellLinkW
+        {
+            void GetPath([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int capacity, IntPtr findData, uint flags);
+            void GetIDList(out IntPtr idList);
+            void SetIDList(IntPtr idList);
+            void GetDescription([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder description, int capacity);
+            void SetDescription([MarshalAs(UnmanagedType.LPWStr)] string description);
+            void GetWorkingDirectory([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder directory, int capacity);
+            void SetWorkingDirectory([MarshalAs(UnmanagedType.LPWStr)] string directory);
+            void GetArguments([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder arguments, int capacity);
+            void SetArguments([MarshalAs(UnmanagedType.LPWStr)] string arguments);
+            void GetHotkey(out short hotkey);
+            void SetHotkey(short hotkey);
+            void GetShowCmd(out int command);
+            void SetShowCmd(int command);
+            void GetIconLocation([Out, MarshalAs(UnmanagedType.LPWStr)] StringBuilder path, int capacity, out int index);
+            void SetIconLocation([MarshalAs(UnmanagedType.LPWStr)] string path, int index);
+            void SetRelativePath([MarshalAs(UnmanagedType.LPWStr)] string path, uint reserved);
+            void Resolve(IntPtr window, uint flags);
+            void SetPath([MarshalAs(UnmanagedType.LPWStr)] string path);
+        }
         static void Shortcut(string path, string executable)
         {
-            object shell = null, shortcut = null;
+            object instance = null;
             try
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
                 if (File.Exists(path))
                     File.Copy(path, path + ".previous-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture) + "-" + Guid.NewGuid().ToString("N").Substring(0, 6));
-                Type type = Type.GetTypeFromProgID("WScript.Shell", true);
-                shell = Activator.CreateInstance(type);
-                shortcut = type.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { path });
-                Type shortcutType = shortcut.GetType();
-                shortcutType.InvokeMember("TargetPath", BindingFlags.SetProperty, null, shortcut, new object[] { executable });
-                shortcutType.InvokeMember("WorkingDirectory", BindingFlags.SetProperty, null, shortcut, new object[] { Path.GetDirectoryName(executable) });
-                shortcutType.InvokeMember("Description", BindingFlags.SetProperty, null, shortcut, new object[] { "TokenMax" });
-                shortcutType.InvokeMember("IconLocation", BindingFlags.SetProperty, null, shortcut, new object[] { executable + ",0" });
-                shortcutType.InvokeMember("Save", BindingFlags.InvokeMethod, null, shortcut, new object[0]);
+                instance = new ShellLink();
+                var shortcut = (IShellLinkW)instance;
+                shortcut.SetPath(executable);
+                shortcut.SetWorkingDirectory(Path.GetDirectoryName(executable));
+                shortcut.SetDescription(T("榨汁机", "TokenMax"));
+                shortcut.SetIconLocation(executable, 0);
+                var file = (System.Runtime.InteropServices.ComTypes.IPersistFile)instance;
+                file.Save(path, true);
+                file.SaveCompleted(null);
             }
-            finally
-            {
-                if (shortcut != null && Marshal.IsComObject(shortcut)) Marshal.FinalReleaseComObject(shortcut);
-                if (shell != null && Marshal.IsComObject(shell)) Marshal.FinalReleaseComObject(shell);
-            }
+            finally { if (instance != null && Marshal.IsComObject(instance)) Marshal.FinalReleaseComObject(instance); }
         }
         static string ShortcutTarget(string path)
         {
             if (!File.Exists(path)) return null;
-            object shell = null, shortcut = null;
+            object instance = null;
             try
             {
-                Type type = Type.GetTypeFromProgID("WScript.Shell", true);
-                shell = Activator.CreateInstance(type);
-                shortcut = type.InvokeMember("CreateShortcut", BindingFlags.InvokeMethod, null, shell, new object[] { path });
-                return shortcut.GetType().InvokeMember("TargetPath", BindingFlags.GetProperty, null, shortcut, null) as string;
+                instance = new ShellLink();
+                ((System.Runtime.InteropServices.ComTypes.IPersistFile)instance).Load(path, 0); // STGM_READ
+                var target = new StringBuilder(32768);
+                ((IShellLinkW)instance).GetPath(target, target.Capacity, IntPtr.Zero, 4); // SLGP_RAWPATH; never resolve or rewrite a target.
+                return target.Length == 0 ? null : target.ToString();
             }
-            finally
-            {
-                if (shortcut != null && Marshal.IsComObject(shortcut)) Marshal.FinalReleaseComObject(shortcut);
-                if (shell != null && Marshal.IsComObject(shell)) Marshal.FinalReleaseComObject(shell);
-            }
+            finally { if (instance != null && Marshal.IsComObject(instance)) Marshal.FinalReleaseComObject(instance); }
         }
         static string ShortcutName { get { return T("榨汁机.lnk", "TokenMax.lnk"); } }
         static IEnumerable<string> KnownShortcutPaths()
@@ -511,6 +532,7 @@ namespace CodexMissionManagerSetup
                 {
                     selfTestStage = "archive_validation";
                     int count = ValidateArchive(payload, Path.Combine(Path.GetTempPath(), "MissionManagerValidation-" + Guid.NewGuid().ToString("N")), false);
+                    selfTestEvidence["shortcut_api"] = "IShellLinkW/IPersistFile";
                     selfTestStage = "shortcut_fixture_setup";
                     bool shortcutChecks = ShortcutMigrationSelfTest();
                     if (!shortcutChecks) throw new InvalidOperationException("Shortcut migration safety checks failed.");

@@ -2,6 +2,7 @@
 
 ## 0.4.0 — TokenMax · 榨汁机
 
+- Fixed Chinese shortcut creation on English Windows. / 修复英文 Windows 下创建中文快捷方式失败。
 - Renamed both apps and packages, retaining existing data. / 两平台更名并保留现有数据。
 - Added the geometric juicer logo, native running animation, dark colors, and reduced-motion support. / 接入几何榨汁机 Logo、原生动效、深色及减少动态适配。
 - Introduced Start Juicing and clean per-chat Juicing switches. / 启动改为“开始榨汁”，精简聊天开关。
