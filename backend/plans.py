@@ -38,7 +38,7 @@ def save_plan(store, plan, expected_revision=None):
     return True
 
 
-def set_plan(store, chat, enabled, prompt, revision, sample, now=None):
+def set_plan(store, chat, enabled, prompt, revision, sample, now=None, config=None):
     now = time.time() if now is None else now
     if not chat.get("can_control") or chat.get("kind") != "codex" or chat.get("host_id") != "local":
         raise ValueError("该聊天本次仅显示目录，未启用自动执行")
@@ -49,7 +49,7 @@ def set_plan(store, chat, enabled, prompt, revision, sample, now=None):
         raise ValueError("计划已变化，请刷新后重试")
     if old and old["state"] == "sending":
         raise ValueError("指令已提交发送，正在确认结果，暂不能修改")
-    selected = plan_window(sample)
+    selected = plan_window(sample, config)
     if enabled and selected is None:
         raise ValueError("当前账号未提供可预约的额度刷新窗口，请使用立刻执行。")
     editing = (enabled and old and old["state"] == "armed"
@@ -192,9 +192,7 @@ class PlanRunner:
                 if view["goal"] is not None:
                     self.finish(plan, "needs_review", "该聊天包含Goal，请先确认目标与预算后再执行自定指令")
                     continue
-                from guardian import parse_bucket
-                fresh = parse_bucket(await self.rpc.call("account/rateLimits/read"), self.config["limit_id"], self.controller.clock())
-                fresh["scope"] = self.controller.identity
+                fresh = await self.controller.read_quota()
                 if not self.ready(plan, fresh):
                     plan["recovery_first_seen"] = None
                     save_plan(self.store, plan, plan["revision"])

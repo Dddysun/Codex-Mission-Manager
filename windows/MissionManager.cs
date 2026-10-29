@@ -531,6 +531,9 @@ namespace CodexMissionManager
         string rulesError = "";
         TextBlock rulesStatus, ruleQuotaSummary;
         Button rulesSave, rulesReload;
+        RadioButton monitorFive, monitorWeekly;
+        TextBlock monitorNote;
+        string rulesWindowDraft = "auto";
 
         sealed class Draft { public string Text; public int Revision; }
 
@@ -828,8 +831,10 @@ namespace CodexMissionManager
             if (connectionBanner.Visibility != Visibility.Visible) return;
             var row = new DockPanel(); var check = MakeButton(T("重新检查", "Check again"), async delegate { await RefreshAsync(); }); DockPanel.SetDock(check, Dock.Right); row.Children.Add(check);
             var icon = Glyph("warning", Brushes.DarkOrange, 15); icon.Margin = new Thickness(0, 2, 10, 0); icon.VerticalAlignment = VerticalAlignment.Top; DockPanel.SetDock(icon, Dock.Left); row.Children.Add(icon);
-            var copy = new StackPanel(); var title = Text(connected ? T("检查状态待恢复", "Status check pending") : String.IsNullOrEmpty(connectionError) ? T("正在连接本机后台", "Connecting to the local service") : T("后台连接待恢复", "Backend connection unavailable"), 12, true); title.Margin = new Thickness(0, 0, 0, 4); copy.Children.Add(title);
-            var description = Text(String.IsNullOrEmpty(connectionError) ? T("正在核对账号与额度…", "Checking account and quota…") : ConnectionErrorText(), 12); description.Margin = new Thickness(0); copy.Children.Add(description); row.Children.Add(copy); connectionBanner.Child = row;
+            var copy = new StackPanel(); var title = Text(connected ? T("状态暂不可用，正在重试", "Status unavailable; retrying") : String.IsNullOrEmpty(connectionError) ? T("正在连接本机后台", "Connecting to the local service") : T("后台连接待恢复", "Backend connection unavailable"), 12, true); title.Margin = new Thickness(0, 0, 0, 4); copy.Children.Add(title);
+            var description = Text(String.IsNullOrEmpty(connectionError) ? T("自动续接暂缓；不会因此中断正在运行的聊天。", "Automatic continuation is withheld. Active chats are not interrupted by this check.") : ConnectionErrorText(), 12); description.Margin = new Thickness(0); copy.Children.Add(description);
+            string errorType = Json.Text(snapshot, "service_error_type"); if (errorType.Length > 0) { var detail = Text(T("检查结果：", "Check result: ")+errorType, 11); detail.Foreground=secondary; copy.Children.Add(detail); }
+            row.Children.Add(copy); connectionBanner.Child = row;
         }
         void BuildContent()
         {
@@ -936,6 +941,16 @@ namespace CodexMissionManager
             }
             return String.Join("\n", lines);
         }
+        bool BelowPauseThreshold(Dictionary<string, object> usage)
+        {
+            var monitoring = Json.Child(usage, "monitoring");
+            double pause = Json.Number(Json.Child(snapshot, "policy"), "pause", 10);
+            return VisibleWindows(usage).Any(w => {
+                double minutes = Json.Number(w, "minutes");
+                double threshold = monitoring.Count > 0 ? minutes == Json.Number(monitoring, "minutes", -1) ? pause : 0 : minutes == 10080 ? 0 : pause;
+                return Json.Number(w, "remaining", Double.PositiveInfinity) <= threshold;
+            });
+        }
         string LogoState
         {
             get
@@ -945,7 +960,7 @@ namespace CodexMissionManager
                 return JuicerLogo.ResolveState(Json.Bool(snapshot, "control_paused", true), Json.Bool(snapshot, "running"),
                     connected, Healthy && String.IsNullOrEmpty(Json.Text(snapshot, "desktop_connection_error")), ControlAvailable, Json.Text(snapshot, "service_error", Json.Text(Json.Child(snapshot, "compatibility"), "status") == "update_required" ? "update_required" : ""),
                     Json.Bool(usage, "stale", true), Json.Text(usage, "quota_state", "unknown"),
-                    Json.Bool(usage, "blocked"), Json.Text(snapshot, "quota_phase", VisibleWindows(usage).Any(window => Json.Number(window, "remaining", Double.PositiveInfinity) <= (Json.Number(window, "minutes") == 10080 ? 0 : Json.Number(Json.Child(snapshot, "policy"), "pause", 10))) ? "low" : "normal"), Json.Bool(snapshot, "control_enabled"));
+                    Json.Bool(usage, "blocked"), Json.Text(snapshot, "quota_phase", BelowPauseThreshold(usage) ? "low" : "normal"), Json.Bool(snapshot, "control_enabled"));
             }
         }
         void RenderSnapshot()
@@ -973,7 +988,8 @@ namespace CodexMissionManager
         {
             if (stateBlock == null || globalButton == null) return;
             bool enabled = Json.Bool(snapshot, "control_enabled") && String.IsNullOrEmpty(connectionError);
-            stateBlock.Text = enabled ? T("榨汁已开启", "Juicing on") : T("榨汁已停止", "Juicing stopped");
+            bool stopped = !Json.Bool(snapshot, "running") || Json.Bool(snapshot, "control_paused", true);
+            stateBlock.Text = stopped ? T("榨汁已停止", "Juicing stopped") : enabled ? T("榨汁已开启", "Juicing on") : T("状态待核验", "Awaiting verification");
             globalButton.Content = !Json.Bool(snapshot, "running") ? T("启动后台服务", "Start background service") : Json.Bool(snapshot, "control_paused", true) ? T("开始榨汁", "Start Juicing") : T("暂停榨汁", "Pause Juicing");
             globalButton.IsEnabled = !busy && (fixtureMode || host == null || (baseUri != null && Json.Bool(snapshot, "running")
                 && (!Json.Bool(snapshot, "control_paused", true) || (ControlAvailable && Healthy))));
@@ -1256,7 +1272,30 @@ namespace CodexMissionManager
         {
             var rules = Json.Child(snapshot, "rules"); var values = Json.Child(rules, "values"); rulesDraft.Clear();
             for (int i = 0; i < RulesPolicy.Fields.Length; i++) rulesDraft[RulesPolicy.Fields[i]] = Json.Integer(values, RulesPolicy.Fields[i], RulesPolicy.Defaults[i]).ToString(CultureInfo.InvariantCulture);
-            rulesDraftRevision = Json.Integer(rules, "revision"); rulesDraftInitialized = true; rulesDirty = false; rulesError = "";
+            rulesDraftRevision = Json.Integer(rules, "revision"); rulesWindowDraft = Json.Text(rules, "monitor_window", "auto");
+            rulesDraftInitialized = true; rulesDirty = false; rulesError = "";
+        }
+        bool CanMonitorWindow(string choice)
+        {
+            var usage = Json.Child(snapshot, "usage");
+            if (Json.Bool(usage, "stale", true) || Json.Text(usage, "quota_state") == "unknown") return false;
+            string plan = Json.Text(Json.Child(usage, "account"), "plan_type").ToLowerInvariant().Split('_')[0];
+            var monitoring = Json.Child(usage, "monitoring");
+            string key = choice == "five_hour" ? "five_hour_available" : "weekly_available";
+            if (choice == "five_hour" && plan == "pro") return false;
+            return monitoring.ContainsKey(key) ? Json.Bool(monitoring, key)
+                : VisibleWindows(usage).Any(w => Json.Number(w, "minutes") == (choice == "five_hour" ? 300 : 10080));
+        }
+        string SelectedMonitorWindow()
+        {
+            if (rulesWindowDraft != "auto") return rulesWindowDraft;
+            return Json.Text(Json.Child(Json.Child(snapshot, "usage"), "monitoring"), "effective_window",
+                CanMonitorWindow("five_hour") ? "five_hour" : "weekly");
+        }
+        void ChooseMonitorWindow(string choice)
+        {
+            if (rulesUpdating || rulesSaving || !CanMonitorWindow(choice)) return;
+            rulesWindowDraft = choice; rulesDirty = true; rulesError = ""; RefreshRulesPresentation();
         }
         void BuildRules()
         {
@@ -1265,6 +1304,15 @@ namespace CodexMissionManager
             var introduction = Text(T("设置暂停、恢复条件和刷新频率。", "Set pause, recovery and refresh intervals."), 13); introduction.Foreground = secondary; introduction.Margin = new Thickness(0, 0, 0, 24); content.Children.Add(introduction);
             if (!rulesDraftInitialized || (!rulesDirty && !rulesSaving)) LoadRulesDraft(); ruleInputs.Clear();
             var editor = new StackPanel(); var heading = Text(T("控制参数", "Control parameters"), 15, true); heading.Margin = new Thickness(0, 0, 0, 18); editor.Children.Add(heading);
+            var monitorHeading = Text(T("监控窗口", "Monitoring window"), 13, true); monitorHeading.Margin = new Thickness(0, 0, 0, 10); editor.Children.Add(monitorHeading);
+            var windowChoices = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 10) };
+            monitorFive = new RadioButton { Content = T("五小时额度", "Five-hour quota"), GroupName = "MonitorWindow", Margin = new Thickness(0, 0, 24, 0) };
+            monitorWeekly = new RadioButton { Content = T("周额度", "Weekly quota"), GroupName = "MonitorWindow" };
+            monitorFive.Checked += delegate { ChooseMonitorWindow("five_hour"); }; monitorWeekly.Checked += delegate { ChooseMonitorWindow("weekly"); };
+            windowChoices.Children.Add(monitorFive); windowChoices.Children.Add(monitorWeekly); editor.Children.Add(windowChoices);
+            var monitorHelp = Text(T("暂停和恢复阈值用于所选窗口；其他窗口用尽或服务禁止使用时仍会暂停。", "Pause and resume thresholds apply to the selected window. An exhausted other window or a service block still pauses work."), 11);
+            monitorHelp.Foreground = secondary; monitorHelp.Margin = new Thickness(0, 0, 0, 10); editor.Children.Add(monitorHelp);
+            monitorNote = Text("", 11); monitorNote.Margin = new Thickness(0, 0, 0, 14); editor.Children.Add(monitorNote);
             string[] labels = RuleLabels(); var bounds = Json.Child(Json.Child(snapshot, "rules"), "bounds");
             for (int i = 0; i < RulesPolicy.Fields.Length; i++)
             {
@@ -1285,6 +1333,7 @@ namespace CodexMissionManager
             Rule(T("订阅与额度", "Subscription and quota"), T("额度未知时等待核验；无固定窗口时须获得服务许可。重置权益仅供查看。", "Unknown quota awaits verification. No fixed window requires service permission. Reset credits are read-only."));
             Rule(T("立刻执行", "Run now"), T("立即发送当前指令，须通过状态与额度核验。结果不明确时不重复发送。", "Send now after status and quota checks. Unconfirmed deliveries are not retried."));
             Rule(T("手动操作优先", "Manual actions take priority"), T("用户指令和审批优先。任务完成后等待新指令。", "User instructions and approvals take priority. Completed chats await new instructions."));
+            Rule(T("状态检查", "Status checks"), T("新额度会先更新，聊天采集继续进行。检查不会关闭全局榨汁；读取失败时暂缓自动续接。", "Fresh quota is published before chat collection finishes. Checks do not turn off Juicing; failed checks withhold automatic continuation."));
             Rule(T("后台运行", "Background operation"), T("关窗后继续运行；退出仅停止TOKEN榨汁机，不中断客户端聊天。", "Closing the window keeps running. Quitting stops TokenMax, not client chats."));
             var settings = MakeButton(T("后台运行与系统权限…", "Background operation and permissions…"), ShowSettingsWindow); settings.HorizontalAlignment = HorizontalAlignment.Left; content.Children.Add(settings); RefreshRulesPresentation();
         }
@@ -1300,6 +1349,19 @@ namespace CodexMissionManager
                 try { foreach (var pair in ruleInputs) if (pair.Value.Text != rulesDraft[pair.Key]) pair.Value.Text = rulesDraft[pair.Key]; }
                 finally { rulesUpdating = false; }
             }
+            rulesUpdating = true;
+            try {
+                monitorFive.IsChecked = SelectedMonitorWindow() == "five_hour";
+                monitorWeekly.IsChecked = SelectedMonitorWindow() == "weekly";
+            } finally { rulesUpdating = false; }
+            monitorFive.IsEnabled = available && !rulesSaving && CanMonitorWindow("five_hour");
+            monitorWeekly.IsEnabled = available && !rulesSaving && CanMonitorWindow("weekly");
+            monitorFive.ToolTip = CanMonitorWindow("five_hour") ? T("五小时额度", "Five-hour quota") : T("该账号未提供此额度窗口。", "This account does not provide this quota window.");
+            monitorWeekly.ToolTip = CanMonitorWindow("weekly") ? T("周额度", "Weekly quota") : T("该账号未提供此额度窗口。", "This account does not provide this quota window.");
+            string monitorState = Json.Text(Json.Child(Json.Child(snapshot, "usage"), "monitoring"), "state");
+            monitorNote.Text = monitorState == "unavailable" ? T("所选窗口暂不可用，请重新选择或等待额度核验。", "The selected window is unavailable. Choose another window or wait for verification.")
+                : monitorState == "service_only" ? T("该账号未提供固定额度窗口，百分比阈值暂不生效。", "No fixed quota window is provided. Percentage thresholds do not apply.") : "";
+            monitorNote.Foreground = monitorState == "unavailable" ? Brushes.DarkOrange : secondary;
             bool conflict = rulesDirty && Json.Integer(rules, "revision") != rulesDraftRevision;
             rulesStatus.Text = rulesError.Length > 0 ? rulesError : rulesSaving ? T("正在保存规则…", "Saving rules…")
                 : !available ? T("连接后可保存；草稿已保留。", "Connect to save. Draft retained.")
@@ -1327,25 +1389,31 @@ namespace CodexMissionManager
                     : error == "near_interval" ? T("临近阈值采集间隔不得长于正常采集间隔。", "Near-limit collection cannot be slower than normal collection.")
                     : fieldIndex >= 0 ? labels[fieldIndex] + T("必须是范围内的整数。", " must be a whole number within the allowed range.") : T("请检查规则参数。", "Check the rule values."); RefreshRulesPresentation(); return;
             }
-            int submittedRevision = rulesDraftRevision; Uri requestedBase = baseUri; rulesSaving = true; rulesError = ""; RefreshRulesPresentation();
+            int submittedRevision = rulesDraftRevision; string submittedWindow = rulesWindowDraft;
+            Uri requestedBase = baseUri; rulesSaving = true; rulesError = ""; RefreshRulesPresentation();
             try
             {
                 using (var request = new HttpRequestMessage(HttpMethod.Post, new Uri(requestedBase, "/api/action")))
                 {
                     request.Headers.Add("X-Guardian-UI", "1"); request.Headers.Add("Origin", requestedBase.GetLeftPart(UriPartial.Authority));
-                    request.Content = new StringContent(Json.Stringify(Json.Values("action", "set_rules", "rules_revision", submittedRevision, "rules", values)), Encoding.UTF8, "application/json");
+                    request.Content = new StringContent(Json.Stringify(Json.Values("action", "set_rules", "rules_revision", submittedRevision, "rules", values, "monitor_window", submittedWindow)), Encoding.UTF8, "application/json");
                     using (var response = await client.SendAsync(request))
                     {
                         var body = Json.Parse(await response.Content.ReadAsStringAsync());
                         if (!response.IsSuccessStatusCode)
                         {
-                            rulesError = (int)response.StatusCode == 409 ? T("规则已更新；请重新载入。草稿已保留。", "Rules changed; reload to continue. Draft retained.")
+                            string detail = Json.Text(body, "error");
+                            rulesError = detail == "所选监控窗口暂不可用，请刷新额度后重试。" ? T("所选监控窗口暂不可用，请刷新额度后重试。", "The selected monitoring window is unavailable. Refresh quota and try again.")
+                                : detail == "监控窗口无效，请重新选择。" ? T("监控窗口无效，请重新选择。", "Invalid monitoring window. Choose another window.")
+                                : (int)response.StatusCode == 409 ? T("规则已更新；请重新载入。草稿已保留。", "Rules changed; reload to continue. Draft retained.")
                                 : preferences.Language == "en" ? Json.Text(body, "message_en", T("规则未保存，草稿已保留。", "Rules could not be saved. Your draft is retained.")) : Json.Text(body, "message", T("规则未保存，草稿已保留。", "Rules could not be saved. Your draft is retained."));
                         }
                         else
                         {
                             var returnedRules = Json.Child(body, "rules"); var returnedValues = Json.Child(returnedRules, "values");
-                            bool confirmed = returnedRules.Count > 0 && Json.Integer(returnedRules, "revision") > submittedRevision && RulesPolicy.Fields.All(field => Json.Integer(returnedValues, field, -1) == Json.Integer(values, field));
+                            bool confirmed = returnedRules.Count > 0 && Json.Integer(returnedRules, "revision") > submittedRevision
+                                && Json.Text(returnedRules, "monitor_window", "auto") == submittedWindow
+                                && RulesPolicy.Fields.All(field => Json.Integer(returnedValues, field, -1) == Json.Integer(values, field));
                             if (confirmed && Object.Equals(baseUri, requestedBase)) { snapshot["rules"] = returnedRules; LoadRulesDraft(); }
                             else rulesError = T("保存待确认；请重新载入。草稿已保留。", "Save unconfirmed; reload to verify. Draft retained.");
                         }
@@ -1909,9 +1977,24 @@ namespace CodexMissionManager
             bool appearancePreserved = ruleInputs["resume_remaining"].Text == "27" && rulesDraftRevision == originalRevision && rulesDirty;
             LoadRulesDraft(); RefreshRulesPresentation();
             bool reloadApplied = ruleInputs["resume_remaining"].Text == "25" && rulesDraftRevision == originalRevision + 1 && !rulesDirty;
-            bool passed = editingCaptured && pollingPreserved && appearancePreserved && reloadApplied;
+            var originalUsage = Json.Child(snapshot, "usage");
+            snapshot["usage"] = Json.Values("stale", false, "account", Json.Values("plan_type", "plus"),
+                "monitoring", Json.Values("effective_window", "five_hour", "five_hour_available", true, "weekly_available", true, "state", "ready"));
+            LoadRulesDraft(); RefreshRulesPresentation();
+            bool plusChoices = monitorFive.IsEnabled && monitorWeekly.IsEnabled && monitorFive.IsChecked == true;
+            monitorWeekly.IsChecked = true;
+            bool windowDraft = rulesDirty && rulesWindowDraft == "weekly";
+            preferences.Theme = "dark"; RebuildPresentation();
+            bool windowPreserved = rulesWindowDraft == "weekly" && monitorWeekly.IsChecked == true && rulesDirty;
+            snapshot["usage"] = Json.Values("stale", false, "account", Json.Values("plan_type", "pro"),
+                "monitoring", Json.Values("effective_window", "weekly", "five_hour_available", false, "weekly_available", true, "state", "ready"));
+            LoadRulesDraft(); RefreshRulesPresentation();
+            bool proWeekly = !monitorFive.IsEnabled && monitorWeekly.IsEnabled && monitorWeekly.IsChecked == true;
+            snapshot["usage"] = originalUsage; LoadRulesDraft(); RefreshRulesPresentation();
+            bool passed = editingCaptured && pollingPreserved && appearancePreserved && reloadApplied && plusChoices && windowDraft && windowPreserved && proWeekly;
             return Json.Values("native", true, "ui", "WPF", "hostStarted", false, "messagesSent", 0, "privatePreferencesLoaded", false,
-                "draftCaptured", editingCaptured, "draftSurvivedPollingConflict", pollingPreserved, "draftSurvivedAppearanceChange", appearancePreserved, "explicitReloadApplied", reloadApplied, "checksPassed", passed);
+                "draftCaptured", editingCaptured, "draftSurvivedPollingConflict", pollingPreserved, "draftSurvivedAppearanceChange", appearancePreserved, "explicitReloadApplied", reloadApplied, "plusWindowChoicesAvailable", plusChoices, "monitorWindowDraftCaptured", windowDraft,
+                "monitorWindowDraftSurvivedAppearance", windowPreserved, "proFiveHourDisabledWeeklySelected", proWeekly, "checksPassed", passed);
         }
         static Button FindTaggedButton(DependencyObject parent, string tag)
         {
@@ -2277,7 +2360,15 @@ namespace CodexMissionManager
             if (quotaState == "service_only") return true;
             var windows = MissionWindow.VisibleWindows(usage); if (quotaState != "metered" || windows.Count == 0) return false;
             double minimum = Json.Number(Json.Child(owner.Snapshot, "policy"), "resume", 20);
-            return windows.All(x => { double remaining = Json.Number(x, "remaining", Double.NaN); return !Double.IsNaN(remaining) && remaining <= 100 && (Json.Number(x, "minutes") == 10080 ? remaining > 0 : remaining >= minimum); });
+            var monitoring = Json.Child(usage, "monitoring");
+            if (Json.Text(monitoring, "state") == "unavailable") return false;
+            return windows.All(x => {
+                double remaining = Json.Number(x, "remaining", Double.NaN);
+                double minutes = Json.Number(x, "minutes");
+                return !Double.IsNaN(remaining) && remaining <= 100 && (monitoring.Count > 0
+                    ? minutes == Json.Number(monitoring, "minutes", -1) ? remaining >= minimum : remaining > 0
+                    : minutes == 10080 ? remaining > 0 : remaining >= minimum);
+            });
         }
         string Status()
         {

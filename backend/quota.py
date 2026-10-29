@@ -84,7 +84,9 @@ def parse_bucket(payload, limit_id, now, stale_grace=90):
     service_allowed = payload.get("ordinaryUsageAllowed") is True
     explicit_no_windows = all(slot in bucket and bucket[slot] is None for slot in ("primary", "secondary"))
     quota_state = "metered" if windows else "service_only" if explicit_no_windows and service_allowed else "unknown"
+    plan_type = bucket.get('planType')
     return {"limit_id": limit_id, "observed_at": now, "windows": windows,
+            "plan_type": plan_type[:80] if isinstance(plan_type, str) else None,
             "quota_state": quota_state, "service_allowed": service_allowed,
             "reset_credits": reset_credits(payload),
             "blocked": bool(reached_type) or bucket.get("spendControlReached") is True
@@ -108,21 +110,54 @@ def _weekly(window):
     return window["minutes"] == 10080
 
 
-def _limiting(window, config):
-    return window["remaining"] <= (0 if _weekly(window) else config["pause_remaining"])
+MONITOR_WINDOWS = {'auto', 'five_hour', 'weekly'}
+
+
+def monitoring_state(sample, config=None):
+    """Choose an actual duration, never a primary/secondary service slot."""
+    config = config or {}
+    requested = config.get('monitor_window', 'auto')
+    if not isinstance(requested, str) or requested not in MONITOR_WINDOWS:
+        requested = 'unavailable'
+    windows = window_map(sample)
+    pro = str(sample.get('plan_type') or '').lower().split('_')[0] == 'pro'
+    five = not pro and any(w['minutes'] == 300 for w in windows.values())
+    weekly = any(w['minutes'] == 10080 for w in windows.values())
+    candidates = [(key, window) for key, window in windows.items()
+                  if not (pro and window['minutes'] == 300)]
+    if requested != 'auto':
+        duration = {'five_hour': 300, 'weekly': 10080}.get(requested)
+        candidates = [(key, window) for key, window in candidates if window['minutes'] == duration]
+    selected = min(candidates, key=lambda pair: (0 if pair[1]['minutes'] == 300 else
+        2 if _weekly(pair[1]) else 1, pair[1]['minutes'], pair[0])) if candidates else None
+    if _state(sample) == 'unknown':
+        selected = None
+    minutes = selected[1]['minutes'] if selected else None
+    return {'requested_window': requested,
+            'effective_window': 'five_hour' if minutes == 300 else 'weekly' if minutes == 10080 else 'custom' if minutes else None,
+            'minutes': minutes, 'window_key': selected[0] if selected else None,
+            'five_hour_available': five, 'weekly_available': weekly,
+            'state': 'ready' if selected else 'service_only' if _state(sample) == 'service_only' else 'unavailable'}
+
+
+def _limiting(window, config, selected_minutes):
+    return window['remaining'] <= (config['pause_remaining'] if window['minutes'] == selected_minutes else 0)
 
 
 def pause_needed(sample, config):
-    return bool(sample.get("blocked")) or any(_limiting(w, config) for w in (sample.get("windows") or {}).values())
+    selected_minutes = monitoring_state(sample, config)['minutes']
+    return bool(sample.get("blocked")) or any(_limiting(w, config, selected_minutes)
+        for w in (sample.get("windows") or {}).values())
 
 
 def classify(sample, config):
     windows = (sample.get("windows") or {}).values()
-    if sample.get("blocked") or any(_weekly(w) and w["remaining"] <= 0 for w in windows):
+    if sample.get("blocked") or any(w["remaining"] <= 0 for w in windows):
         return "blocked"
-    if _state(sample) == "unknown":
+    monitoring = monitoring_state(sample, config)
+    if _state(sample) == "unknown" or monitoring['state'] == 'unavailable':
         return "unknown"
-    metered = [w for w in windows if not _weekly(w)]
+    metered = [w for w in windows if w['minutes'] == monitoring['minutes']]
     if any(w["remaining"] <= config["pause_remaining"] for w in metered):
         return "low"
     if any(w["remaining"] <= config["warn_remaining"] for w in metered):
@@ -138,8 +173,10 @@ def quota_usable(sample, config):
     if not sample.get("service_allowed") and config.get("require_service_allowed"):
         return False
     windows = sample.get("windows") or {}
-    return bool(windows) and all(w["remaining"] > 0 if _weekly(w)
-        else w["remaining"] >= config["resume_remaining"] for w in windows.values())
+    monitoring = monitoring_state(sample, config)
+    return monitoring['state'] == 'ready' and all(
+        w['remaining'] >= config['resume_remaining'] if w['minutes'] == monitoring['minutes']
+        else w['remaining'] > 0 for w in windows.values())
 
 
 def restoration_reason(current, previous, config, now):
@@ -151,11 +188,12 @@ def restoration_reason(current, previous, config, now):
         return None
     old_windows, new_windows = window_map(previous), window_map(current)
     early = False
+    selected_minutes = monitoring_state(previous, config)['minutes']
     for key, old in old_windows.items():
         new = new_windows.get(key)
         if new is None or new["minutes"] != old["minutes"]:
             return None  # An omitted old allowance is not proof of recovery.
-        if _limiting(old, config) and new["reset"] <= old["reset"]:
+        if _limiting(old, config, selected_minutes) and new["reset"] <= old["reset"]:
             if new['remaining'] - old['remaining'] < max(5, config['resume_remaining'] - config['pause_remaining']):
                 return None
             early = True
@@ -188,14 +226,13 @@ def restoration_details(current, previous_windows, reason):
                 for key, old in previous_windows.items() if key in windows]}
 
 
-def plan_window(sample):
+def plan_window(sample, config=None):
     """Select the actual timed window for a newly armed one-time instruction."""
     windows = window_map(sample)
     if not windows or _state(sample) == "unknown":
         return None
-    key = min(windows, key=lambda k: (0 if windows[k]["minutes"] == 300 else
-        2 if _weekly(windows[k]) else 1, windows[k]["minutes"], k))
-    return key, windows[key]
+    selected = monitoring_state(sample, config)['window_key']
+    return (selected, windows[selected]) if selected else None
 
 
 def next_reset(sample):

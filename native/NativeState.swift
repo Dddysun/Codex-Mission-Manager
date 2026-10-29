@@ -38,6 +38,9 @@ struct MissionSnapshot: Decodable {
     var service_error: String?
     var desktop_connection_error: String?
     var quota_phase: String?
+    var collection_in_progress: Bool?
+    var collection_seconds: Double?
+    var service_error_type: String?
     var tasks: [MissionChat]
     var events: [MissionEvent]
     var usage: MissionUsage?
@@ -69,6 +72,7 @@ struct MissionUsage: Decodable {
     var scheduling_window: MissionQuotaWindow?
     var limit_name: String?
     var reset_credits: MissionResetCredits?
+    var monitoring: MissionMonitoring?
     var visibleWindows: [MissionQuotaWindow] {
         if let quota_windows { return quota_windows }
         // A V0.2 snapshot has only the two legacy display slots.
@@ -86,8 +90,10 @@ struct MissionUsage: Decodable {
         guard service_allowed == true, minimum.isFinite else { return false }
         if quota_state == "service_only" { return true }
         guard quota_state == "metered", !visibleWindows.isEmpty else { return false }
+        if monitoring?.state == "unavailable" { return false }
         return visibleWindows.allSatisfy { window in
             guard let remaining=window.value.validRemaining else { return false }
+            if let monitoring { return window.minutes == Double(monitoring.minutes ?? -1) ? remaining >= minimum : remaining > 0 }
             return window.minutes == 10080 ? remaining > 0 : remaining >= minimum
         }
     }
@@ -124,6 +130,23 @@ struct MissionUsage: Decodable {
         if !hasWeek { return L("未提供周额度窗口") }
         return nil
     }
+    func canMonitor(_ window:String) -> Bool {
+        guard ["five_hour","weekly"].contains(window), stale != true, quota_state != "unknown" else { return false }
+        let pro=account?.plan_type?.lowercased().split(separator:"_").first == "pro"
+        if window == "five_hour" {
+            return !pro && (monitoring?.five_hour_available ?? visibleWindows.contains {$0.minutes == 300})
+        }
+        return monitoring?.weekly_available ?? visibleWindows.contains {$0.minutes == 10080}
+    }
+}
+struct MissionMonitoring: Decodable {
+    var requested_window:String?
+    var effective_window:String?
+    var minutes:Int?
+    var window_key:String?
+    var five_hour_available:Bool?
+    var weekly_available:Bool?
+    var state:String?
 }
 struct MissionAccount: Decodable {
     var id: String?; var name: String?; var email: String?; var type: String?
@@ -404,6 +427,7 @@ enum MissionLogoControl {
         if snapshot.quota_phase == "low" || snapshot.quota_phase == "blocked" || snapshot.usage?.blocked == true { return .waiting }
         if snapshot.usage?.quota_state == "metered", snapshot.usage?.visibleWindows.contains(where: {
             guard let remaining=$0.value.validRemaining else { return false }
+            if let monitor=snapshot.usage?.monitoring {return remaining <= ($0.minutes == Double(monitor.minutes ?? -1) ? snapshot.policy.pause : 0)}
             return $0.minutes == 10080 ? remaining <= 0 : remaining <= snapshot.policy.pause
         }) == true { return .waiting }
         guard snapshot.healthy, snapshot.control_enabled, snapshot.control_available != false,
@@ -424,8 +448,10 @@ func missionTime(_ stamp: Double?) -> String {
 // One source of truth for native control requests; the backend still rechecks
 // account, quota, current turn and durable idempotency before dispatching.
 enum MissionCommands {
-    static func rules(_ values: [String:Int], revision: Int) -> [String:Any] {
-        ["action":"set_rules", "rules_revision":revision, "rules":values]
+    static func rules(_ values: [String:Int], revision: Int, monitorWindow:String? = nil) -> [String:Any] {
+        var payload:[String:Any] = ["action":"set_rules", "rules_revision":revision, "rules":values]
+        if let monitorWindow {payload["monitor_window"]=monitorWindow}
+        return payload
     }
     static func automatic(_ chat: MissionChat, enabled: Bool) -> [String: Any] {
         ["action":"set_auto", "key":chat.key, "enabled":enabled, "revision":chat.revision]
@@ -474,8 +500,10 @@ struct MissionRules: Decodable {
     var revision: Int
     var values: [String:Int]
     var bounds: [String:MissionRuleBound]?
-    func confirms(_ submitted:[String:Int], after revision:Int) -> Bool {
-        self.revision > revision && values == submitted
+    var monitor_window:String?
+    var requestedWindow:String {monitor_window ?? "auto"}
+    func confirms(_ submitted:[String:Int], monitorWindow:String? = nil, after revision:Int) -> Bool {
+        self.revision > revision && values == submitted && (monitorWindow == nil || requestedWindow == monitorWindow)
     }
 }
 enum MissionRuleFields {

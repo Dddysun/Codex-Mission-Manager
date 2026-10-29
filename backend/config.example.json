@@ -25,5 +25,6 @@
   "require_service_allowed": true,
   "runtime_root": ".",
   "ui_port": 8769,
-  "timezone": "Asia/Dubai"
+  "timezone": "Asia/Dubai",
+  "monitor_window": "auto"
 }

@@ -20,7 +20,7 @@ from plans import get_plan, all_plans, set_plan
 from immediate import enqueue_dispatch, latest_dispatches
 from compatibility import desktop_compatibility
 from rules import effective_config, effective_rules, update_rules
-from quota import reset_credits
+from quota import reset_credits, monitoring_state, plan_window
 from event_origin import event_origin, origin_detail
 IS_WINDOWS = os.name == 'nt'
 
@@ -166,6 +166,15 @@ class Application:
                 "scheduling_available": False, "observed_at": None}
             usage["stale"] = not running or now - (usage.get("observed_at") or 0) > cfg["max_sample_age_seconds"]
             usage.setdefault('reset_credits', reset_credits({}))
+            quota_sample = dict(report.get('quota') or {})
+            quota_sample.setdefault('plan_type', (usage.get('account') or {}).get('plan_type'))
+            if not quota_sample.get('plan_type'):
+                quota_sample['plan_type'] = (usage.get('account') or {}).get('plan_type')
+            usage['monitoring'] = monitoring_state(quota_sample, cfg)
+            target = plan_window(quota_sample, cfg)
+            usage['scheduling_available'] = target is not None
+            usage['scheduling_window'] = (dict(target[1], id=target[0], kind='five_hour' if target[1]['minutes'] == 300
+                else 'weekly' if target[1]['minutes'] == 10080 else 'custom') if target else None)
             store.db.rollback()
             return {
                 "observed_at": report.get("observed_at"), "now": now, "running": running,
@@ -176,6 +185,9 @@ class Application:
                 "control_revision": global_revision,
                 "service_error": report.get("stage") if report.get("phase") == "unknown" else None,
                 "quota_phase": report.get("phase"),
+                "collection_in_progress": report.get('collection_in_progress', False),
+                "collection_seconds": report.get('collection_seconds'),
+                "service_error_type": report.get('error'),
                 "tasks": tasks, "events": events,
                 "usage": usage, "compatibility": compatibility, "rules": rules,
                 "bulk_pause": store.get("bulk_pause_result"),
@@ -198,7 +210,9 @@ class Application:
         store = Store(cfg["state_dir"])
         try:
             if action == 'set_rules':
-                return {'rules': update_rules(store, cfg, payload.get('rules'), payload.get('rules_revision')),
+                if 'monitor_window' in payload and not isinstance(payload['monitor_window'], str):
+                    raise ValueError('监控窗口无效，请重新选择。')
+                return {'rules': update_rules(store, cfg, payload.get('rules'), payload.get('rules_revision'), payload.get('monitor_window')),
                         'message': '规则已保存', 'message_en': 'Rules saved.'}
             cfg = effective_config(store, cfg)
             if action == "start":
@@ -281,7 +295,7 @@ class Application:
                         # the stored catalog remains read-only and no enable or
                         # dispatch path receives this copy.
                         plan_chat = dict(chat, can_control=True)
-                    set_plan(store, plan_chat, enabled, payload.get("prompt", "继续任务"), revision, sample)
+                    set_plan(store, plan_chat, enabled, payload.get("prompt", "继续任务"), revision, sample, config=cfg)
                     store.suppress_unmanaged_auto_discovery(chat["id"])
                     return {"message": "已预约，额度恢复后执行一次" if enabled else "已取消预约", "message_en": "Scheduled once after quota recovery." if enabled else "Schedule cancelled."}
                 task = store.configure_auto(chat["id"], enabled, revision, sample.get("scope"))

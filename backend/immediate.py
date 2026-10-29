@@ -145,8 +145,7 @@ class ImmediateRunner:
                 if (latest.get("started_at_ms", 0) > value["requested_at"] * 1000
                         or value.get("expected_turn_id") and latest.get("id") != value["expected_turn_id"]):
                     raise ValueError("点击后聊天出现新回合，未发送旧指令；请刷新后重试")
-                from guardian import parse_bucket
-                fresh = parse_bucket(await self.rpc.call("account/rateLimits/read"), self.config["limit_id"], self.controller.clock())
+                fresh = await self.controller.read_quota()
                 if not quota_usable(fresh, self.config):
                     raise ValueError("发送前复核额度或服务许可不足，未发送指令")
                 if self.controller.identity_check and await self.controller.identity_check() != value["scope"]:

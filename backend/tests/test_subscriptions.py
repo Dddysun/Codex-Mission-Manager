@@ -55,13 +55,13 @@ class SubscriptionPolicyTests(unittest.TestCase):
         value = read(limits(None, meter(10080, 6), planType="pro"))
         self.assertEqual(value["quota_state"], "metered")
         self.assertNotIn("primary", value["windows"])
-        self.assertEqual(classify(value, CONFIG), "normal")
-        self.assertTrue(quota_usable(value, CONFIG))
+        self.assertEqual(classify(value, CONFIG), "low")
+        self.assertFalse(quota_usable(value, CONFIG))
 
     def test_weekly_in_primary_slot_is_not_treated_as_a_short_window(self):
         value = read(limits(meter(10080, 6), None))
-        self.assertEqual(classify(value, CONFIG), "normal")
-        self.assertTrue(quota_usable(value, CONFIG))
+        self.assertEqual(classify(value, CONFIG), "low")
+        self.assertFalse(quota_usable(value, CONFIG))
         exhausted = read(limits(meter(10080, 0), None))
         self.assertEqual(classify(exhausted, CONFIG), "blocked")
         self.assertFalse(quota_usable(exhausted, CONFIG))
@@ -79,10 +79,13 @@ class SubscriptionPolicyTests(unittest.TestCase):
                     self.assertEqual(classify(value, CONFIG), phase)
                     self.assertEqual(quota_usable(value, CONFIG), remaining >= CONFIG["resume_remaining"])
 
-    def test_all_reported_nonweekly_windows_constrain_recovery(self):
+    def test_unselected_nonweekly_window_only_constrains_recovery_when_exhausted(self):
         value = read(limits(meter(300, 90), meter(1440, 8)))
-        self.assertEqual(classify(value, CONFIG), "low")
-        self.assertFalse(quota_usable(value, CONFIG))
+        self.assertEqual(classify(value, CONFIG), "normal")
+        self.assertTrue(quota_usable(value, CONFIG))
+        exhausted = read(limits(meter(300, 90), meter(1440, 0)))
+        self.assertEqual(classify(exhausted, CONFIG), "blocked")
+        self.assertFalse(quota_usable(exhausted, CONFIG))
 
     def test_missing_optional_weekly_window_does_not_create_a_zero_quota(self):
         value = read(limits(meter(300, 80)))

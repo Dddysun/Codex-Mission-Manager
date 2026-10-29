@@ -31,6 +31,12 @@
 
 ### 运行规则
 
+**监控窗口：**可选五小时额度或周额度。Plus 可选择账号实际返回的窗口；Pro 默认周额度，五小时选项置灰。首次使用和旧设置自动选择：优先五小时，Pro 或仅有周额度时选周。缺失或未核验的窗口不可选择；手动选定的窗口消失后会暂缓自动续接，需重新选择或等待核验。
+
+下面的暂停和恢复阈值用于所选窗口。例如选择周额度后，剩余不高于 10% 时暂停，至少恢复到 20% 并通过复核后才续接。其他窗口虽不使用该百分比保留值，但用尽或服务禁止使用仍会暂停。官方未提供固定窗口而仅明确许可使用时，百分比阈值不适用。
+
+新建预约使用所选监控窗口；已保存的预约保留原窗口。保存规则不会开启已暂停的全局榨汁，也不会解除手动保持。
+
 | 设置 | 默认 | 范围 |
 | --- | --- | --- |
 | 暂停阈值 | 10% | 1–50% |
@@ -40,7 +46,7 @@
 | 恢复复核 | 5 秒 | 3–60 秒 |
 | 界面刷新 | 5 秒 | 2–30 秒 |
 
-保存后生效。采集耗时另计，连接失败有重试间隔。界面刷新读取缓存；服务提供的额度和刷新时间不可编辑。保存冲突时保留草稿，可重新载入。
+保存后生效。恢复复核是最短等待时间，仍需下一次有效采样；处理耗时另计，不能保证恰好 5 秒续接。连接失败有重试间隔。界面刷新读取缓存；服务提供的额度和刷新时间不可编辑。保存冲突时保留草稿，可重新载入。
 
 ### 设置与退出
 
@@ -52,9 +58,9 @@
 
 ### 升级与排查
 
-0.4.2 修复运行后生成程序包内缓存导致 Mac 签名完整性检查失败的问题，并为连接卡住时的写入和关闭增加超时保护。升级仍按下述步骤进行，已有设置、任务和记录保留。
+0.4.3 增加监控窗口选择。旧设置自动适配：仅周额度的账号现在同样使用已设置的暂停／恢复阈值，不再仅等周额度用尽。请在运行规则中核对选择。
 
-候选源码也补齐开关撤销的并发保护、异常数值校验、本机连接上限及大快照等待预算。源码、安装包和正在运行的版本分别核对；未重新打包的追加修复不在此前候选包中。
+例行检查不会关闭全局榨汁，也不会仅因核验提示中断正在运行的聊天。新额度在聊天采集前更新，时间戳取实际采样时间；真正过期或通信失败时仍暂缓自动续接并提示重试。Logo 仍反映连接、额度和调度状态；灰色不一定代表用户按下了暂停。界面区分“已停止”和“待核验”。
 
 升级前退出旧版。Mac 新应用为 `TokenMax.app`；旧版 `Codex Mission Manager.app` 可在退出后移除，勿同时运行。Windows 安装器沿用原安装位置。设置、任务和记录保留。
 
@@ -93,6 +99,12 @@ Quota recovery entries show attribution and balance changes; expand details for 
 
 ### Operating rules
 
+**Monitoring window:** choose five-hour or weekly quota. Plus can select windows actually returned for the account. Pro defaults to weekly, with five-hour disabled. New and legacy settings select automatically: five-hour first, or weekly for Pro and weekly-only accounts. Missing or unverified windows cannot be selected. If an explicitly selected window disappears, automatic resumption waits for verification or a new selection.
+
+The thresholds below apply to the selected window. For weekly monitoring, the default pauses at 10% or less and resumes only at 20% or more after confirmation. Other windows do not use this reserve threshold, but exhaustion or a service block still pauses eligible tasks. Percentage thresholds do not apply when the service explicitly permits use without fixed windows.
+
+New schedules use the selected window. Existing schedules retain their original window. Saving rules does not enable globally paused juicing or clear manual holds.
+
 | Setting | Default | Range |
 | --- | --- | --- |
 | Pause threshold | 10% | 1–50% |
@@ -102,7 +114,7 @@ Quota recovery entries show attribution and balance changes; expand details for 
 | Recovery confirmation | 5 s | 3–60 s |
 | UI refresh | 5 s | 2–30 s |
 
-Changes apply after saving. Collection time is additional; connection failures use retry delays. UI refresh reads the cache. Service quota and reset times are read-only. Conflicting saves retain drafts for review or reload.
+Changes apply after saving. Recovery confirmation is a minimum wait and still requires a subsequent valid sample; processing adds time, so a five-second setting does not guarantee resumption at exactly five seconds. Connection failures use retry delays. UI refresh reads the cache. Service quota and reset times are read-only. Conflicting saves retain drafts for review or reload.
 
 ### Settings and quitting
 
@@ -114,9 +126,9 @@ Keep-awake prevents idle sleep, not manual sleep or guaranteed operation with th
 
 ### Upgrade and troubleshoot
 
-0.4.2 prevents runtime caches inside the app from invalidating the Mac resource seal and bounds writes and shutdown on stalled connections. Follow the upgrade steps below; existing settings, tasks, and history are retained.
+0.4.3 adds monitoring-window selection. Legacy settings adapt automatically: weekly-only accounts now use the configured pause/resume thresholds instead of waiting for weekly exhaustion. Review the selection in Operating rules.
 
-Candidate sources also protect concurrent toggle revocations, validate overflowing numbers, limit local connections, and honor large-snapshot budgets. Verify source, package and running versions separately; changes not yet repackaged are absent from earlier candidate packages.
+Routine checking does not turn off global juicing or interrupt a running chat solely because verification is pending. Fresh quota is published before chat collection, with its actual observation timestamp. Genuine stale data or connection failures still withhold automatic resumption and show a retry notice. The logo reflects connection, quota, and scheduling state; gray does not necessarily mean the user pressed Pause. The interface distinguishes Stopped from Awaiting verification.
 
 Quit the previous version before upgrading. On Mac, install `TokenMax.app`, then remove the old `Codex Mission Manager.app`; do not run both. Windows retains the existing installation location. Settings, tasks, and history are preserved.
 

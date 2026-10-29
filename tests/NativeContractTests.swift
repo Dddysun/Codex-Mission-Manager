@@ -107,6 +107,29 @@ import Foundation
         precondition(weeklyUsage.permitsImmediate(minimum:20), "Weekly windows remain usable above zero")
         weeklyUsage.quota_windows?[0].remaining = 0
         precondition(!weeklyUsage.permitsImmediate(minimum:20))
+        var selectedWeekly = weekly.usage!
+        selectedWeekly.monitoring = MissionMonitoring(requested_window:"weekly",effective_window:"weekly",minutes:10080,window_key:"duration:10080",five_hour_available:false,weekly_available:true,state:"ready")
+        selectedWeekly.quota_windows?[0].remaining = 10
+        precondition(!selectedWeekly.permitsImmediate(minimum:20), "Selected weekly windows use the configured recovery reserve")
+        precondition(!selectedWeekly.canMonitor("five_hour") && selectedWeekly.canMonitor("weekly"))
+        selectedWeekly.quota_windows?[0].remaining = 20
+        precondition(selectedWeekly.permitsImmediate(minimum:20))
+        selectedWeekly.monitoring?.state = "unavailable"
+        precondition(!selectedWeekly.permitsImmediate(minimum:20))
+        var collecting = state
+        collecting.running=true;collecting.healthy=true;collecting.stale=false
+        collecting.control_paused=false;collecting.control_enabled=true;collecting.control_available=true
+        collecting.service_error=nil;collecting.desktop_connection_error=nil;collecting.quota_phase="normal"
+        collecting.collection_in_progress=true;collecting.usage?.stale=false
+        collecting.usage?.windows.five_hour?.remaining=80;collecting.usage?.windows.weekly?.remaining=60
+        precondition(MissionLogoControl.state(connected:true,paused:false,snapshot:collecting) == .working,
+                     "Normal collection does not stop Juicing or its logo")
+        collecting.healthy=false;collecting.control_enabled=false
+        precondition(MissionLogoControl.state(connected:true,paused:false,snapshot:collecting) != .idle,
+                     "Verification failure is distinct from a manual stop")
+        let selectedRules=MissionRules(revision:2,values:MissionRuleFields.defaults,bounds:nil,monitor_window:"weekly")
+        precondition(selectedRules.confirms(MissionRuleFields.defaults,monitorWindow:"weekly",after:1))
+        precondition(!selectedRules.confirms(MissionRuleFields.defaults,monitorWindow:"five_hour",after:1))
         let custom = try fixture("native-custom-windows.json")
         precondition(custom.usage?.visibleWindows.map { $0.title } == ["15分钟额度", "1天额度"])
         precondition(custom.usage?.scheduleWindow?.minutes == 15)
