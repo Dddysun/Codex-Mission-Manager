@@ -50,11 +50,15 @@ def main():
     plan = json.loads(args.plan.read_text())
     assert plan['simulation'] and plan['schema'] == 1
     output = args.output.resolve()
-    preview = output/'00_全部镜头预览_40秒.mp4'
+    scenes = plan['scenes']
+    assert scenes and all(s['key'].startswith('%02d_' % (i+1)) for i,s in enumerate(scenes))
+    preview_seconds = len(scenes)*4
+    preview = output/('00_按台本顺序预览_%d秒.mp4' % preview_seconds)
+    full = output/'00_按台本顺序完整串联.mp4'
     if preview.exists():
         parser.error('Preview already exists; use a new output folder')
-    scenes = plan['scenes']
-    assert len(scenes) == 10
+    if full.exists():
+        parser.error('Full sequence already exists; use a new output folder')
     jobs = []
     for folder, width, height in [('01_竖屏_1080x1920', 1080, 1920),
                                   ('02_横屏原始_2560x1600', 2560, 1600)]:
@@ -72,7 +76,8 @@ def main():
                 '-c', 'copy', '-movflags', '+faststart', ready)
             ready.replace(path)
         # Four seconds per shot. The chosen in-points retain each key transition.
-        starts = [3, 4, 6, 8, 3, 7, 3, 4, 2, 4]
+        starts = [1,1,3,3,1,3,3,4,6,8,2,2,3,1,7,3,3,4,4]
+        assert len(starts) == len(scenes)
         parts = []
         for index, (scene, start) in enumerate(zip(scenes, starts)):
             source = output/'01_竖屏_1080x1920'/(scene['key']+'.mp4')
@@ -85,7 +90,16 @@ def main():
         concat.write_text(''.join("file '%s'\n" % name for name in parts))
         run(args.ffmpeg, '-nostdin', '-v', 'error', '-f', 'concat', '-safe', 1,
             '-i', concat, '-c', 'copy', '-movflags', '+faststart', preview)
-    jobs.append((preview, 1080, 1920, 40))
+        complete = []
+        for index, scene in enumerate(scenes):
+            link = temporary/('full-%02d.mp4' % index)
+            link.symlink_to(output/'01_竖屏_1080x1920'/(scene['key']+'.mp4'))
+            complete.append(link.name)
+        concat.write_text(''.join("file '%s'\n" % name for name in complete))
+        run(args.ffmpeg, '-nostdin', '-v', 'error', '-f', 'concat', '-safe', 1,
+            '-i', concat, '-c', 'copy', '-movflags', '+faststart', full)
+    jobs.extend([(preview, 1080, 1920, preview_seconds),
+                 (full, 1080, 1920, sum(s['duration'] for s in scenes))])
     with ThreadPoolExecutor(max_workers=2) as pool:
         records = list(pool.map(lambda job: inspect(*job, args.ffmpeg, args.ffprobe), jobs))
     for record, job in zip(records, jobs):
@@ -99,8 +113,11 @@ def main():
     distinct = len(set(frame_hashes))
     assert distinct >= 20, 'Native logo animation did not update'
     manifest = {'schema': 1, 'product': plan['product'], 'version': plan['version'],
-                'brand': plan['brand'], 'recording_mode': 'isolated_native_ui_with_synthetic_data',
+                'brand': plan['brand'], 'branding':plan['branding'],
+                'recording_mode': 'isolated_native_ui_and_credited_official_public_screenshots',
                 'time_compressed': True, 'scene_count': len(scenes),
+                'script_order':[{'scene':s['key'],'narration':s['script_cue'],
+                                 'source':s.get('source_url','synthetic_native_ui')} for s in scenes],
                 'unique_scene_seconds': sum(s['duration'] for s in scenes),
                 'native_logo_motion_check': {'sampled_frames': len(frame_hashes),
                                              'distinct_frames': distinct},

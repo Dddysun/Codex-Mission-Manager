@@ -60,7 +60,7 @@ def step(at, **kwargs):
     return {'at':at,'snapshot':snapshot(**kwargs),**settings}
 
 
-def scenarios():
+def original_scenarios():
     scenes=[
         {'key':'01_额度与任务总览','title':'Codex 额度，一眼看清','subtitle':'五小时窗口 · 周额度 · 任务状态',
          'duration':10,'focus':[10,305,280,280],'steps':[step(0),step(5,remaining=68)]},
@@ -117,6 +117,71 @@ def scenarios():
             'prompt':PROMPT,'scenes':scenes}
 
 
+def scenarios(assets):
+    base = original_scenarios()
+    previous = base['scenes']
+
+    def native(index, key, **changes):
+        result = copy.deepcopy(previous[index-1])
+        result.update(key=key, **changes)
+        return result
+
+    def codex(key, title, subtitle, number, focus):
+        image = assets/(str(number)+'.jpeg')
+        if not image.is_file():
+            raise FileNotFoundError('Run fetch_codex_assets.py before creating the full recording plan')
+        return {'key':key, 'title':title, 'subtitle':subtitle, 'duration':8,
+                'view':'public', 'media':str(image.resolve()), 'focus':focus,
+                'sourceCredit':'Codex 官方公开截图 · 来源 OpenAI', 'steps':[step(0)],
+                'source_url':'https://developers.openai.com/blog/run-long-horizon-tasks-with-codex',
+                'source_type':'official_screenshot_with_camera_motion'}
+
+    scenes = [
+        codex('01_Codex桌面与写代码','用 Codex 写代码','Codex 桌面界面 · OpenAI 官方公开示例',4,[190,60,940,670]),
+        codex('02_Codex代码修改','任务在继续，代码在变化','查看代码修改与检查过程',6,[130,65,920,680]),
+        native(1,'03_五小时与周额度',title='五小时窗口，还有周额度',subtitle='查看剩余额度和下一次刷新时间'),
+        native(1,'04_晚上十点与凌晨三点',title='晚上十点用完，凌晨三点恢复',subtitle='刷新时间，未必配合你的作息',duration=10,
+               steps=[step(0,remaining=8,mode='paused')]),
+        codex('05_Codex等待下一步','AI 在等额度，你在等 AI','不用一直惦记下一次刷新',4,[475,510,600,190]),
+        native(10,'06_TokenMax登场',title='TokenMax / Token榨汁机',subtitle='开源工具，让额度调度自动进行',duration=10),
+        native(1,'07_额度与任务监控',title='剩余额度，一眼看清',subtitle='五小时窗口 · 周额度 · 任务状态'),
+        native(2,'08_低额度自动暂停'),
+        native(3,'09_额度恢复自动续接'),
+        native(4,'10_睡前写好预约指令'),
+        native(4,'11_一次性预约已保存',title='下一步，提前安排好',subtitle='额度恢复并符合条件后，执行一次',duration=8,
+               steps=[step(0,remaining=8,mode='paused',prompt=PROMPT,plan='armed')]),
+        native(9,'12_后台运行条件',subtitle='保持电脑、客户端、网络正常运行'),
+        native(5,'13_第二天检查执行结果'),
+        codex('14_Codex检查测试结果','第二天，检查执行结果','测试与交付结果仍需人工验收',5,[0,220,800,350]),
+        native(6,'15_额度恢复历史记录'),
+        native(7,'16_按规则调度不增加额度',title='不增加官方额度',subtitle='阈值控制调度，官方余额与刷新时间只读'),
+        native(1,'17_官方余额与刷新只读',title='不用自己的时间，守着刷新',subtitle='按账号实际返回的额度窗口工作',duration=8),
+        native(8,'18_日夜外观与主题',title='白天、夜晚，都能安排好',subtitle='在符合条件时，把会员权益用到位'),
+        native(1,'19_高斯模糊动态Logo片尾',title='Token榨汁机 / TokenMax',subtitle='把会员权益，用到位。',view='outro',
+               duration=16,focus=[415,0,450,800]),
+    ]
+    cues = [
+        '尤其是经常用 Codex 写代码的朋友', 'Codex 写代码与任务执行的补充镜头',
+        '除了周额度之外，还有一个五小时额度窗口', '晚上十点用完，下一次恢复是凌晨三点',
+        'AI 在等额度，我们在等 AI', '最近发现了开源工具 TokenMax / Token榨汁机',
+        '监控 Codex 的剩余额度', '在符合条件时自动暂停任务', '等额度恢复，再自动接续原来的工作',
+        '睡觉之前，提前写好下一条指令', '预约在额度恢复之后执行',
+        '只要电脑和客户端保持正常运行，账号额度和任务状态符合要求',
+        '第二天起床，检查执行结果', '次日检查与人工验收的补充镜头',
+        '记录额度恢复历史，知道什么时候恢复、恢复多少', '不是破解限制，也不会增加官方额度',
+        '不用自己的时间迁就 AI 的额度刷新时间', '能多利用一点，就多利用一点', '这才叫真正把会员权益用到位',
+    ]
+    for scene, cue in zip(scenes, cues):
+        scene['script_cue'] = cue
+    base.update(scenes=scenes, edition=2, branding='TokenMax / Token榨汁机',
+                order='narration_sequence', codex_media='official_public_screenshots_with_camera_motion')
+    return base
+
+
 if __name__ == '__main__':
-    import sys
-    Path(sys.argv[1]).write_text(json.dumps(scenarios(),ensure_ascii=False,indent=2)+'\n')
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('output',type=Path)
+    parser.add_argument('--assets',type=Path,required=True)
+    args = parser.parse_args()
+    args.output.write_text(json.dumps(scenarios(args.assets),ensure_ascii=False,indent=2)+'\n')

@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import AVFoundation
 import CoreVideo
+import CoreImage
 
 final class RecordingClock: ObservableObject {
     static let shared=RecordingClock()
@@ -21,6 +22,8 @@ struct RecordingScene: Decodable {
     var duration:Double
     var focus:[Double]
     var theme:String?
+    var media:String?
+    var sourceCredit:String?
     var steps:[RecordingStep]
 }
 struct RecordingPlan: Decodable {
@@ -69,17 +72,67 @@ struct RecordingRoot: View {
     var body:some View {
         Group {
             if kind == "menu" {MissionMenuPanel(model:driver.model,openWindow:{},openSettings:{},quit:{})}
+            else if kind == "outro" {RecordingEndCard(driver:driver)}
             else if kind == "brand" {
                 VStack(spacing:22) {
                     JuicerLogo(state:.working,darkSurface:true).frame(width:270,height:270)
                     Text("TokenMax").font(.system(size:60,weight:.bold))
-                    Text("TOKEN榨汁机").font(.system(size:25,weight:.medium)).foregroundStyle(.secondary)
+                    Text("Token榨汁机").font(.system(size:25,weight:.medium)).foregroundStyle(.secondary)
                 }.frame(maxWidth:.infinity,maxHeight:.infinity).background(Color(nsColor:MissionPalette.color("101A29")))
             } else {
                 MissionWindow(model:driver.model,showSettings:{},initialSection:driver.section,
                               initialActivityFilter:driver.filter).id(driver.rootIdentity)
             }
         }.preferredColorScheme(driver.model.colorScheme).environment(\.controlActiveState,.key)
+    }
+}
+
+struct RecordingEndCard: View {
+    @ObservedObject var driver:RecordingDriver
+    @ObservedObject var clock=RecordingClock.shared
+    private var progress:Double {let x=max(0,min(1,(clock.seconds-0.6)/1.6));return x*x*(3-2*x)}
+    var body:some View {
+        VStack(spacing:14) {
+                JuicerLogo(state:.working,darkSurface:true).frame(width:225,height:225)
+                Text("Token榨汁机").font(.system(size:38,weight:.bold)).foregroundStyle(.white)
+                Text("TokenMax").font(.system(size:52,weight:.bold)).foregroundStyle(.white)
+                RoundedRectangle(cornerRadius:2).fill(Color(nsColor:MissionPalette.color("F2BA42")))
+                    .frame(width:48,height:3).padding(.top,12)
+                Text("把会员权益，用到位。")
+                    .font(.system(size:16,weight:.medium)).foregroundStyle(.white.opacity(0.76)).padding(.top,8)
+        }.frame(maxWidth:.infinity,maxHeight:.infinity)
+            .opacity(progress).offset(y:16*(1-progress)).background(Color.clear)
+    }
+}
+
+// Layer blur can disappear in AppKit's offscreen cache. Composite an explicit
+// Gaussian-filtered native backdrop so the delivered frames contain the blur.
+final class RecordingGaussianBackdrop {
+    let original:CGImage
+    let processor=CIContext(options:[.cacheIntermediates:false])
+    private var level = -1
+    private var blurred:CGImage?
+    init(_ image:CGImage) {original=image}
+    func frame(foreground:CGImage,time:Double)throws->CGImage {
+        let x=max(0,min(1,(time-0.6)/1.6)),progress=x*x*(3-2*x)
+        let next=Int((progress*20).rounded())
+        if next != level {
+            level=next
+            let source=CIImage(cgImage:original)
+            let filtered=source.clampedToExtent().applyingFilter("CIGaussianBlur",parameters:[kCIInputRadiusKey:Double(level)*2.6])
+            guard let result=processor.createCGImage(filtered.cropped(to:source.extent),from:source.extent)
+            else {throw RecordingError.message("Cannot render Gaussian backdrop")}
+            blurred=result
+        }
+        guard let context=CGContext(data:nil,width:original.width,height:original.height,bitsPerComponent:8,bytesPerRow:0,
+                                    space:CGColorSpace(name:CGColorSpace.sRGB)!,bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)
+        else {throw RecordingError.message("Cannot composite ending")}
+        let rect=CGRect(x:0,y:0,width:original.width,height:original.height)
+        context.draw(blurred ?? original,in:rect)
+        context.setFillColor(NSColor.black.withAlphaComponent(0.62*progress).cgColor);context.fill(rect)
+        context.draw(foreground,in:rect)
+        guard let result=context.makeImage() else {throw RecordingError.message("Cannot produce ending frame")}
+        return result
     }
 }
 
@@ -172,21 +225,39 @@ func recordingBackground(_ context:CGContext,width:Int,height:Int) {
     context.setFillColor(MissionPalette.color("0B1422").cgColor)
     context.fill(CGRect(x:0,y:0,width:width,height:height))
 }
-func drawSource(_ image:CGImage,context:CGContext) {
+func recordingCanvasImage(_ image:CGImage)->CGImage {
+    let context=CGContext(data:nil,width:2560,height:1600,bitsPerComponent:8,bytesPerRow:0,
+                          space:CGColorSpace(name:CGColorSpace.sRGB)!,bitmapInfo:CGImageAlphaInfo.premultipliedLast.rawValue)!
+    recordingBackground(context,width:2560,height:1600)
+    let scale=min(2560/Double(image.width),1600/Double(image.height))
+    let width=Double(image.width)*scale,height=Double(image.height)*scale
+    context.draw(image,in:CGRect(x:(2560-width)/2,y:(1600-height)/2,width:width,height:height))
+    return context.makeImage()!
+}
+func drawSource(_ image:CGImage,scene:RecordingScene,time:Double,context:CGContext) {
     recordingBackground(context,width:2560,height:1600)
     let scale=min(2560/Double(image.width),1600/Double(image.height))
     let w=Double(image.width)*scale,h=Double(image.height)*scale
-    context.draw(image,in:CGRect(x:(2560-w)/2,y:(1600-h)/2,width:w,height:h))
+    let zoom=scene.media == nil ? 1:1+0.035*min(1,time/scene.duration)
+    context.draw(image,in:CGRect(x:(2560-w*zoom)/2,y:(1600-h*zoom)/2,width:w*zoom,height:h*zoom))
     context.setFillColor(NSColor.black.withAlphaComponent(0.67).cgColor)
     context.fill(CGRect(x:22,y:14,width:495,height:42))
-    recordText("界面演示 · 模拟数据 · 时间已压缩",context:context,x:38,top:1554,width:475,height:32,
+    recordText(scene.sourceCredit ?? "界面演示 · 模拟数据 · 时间已压缩",context:context,x:38,top:1554,width:475,height:32,
                canvasHeight:1600,size:22,color:.white)
 }
 func drawPortrait(_ image:CGImage,logical:NSSize,scene:RecordingScene,time:Double,context:CGContext) {
     recordingBackground(context,width:1080,height:1920)
     let white=NSColor.white,muted=MissionPalette.color("A7B7CF")
+    if scene.view == "outro" {
+        let scale=max(1080/Double(image.width),1920/Double(image.height))
+        let width=Double(image.width)*scale,height=Double(image.height)*scale
+        context.draw(image,in:CGRect(x:(1080-width)/2,y:(1920-height)/2,width:width,height:height))
+        recordText("原生界面演示 · 模拟数据",context:context,x:70,top:1780,width:940,height:45,
+                   canvasHeight:1920,size:22,color:muted)
+        return
+    }
     context.setFillColor(MissionPalette.color("F2BA42").cgColor);context.fill(CGRect(x:70,y:1670,width:50,height:5))
-    recordText("TOKENMAX / CODEX 额度管家",context:context,x:70,top:180,width:940,height:45,
+    recordText("TokenMax / Token榨汁机",context:context,x:70,top:180,width:940,height:45,
                canvasHeight:1920,size:27,color:muted,weight:.semibold)
     recordText(scene.title,context:context,x:66,top:282,width:950,height:160,
                canvasHeight:1920,size:64,color:white,weight:.bold)
@@ -206,7 +277,7 @@ func drawPortrait(_ image:CGImage,logical:NSSize,scene:RecordingScene,time:Doubl
                     y:frame.midY-(logical.height-focus.midY)*scale,
                     width:logical.width*scale,height:logical.height*scale)
     context.interpolationQuality = .high;context.draw(image,in:rect);context.restoreGState()
-    recordText("原生界面演示 · 模拟数据 · 时间已压缩",context:context,x:70,top:1700,width:940,height:45,
+    recordText(scene.sourceCredit ?? "原生界面演示 · 模拟数据 · 时间已压缩",context:context,x:70,top:1700,width:940,height:45,
                canvasHeight:1920,size:24,color:muted)
     recordText("TokenMax  0.4.2 / build 13",context:context,x:70,top:1760,width:940,height:38,
                canvasHeight:1920,size:23,color:muted)
@@ -239,9 +310,31 @@ func drawPortrait(_ image:CGImage,logical:NSSize,scene:RecordingScene,time:Doubl
         let logical=scene.view == "menu" ? NSSize(width:400,height:570):NSSize(width:1280,height:800)
         let controller=NSHostingController(rootView:RecordingRoot(driver:driver,kind:scene.view))
         let window=RecordingWindow(contentViewController:controller);window.isReleasedWhenClosed=false
+        window.isOpaque=false;window.backgroundColor = .clear
         window.setContentSize(logical);window.appearance=NSApplication.shared.appearance
         let view=controller.view;view.layoutSubtreeIfNeeded()
+        view.wantsLayer=true;view.layer?.backgroundColor=NSColor.clear.cgColor
+        let externalImage:CGImage? = try scene.media.map {path in
+            guard let image=NSImage(contentsOfFile:path)?.cgImage(forProposedRect:nil,context:nil,hints:nil)
+            else {throw RecordingError.message("Cannot read public demonstration image")}
+            return recordingCanvasImage(image)
+        }
         RunLoop.current.run(until:Date().addingTimeInterval(0.15))
+        var backdrop:RecordingGaussianBackdrop?
+        if scene.view == "outro" {
+            let backgroundController=NSHostingController(rootView:RecordingRoot(driver:driver,kind:"app"))
+            let backgroundWindow=RecordingWindow(contentViewController:backgroundController)
+            backgroundWindow.isReleasedWhenClosed=false;backgroundWindow.setContentSize(logical)
+            let backgroundView=backgroundController.view
+            RunLoop.current.run(until:Date().addingTimeInterval(0.12));backgroundView.layoutSubtreeIfNeeded()
+            guard let bitmap=backgroundView.bitmapImageRepForCachingDisplay(in:backgroundView.bounds)
+            else {throw RecordingError.message("Cannot capture native ending backdrop")}
+            backgroundView.effectiveAppearance.performAsCurrentDrawingAppearance {
+                backgroundView.cacheDisplay(in:backgroundView.bounds,to:bitmap)
+            }
+            guard let image=bitmap.cgImage else {throw RecordingError.message("Missing ending backdrop")}
+            backdrop=RecordingGaussianBackdrop(image);backgroundWindow.close()
+        }
         let source:MovieWriter? = preview ? nil:try MovieWriter(url:horizontal.appendingPathComponent(scene.key+".mp4"),width:2560,height:1600,bitrate:12_000_000)
         let portrait:MovieWriter? = preview ? nil:try MovieWriter(url:vertical.appendingPathComponent(scene.key+".mp4"),width:1080,height:1920,bitrate:7_000_000)
         let count=preview ? 1:Int(scene.duration*30)
@@ -259,13 +352,14 @@ func drawPortrait(_ image:CGImage,logical:NSSize,scene:RecordingScene,time:Doubl
                 }
                 guard let bitmap=view.bitmapImageRepForCachingDisplay(in:view.bounds) else {throw RecordingError.message("Cannot capture native view")}
                 view.effectiveAppearance.performAsCurrentDrawingAppearance {view.cacheDisplay(in:view.bounds,to:bitmap)}
-                guard let image=bitmap.cgImage else {throw RecordingError.message("Cannot produce native frame")}
+                guard var image=externalImage ?? bitmap.cgImage else {throw RecordingError.message("Cannot produce native frame")}
+                if let backdrop {image=try backdrop.frame(foreground:image,time:t)}
                 if preview {
-                    try bitmap.representation(using:.png,properties:[:])!.write(to:posters.appendingPathComponent(scene.key+"_原生.png"))
+                    try NSBitmapImageRep(cgImage:image).representation(using:.png,properties:[:])!.write(to:posters.appendingPathComponent(scene.key+"_原生.png"))
                 } else {
                     let sample=(i==0 || i==count/2 || i==count-1)
                     let stamp=i==0 ? "开始":i==count-1 ? "结束":"中间"
-                    try source!.append(frame:i,poster:sample ? posters.appendingPathComponent(scene.key+"_横屏_"+stamp+".png"):nil) {drawSource(image,context:$0)}
+                    try source!.append(frame:i,poster:sample ? posters.appendingPathComponent(scene.key+"_横屏_"+stamp+".png"):nil) {drawSource(image,scene:scene,time:t,context:$0)}
                     try portrait!.append(frame:i,poster:sample ? posters.appendingPathComponent(scene.key+"_竖屏_"+stamp+".png"):nil) {drawPortrait(image,logical:logical,scene:scene,time:t,context:$0)}
                 }
             }
