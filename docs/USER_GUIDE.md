@@ -52,11 +52,15 @@
 
 0.4.2 修复运行后生成程序包内缓存导致 Mac 签名完整性检查失败的问题，并为连接卡住时的写入和关闭增加超时保护。升级仍按下述步骤进行，已有设置、任务和记录保留。
 
+候选源码也补齐开关撤销的并发保护、异常数值校验、本机连接上限及大快照等待预算。源码、安装包和正在运行的版本分别核对；未重新打包的追加修复不在此前候选包中。
+
 升级前退出旧版。Mac 新应用为 `TokenMax.app`；旧版 `Codex Mission Manager.app` 可在退出后移除，勿同时运行。Windows 安装器沿用原安装位置。设置、任务和记录保留。
 
 连接异常时，在设置中检查客户端状态，确认已登录并重新检查。未知客户端版本需要兼容更新。持续“连接中”不代表工作正常。
 
 运行数据仍在 `~/Library/Application Support/CodexMissionManager`（Mac）或 `%LOCALAPPDATA%\CodexMissionManager`（Windows）。可能包含账号和聊天信息，勿直接公开上传。卸载应用默认保留这些数据。
+
+这些记录目前没有应用层加密，文件权限不等于加密。仅绑定本机地址的界面服务也不构成不同本机程序或系统用户间的身份隔离。
 
 ## English
 
@@ -108,8 +112,12 @@ Keep-awake prevents idle sleep, not manual sleep or guaranteed operation with th
 
 0.4.2 prevents runtime caches inside the app from invalidating the Mac resource seal and bounds writes and shutdown on stalled connections. Follow the upgrade steps below; existing settings, tasks, and history are retained.
 
+Candidate sources also protect concurrent toggle revocations, validate overflowing numbers, limit local connections, and honor large-snapshot budgets. Verify source, package and running versions separately; changes not yet repackaged are absent from earlier candidate packages.
+
 Quit the previous version before upgrading. On Mac, install `TokenMax.app`, then remove the old `Codex Mission Manager.app`; do not run both. Windows retains the existing installation location. Settings, tasks, and history are preserved.
 
 For connection issues, inspect client status in Settings, confirm sign-in, and check again. Unknown client versions need a compatibility update. A persistent connecting state is not normal operation.
 
 Data remains in `~/Library/Application Support/CodexMissionManager` on Mac and `%LOCALAPPDATA%\CodexMissionManager` on Windows. It may contain account and chat information; do not upload it publicly without review. Uninstalling preserves this data by default.
+
+These records currently have no application-level encryption; file permissions are not encryption. Binding the interface service to loopback also does not authenticate different local programs or operating-system users.

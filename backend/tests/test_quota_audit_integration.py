@@ -32,19 +32,24 @@ class SamplingAuditTests(unittest.TestCase):
         class Service:
             account_display = None
 
+            def __init__(self):
+                self.changed = asyncio.Event()
+
             async def start(self):
                 pass
 
             async def close(self):
                 pass
 
-            async def call(self, method):
+            async def call(self, method, params=None):
                 calls.append(method)
                 return replies[0]
 
         with tempfile.TemporaryDirectory() as directory:
             config = dict(CONFIG, state_dir=directory, mode='notify', desktop_control_enabled=False,
-                          quota_notifications=False, power_guard_enabled=False, server_command=['unused'])
+                          quota_notifications=False, power_guard_enabled=False, server_command=['unused'],
+                          fresh_quota_reads=False, desktop_database=str(Path(directory) / 'missing.sqlite'),
+                          desktop_sessions_dir=str(Path(directory) / 'sessions'))
             with contextlib.closing(Store(directory)) as store:
                 store.put('supervisor_paused', True)
             with mock.patch('guardian.Rpc', return_value=Service()), \

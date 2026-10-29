@@ -24,9 +24,9 @@ and false respectively.
 """
 import hashlib
 import json
-import math
 import time
 from collections import Counter
+from quota import finite_number
 
 MIN_INCREASE = 5
 MAX_GAP_SECONDS = 6 * 60 * 60
@@ -37,7 +37,7 @@ ANCHOR_PREFIX = 'quota_audit_anchor_v1:'
 
 
 def _number(value):
-    return type(value) in (int, float) and math.isfinite(value)
+    return finite_number(value)
 
 
 def _credits(value):

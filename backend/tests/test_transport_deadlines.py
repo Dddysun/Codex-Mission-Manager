@@ -3,8 +3,9 @@ import asyncio
 from types import SimpleNamespace
 import time
 import unittest
+from unittest import mock
 
-from desktop import DesktopIPC
+from desktop import DesktopAdapter, DesktopIPC, DesktopError
 from rpc import Rpc
 
 
@@ -65,3 +66,36 @@ class TransportDeadlineTests(unittest.IsolatedAsyncioTestCase):
         ipc = DesktopIPC()
         ipc.writer = BlockedWriter()
         await asyncio.wait_for(ipc.close(), 1.5)
+
+    async def test_valid_slow_snapshot_uses_the_configured_transport_budget(self):
+        ipc = DesktopAdapter(SimpleNamespace(changed=asyncio.Event()), {'rpc_timeout_seconds': 10}).ipc
+        ipc.owners['synthetic'] = 'synthetic-owner'
+        ipc.send = mock.AsyncMock()
+        clock = [0.0]
+        view = {'thread': {'status': {'type': 'idle'}},
+                'turns': [{'id': 'synthetic-turn', 'started_at_ms': 1}]}
+
+        async def advance_clock(_):
+            clock[0] += .5
+            if clock[0] == 6:
+                ipc.snapshots['synthetic'] = [(1, clock[0], view)]
+
+        with mock.patch('desktop.time.monotonic', side_effect=lambda: clock[0]), \
+             mock.patch('desktop.asyncio.sleep', side_effect=advance_clock):
+            self.assertEqual(await ipc.snapshot('synthetic'), view)
+
+    async def test_missing_snapshot_still_expires_and_clears_its_owner(self):
+        ipc = DesktopAdapter(SimpleNamespace(changed=asyncio.Event()), {'rpc_timeout_seconds': 10}).ipc
+        ipc.owners['synthetic'] = 'synthetic-owner'
+        ipc.send = mock.AsyncMock()
+        clock = [0.0]
+
+        async def advance_clock(_):
+            clock[0] += .5
+
+        with mock.patch('desktop.time.monotonic', side_effect=lambda: clock[0]), \
+             mock.patch('desktop.asyncio.sleep', side_effect=advance_clock):
+            with self.assertRaises(DesktopError):
+                await ipc.snapshot('synthetic')
+        self.assertNotIn('synthetic', ipc.owners)
+        self.assertEqual(clock[0], 10)

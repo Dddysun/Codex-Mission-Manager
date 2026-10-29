@@ -220,7 +220,10 @@ class DesktopIPC:
         await self.send({"type": "broadcast", "method": "thread-stream-following-changed", "version": 1,
             "sourceClientId": self.client_id, "targetClientIds": [owner],
             "params": {"conversationId": thread_id, "hostId": host, "following": True}})
-        deadline = time.monotonic() + 5
+        # Large valid frames can take more than five seconds on a named pipe.
+        # Honor the configured transport budget while keeping a finite minimum
+        # for the snapshot burst used by short diagnostic connections.
+        deadline = time.monotonic() + max(5, self.timeout)
         first_seen = None
         while time.monotonic() < deadline:
             if self.disconnected:
@@ -280,7 +283,7 @@ class DesktopAdapter:
     def __init__(self, quota_rpc, config):
         self.quota = quota_rpc
         self.config = config
-        self.ipc = DesktopIPC(config.get("desktop_socket"))
+        self.ipc = DesktopIPC(config.get("desktop_socket"), timeout=config.get("rpc_timeout_seconds", 30))
         self.hosts = {x["id"]: x.get("host_id", "local") for x in config.get("desktop_targets", [])}
         self.changed = quota_rpc.changed
         self.views, self.available = {}, []

@@ -254,5 +254,7 @@
     "bytecode_disabled": true,
     "private_data_loaded": false,
     "production_host_started": false
-  }
+  },
+  "additional_source_review": "deep-review-summary.json",
+  "candidate_packages_include_additional_review_fixes": false
 }

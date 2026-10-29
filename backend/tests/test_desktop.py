@@ -327,6 +327,9 @@ class NativeProtocolTests(unittest.IsolatedAsyncioTestCase):
         # A long real conversation crossed 64 MiB. Exercise the framed stream,
         # parser and subsequent request, rather than only checking the constant.
         self.state["fixturePadding"] = "x" * (64 * 1024 * 1024)
+        # Use the production transport budget for this large Windows pipe
+        # transfer; the two-second small-fixture budget is not a size contract.
+        self.adapter.ipc.timeout = CONFIG['rpc_timeout_seconds']
         view = await self.adapter.ipc.snapshot("one")
         self.assertEqual(view["thread"]["status"]["type"], "active")
         self.assertNotIn("fixturePadding", json.dumps(view))
