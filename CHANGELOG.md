@@ -1,5 +1,13 @@
 # Changelog / 版本记录
 
+## 0.4.4 — Long snapshot reception / 超长状态接收
+
+- Accept bounded snapshots up to 256 MiB after a live 197 MiB frame exceeded the prior cap. / 接收上限改为有界的 256 MiB，覆盖实际 197 MiB 状态帧。
+- Release this tool’s subscription after each snapshot attempt, with a bounded cleanup write. / 每次快照采样后取消本工具的订阅，清理写入有时间上限。
+- Exercise a 200 MiB synthetic history and preserve oversized-header rejection and reconnection checks. / 使用 200 MiB 模拟历史验证，保留超限拒绝与重连检查。
+
+See [0.4.4 release notes](docs/releases/0.4.4.md). / 详见 [0.4.4 发行说明](docs/releases/0.4.4.md)。
+
 ## 0.4.3 — Monitoring window and collection status / 监控窗口与采集状态
 
 - Choose five-hour or weekly thresholds in native Operating rules; Pro defaults to weekly with five-hour disabled. / 原生运行规则可选五小时或周额度，Pro 默认周额度，五小时置灰。

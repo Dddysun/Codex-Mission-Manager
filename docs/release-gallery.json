@@ -584,6 +584,202 @@
           }
         }
       ]
+    },
+    "0.4.4": {
+      "images": [
+        {
+          "id": "plus-window",
+          "platform": "macos",
+          "kind": "rules",
+          "view": "rules",
+          "file": "rules-plus-window.png",
+          "receipt": "rules-plus-window.json",
+          "dimensions": [
+            [
+              1380,
+              900
+            ],
+            [
+              2760,
+              1800
+            ]
+          ],
+          "accent": "blue",
+          "theme": "light",
+          "language": "zh",
+          "highlight": true,
+          "caption": {
+            "zh": "Plus：五小时与周额度可选（模拟数据）",
+            "en": "Plus: five-hour and weekly choices (demo data)"
+          }
+        },
+        {
+          "id": "pro-window",
+          "platform": "macos",
+          "kind": "rules",
+          "view": "rules",
+          "file": "rules-pro-window.png",
+          "receipt": "rules-pro-window.json",
+          "dimensions": [
+            [
+              1380,
+              900
+            ],
+            [
+              2760,
+              1800
+            ]
+          ],
+          "accent": "purple",
+          "theme": "dark",
+          "language": "en",
+          "highlight": true,
+          "caption": {
+            "zh": "Pro：周额度默认选中，五小时置灰（模拟数据）",
+            "en": "Pro: weekly selected, five-hour disabled (demo data)"
+          }
+        },
+        {
+          "id": "checking-active",
+          "platform": "macos",
+          "kind": "home",
+          "view": "home",
+          "file": "checking-active.png",
+          "receipt": "checking-active.json",
+          "dimensions": [
+            [
+              1380,
+              900
+            ],
+            [
+              2760,
+              1800
+            ]
+          ],
+          "accent": "green",
+          "theme": "light",
+          "language": "zh",
+          "highlight": true,
+          "caption": {
+            "zh": "长会话采集中的实际状态与榨汁运行（模拟数据）",
+            "en": "Collection status and juicing during long-chat sampling (demo data)"
+          }
+        },
+        {
+          "id": "plus-window",
+          "platform": "windows",
+          "kind": "rules",
+          "view": "rules",
+          "file": "rules-zh-light-native-monitor-plus-blue.png",
+          "receipt": "rules-zh-light-native-monitor-plus-blue.png.json",
+          "dimensions": [
+            [
+              2760,
+              1800
+            ]
+          ],
+          "accent": "blue",
+          "theme": "light",
+          "language": "zh",
+          "highlight": true,
+          "caption": {
+            "zh": "Plus：五小时与周额度可选（模拟数据）",
+            "en": "Plus: five-hour and weekly choices (demo data)"
+          }
+        },
+        {
+          "id": "pro-window",
+          "platform": "windows",
+          "kind": "rules",
+          "view": "rules",
+          "file": "rules-en-dark-native-monitor-pro-purple.png",
+          "receipt": "rules-en-dark-native-monitor-pro-purple.png.json",
+          "dimensions": [
+            [
+              2760,
+              1800
+            ]
+          ],
+          "accent": "purple",
+          "theme": "dark",
+          "language": "en",
+          "highlight": true,
+          "caption": {
+            "zh": "Pro：周额度默认选中，五小时置灰（模拟数据）",
+            "en": "Pro: weekly selected, five-hour disabled (demo data)"
+          }
+        },
+        {
+          "id": "checking-active",
+          "platform": "windows",
+          "kind": "home",
+          "view": "home",
+          "file": "home-zh-light-native-monitor-checking-green.png",
+          "receipt": "home-zh-light-native-monitor-checking-green.png.json",
+          "dimensions": [
+            [
+              2760,
+              1800
+            ]
+          ],
+          "accent": "green",
+          "theme": "light",
+          "language": "zh",
+          "highlight": true,
+          "caption": {
+            "zh": "长会话采集中的实际状态与榨汁运行（模拟数据）",
+            "en": "Collection status and juicing during long-chat sampling (demo data)"
+          }
+        },
+        {
+          "id": "compact-activity",
+          "platform": "macos",
+          "kind": "activity",
+          "view": "activity",
+          "file": "activity-zh-light.png",
+          "receipt": "activity-zh-light.json",
+          "dimensions": [
+            [
+              1380,
+              900
+            ],
+            [
+              2760,
+              1800
+            ]
+          ],
+          "accent": "blue",
+          "theme": "light",
+          "language": "zh",
+          "highlight": false,
+          "caption": {
+            "zh": "额度恢复摘要与可展开详情",
+            "en": "Compact quota recovery with expandable evidence"
+          }
+        },
+        {
+          "id": "settings",
+          "platform": "windows",
+          "kind": "settings",
+          "view": "settings",
+          "file": "settings-zh-light-native-state-blue.png",
+          "receipt": "settings-zh-light-native-state-blue.png.json",
+          "dimensions": [
+            [
+              1600,
+              2200
+            ]
+          ],
+          "accent": "blue",
+          "theme": "light",
+          "language": "zh",
+          "highlight": false,
+          "caption": {
+            "zh": "精简设置说明",
+            "en": "Concise settings and permissions"
+          }
+        }
+      ]
     }
   }
 }
