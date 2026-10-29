@@ -21,6 +21,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from platform_support import (lock_file, open_lock, private_directory,
                               private_file_permissions, process_alive, python_command)
 from rpc import Rpc
+from desktop import DesktopOwnerUnavailable
 from mission_version import VERSION
 from quota import (parse_bucket, classify, recovered, restoration_reason, restoration_details,
                    next_reset, sample_summary, window_map)
@@ -469,6 +470,7 @@ class Controller:
                 except Exception as exc:
                     intent_errors[task["id"]] = {"type": type(exc).__name__, "detail": str(exc)[:300]}
         errors, views, resume_busy = dict(intent_errors), {}, False
+        unloaded = set()
         tasks = sorted(self.store.tasks(), key=lambda t: (t["priority"], t["id"]))
         for task in tasks:
             if getattr(self.rpc, 'hosts', {}).get(task['id'], task.get('host_id', 'local')) != 'local':
@@ -492,7 +494,10 @@ class Controller:
                     else:
                         self.review(task, "恢复的回合已被中断或失败")
             except Exception as exc:
-                errors[task["id"]] = {"type": type(exc).__name__, "detail": str(exc)[:300]}
+                if isinstance(exc, DesktopOwnerUnavailable) and task["state"] == "watching":
+                    unloaded.add(task["id"])
+                else:
+                    errors[task["id"]] = {"type": type(exc).__name__, "detail": str(exc)[:300]}
         for task in sorted(self.store.tasks(), key=lambda t: (t["priority"], t["id"])):
             view = views.get(task["id"])
             if view is None or task["state"] in ("disabled", "needs_review", "held"):
@@ -518,9 +523,12 @@ class Controller:
             except Exception as exc:
                 errors[task["id"]] = {"type": type(exc).__name__, "detail": str(exc)[:300]}
         self.store.put("task_errors", errors)
-        self.store.put("task_runtime", {tid: {
+        runtime = {tid: {
             "status": view["thread"]["status"], "goal": bool(view.get("goal")),
-            "observed_at": self.clock()} for tid, view in views.items()})
+            "observed_at": self.clock()} for tid, view in views.items()}
+        runtime.update({tid: {"status": {"type": "notLoaded"}, "goal": False,
+            "observed_at": self.clock()} for tid in unloaded})
+        self.store.put("task_runtime", runtime)
 
 
 async def identity_for(rpc, store=None):

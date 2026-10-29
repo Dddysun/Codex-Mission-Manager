@@ -2,6 +2,8 @@
 
 ## 0.4.2 — Runtime fixes and core discharge / 运行修复与内核放电
 
+- Distinguish an explicitly unloaded monitored chat from real connection failure; preserve unresolved-action alerts and task permissions. / 区分明确未加载的监测聊天与真实连接故障，保留未确认动作的告警和任务许可。
+
 - Brand 1.3.0: ten irregular core-origin discharges and independent two-second bolt breathing in native Mac, Windows and SVG. / 品牌 1.3.0：两端原生及 SVG 同步十种随机内核放电，保留独立 2 秒呼吸。
 
 - Disable Python bytecode writes explicitly in both native launchers and owned subprocesses. / 两平台原生启动器和后台子进程显式禁止生成 Python 字节码缓存。

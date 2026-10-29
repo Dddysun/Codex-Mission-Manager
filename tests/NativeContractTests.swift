@@ -41,6 +41,12 @@ import Foundation
         var idle = state.tasks[1]
         precondition(idle.canExecute && !state.tasks[0].canExecute && !state.tasks[2].canExecute)
         precondition(idle.status == "等待指令")
+        var unopened = idle
+        unopened.runtime?.type = "notLoaded"
+        precondition(unopened.status == "未打开" && !unopened.attention)
+        unopened.connection_error = "read failed"
+        precondition(unopened.status == "连接待恢复" && unopened.attention,
+                     "A real error must not be hidden by unloaded metadata")
         idle.runtime?.activeFlags = ["waitingForApproval"]
         precondition(!idle.canExecute && idle.status == "等待你处理")
         idle.runtime?.activeFlags = []
