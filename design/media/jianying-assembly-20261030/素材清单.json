@@ -1,0 +1,356 @@
+{
+  "name": "TokenMax_竖屏整合_33镜头_20261030",
+  "main_count": 33,
+  "backup_count": 37,
+  "duration_seconds": 331,
+  "main": [
+    {
+      "index": 1,
+      "file": "01_主序列_按台本顺序/001_动画_price_官网20美元_真实截图与数字.mp4",
+      "source_name": "01_price_官网20美元_真实截图与数字.mp4",
+      "duration": 7.0
+    },
+    {
+      "index": 2,
+      "file": "01_主序列_按台本顺序/002_动画_exchange_实时查询截图_美元换人民币.mp4",
+      "source_name": "02_exchange_实时查询截图_美元换人民币.mp4",
+      "duration": 6.0
+    },
+    {
+      "index": 3,
+      "file": "01_主序列_按台本顺序/003_动画_members_六项会员_真实Logo逐个入场.mp4",
+      "source_name": "02b_members_六项会员_真实Logo逐个入场.mp4",
+      "duration": 6.0
+    },
+    {
+      "index": 4,
+      "file": "01_主序列_按台本顺序/004_动画_balance_六会员天秤_金币连续转场.mp4",
+      "source_name": "03_balance_六会员天秤_金币连续转场.mp4",
+      "duration": 12.0
+    },
+    {
+      "index": 5,
+      "file": "01_主序列_按台本顺序/005_动画_map_stall_中国贵州贵阳_推进牛肉面摊.mp4",
+      "source_name": "01_map_stall_中国贵州贵阳_推进牛肉面摊.mp4",
+      "duration": 12.0
+    },
+    {
+      "index": 6,
+      "file": "01_主序列_按台本顺序/006_动画_bowl_price_主体牛肉面_下排加面加蛋加肉_等于20元.mp4",
+      "source_name": "02_bowl_price_主体牛肉面_下排加面加蛋加肉_等于20元.mp4",
+      "duration": 14.0
+    },
+    {
+      "index": 7,
+      "file": "01_主序列_按台本顺序/007_实录_Codex桌面与写代码.mp4",
+      "source_name": "01_Codex桌面与写代码.mp4",
+      "duration": 8.0
+    },
+    {
+      "index": 8,
+      "file": "01_主序列_按台本顺序/008_实录_Codex代码修改.mp4",
+      "source_name": "02_Codex代码修改.mp4",
+      "duration": 8.0
+    },
+    {
+      "index": 9,
+      "file": "01_主序列_按台本顺序/009_动画_quota_五小时与周额度_同时消耗.mp4",
+      "source_name": "06_quota_五小时与周额度_同时消耗.mp4",
+      "duration": 10.0
+    },
+    {
+      "index": 10,
+      "file": "01_主序列_按台本顺序/010_实录_五小时与周额度.mp4",
+      "source_name": "03_五小时与周额度.mp4",
+      "duration": 10.0
+    },
+    {
+      "index": 11,
+      "file": "01_主序列_按台本顺序/011_动画_week_十次机会_七天日历.mp4",
+      "source_name": "07_week_十次机会_七天日历.mp4",
+      "duration": 6.0
+    },
+    {
+      "index": 12,
+      "file": "01_主序列_按台本顺序/012_动画_life_兔子上班吃饭睡觉娱乐.mp4",
+      "source_name": "08_life_兔子上班吃饭睡觉娱乐.mp4",
+      "duration": 12.0
+    },
+    {
+      "index": 13,
+      "file": "01_主序列_按台本顺序/013_动画_alarm_晚上十点_凌晨三点惊醒.mp4",
+      "source_name": "09_alarm_晚上十点_凌晨三点惊醒.mp4",
+      "duration": 10.0
+    },
+    {
+      "index": 14,
+      "file": "01_主序列_按台本顺序/014_实录_晚上十点与凌晨三点.mp4",
+      "source_name": "04_晚上十点与凌晨三点.mp4",
+      "duration": 10.0
+    },
+    {
+      "index": 15,
+      "file": "01_主序列_按台本顺序/015_动画_office_人在公司_惦记家中额度.mp4",
+      "source_name": "10_office_人在公司_惦记家中额度.mp4",
+      "duration": 8.0
+    },
+    {
+      "index": 16,
+      "file": "01_主序列_按台本顺序/016_动画_pay_我花钱_AI敲键盘.mp4",
+      "source_name": "11_pay_我花钱_AI敲键盘.mp4",
+      "duration": 8.0
+    },
+    {
+      "index": 17,
+      "file": "01_主序列_按台本顺序/017_动画_wait_AI等额度_人等AI_时间流失.mp4",
+      "source_name": "12_wait_AI等额度_人等AI_时间流失.mp4",
+      "duration": 8.0
+    },
+    {
+      "index": 18,
+      "file": "01_主序列_按台本顺序/018_实录_Codex等待下一步.mp4",
+      "source_name": "05_Codex等待下一步.mp4",
+      "duration": 8.0
+    },
+    {
+      "index": 19,
+      "file": "01_主序列_按台本顺序/019_实录_TokenMax登场.mp4",
+      "source_name": "06_TokenMax登场.mp4",
+      "duration": 10.0
+    },
+    {
+      "index": 20,
+      "file": "01_主序列_按台本顺序/020_实录_额度与任务监控.mp4",
+      "source_name": "07_额度与任务监控.mp4",
+      "duration": 10.0
+    },
+    {
+      "index": 21,
+      "file": "01_主序列_按台本顺序/021_实录_低额度自动暂停.mp4",
+      "source_name": "08_低额度自动暂停.mp4",
+      "duration": 12.0
+    },
+    {
+      "index": 22,
+      "file": "01_主序列_按台本顺序/022_实录_额度恢复自动续接.mp4",
+      "source_name": "09_额度恢复自动续接.mp4",
+      "duration": 12.0
+    },
+    {
+      "index": 23,
+      "file": "01_主序列_按台本顺序/023_实录_睡前写好预约指令.mp4",
+      "source_name": "10_睡前写好预约指令.mp4",
+      "duration": 16.0
+    },
+    {
+      "index": 24,
+      "file": "01_主序列_按台本顺序/024_实录_一次性预约已保存.mp4",
+      "source_name": "11_一次性预约已保存.mp4",
+      "duration": 8.0
+    },
+    {
+      "index": 25,
+      "file": "01_主序列_按台本顺序/025_实录_后台运行条件.mp4",
+      "source_name": "12_后台运行条件.mp4",
+      "duration": 8.0
+    },
+    {
+      "index": 26,
+      "file": "01_主序列_按台本顺序/026_实录_第二天检查执行结果.mp4",
+      "source_name": "13_第二天检查执行结果.mp4",
+      "duration": 8.0
+    },
+    {
+      "index": 27,
+      "file": "01_主序列_按台本顺序/027_实录_Codex检查测试结果.mp4",
+      "source_name": "14_Codex检查测试结果.mp4",
+      "duration": 8.0
+    },
+    {
+      "index": 28,
+      "file": "01_主序列_按台本顺序/028_实录_额度恢复历史记录.mp4",
+      "source_name": "15_额度恢复历史记录.mp4",
+      "duration": 12.0
+    },
+    {
+      "index": 29,
+      "file": "01_主序列_按台本顺序/029_实录_按规则调度不增加额度.mp4",
+      "source_name": "16_按规则调度不增加额度.mp4",
+      "duration": 8.0
+    },
+    {
+      "index": 30,
+      "file": "01_主序列_按台本顺序/030_实录_官方余额与刷新只读.mp4",
+      "source_name": "17_官方余额与刷新只读.mp4",
+      "duration": 8.0
+    },
+    {
+      "index": 31,
+      "file": "01_主序列_按台本顺序/031_实录_日夜外观与主题.mp4",
+      "source_name": "18_日夜外观与主题.mp4",
+      "duration": 10.0
+    },
+    {
+      "index": 32,
+      "file": "01_主序列_按台本顺序/032_动画_install_简介箭头_截图给Agent安装.mp4",
+      "source_name": "13_install_简介箭头_截图给Agent安装.mp4",
+      "duration": 22.0
+    },
+    {
+      "index": 33,
+      "file": "01_主序列_按台本顺序/033_实录_高斯模糊动态Logo片尾.mp4",
+      "source_name": "19_高斯模糊动态Logo片尾.mp4",
+      "duration": 16.0
+    }
+  ],
+  "backup": [
+    {
+      "tag": "V1数字",
+      "source_name": "01_五小时与周额度_带结论.mp4"
+    },
+    {
+      "tag": "V1数字",
+      "source_name": "02_五小时与周额度_纯进度条.mp4"
+    },
+    {
+      "tag": "V1数字",
+      "source_name": "03_150元开场.mp4"
+    },
+    {
+      "tag": "V1数字",
+      "source_name": "04_六个会员还剩20元.mp4"
+    },
+    {
+      "tag": "V1数字",
+      "source_name": "05_晚上十点到凌晨三点.mp4"
+    },
+    {
+      "tag": "V1数字",
+      "source_name": "06_十次机会与七天.mp4"
+    },
+    {
+      "tag": "V1数字",
+      "source_name": "07_转入五小时额度.mp4"
+    },
+    {
+      "tag": "V1贵阳",
+      "source_name": "00_中国到贵州贵阳街区_地图动画.mp4"
+    },
+    {
+      "tag": "V1贵阳",
+      "source_name": "00_中国到贵州贵阳街区_地图动画_v2.mp4"
+    },
+    {
+      "tag": "V1贵阳",
+      "source_name": "01_贵阳街头粉店_AI示意.mp4"
+    },
+    {
+      "tag": "V1贵阳",
+      "source_name": "02_牛肉粉_AI示意.mp4"
+    },
+    {
+      "tag": "V1贵阳",
+      "source_name": "03_加粉_AI示意.mp4"
+    },
+    {
+      "tag": "V1贵阳",
+      "source_name": "04_加肉_AI示意.mp4"
+    },
+    {
+      "tag": "V1贵阳",
+      "source_name": "05_加煎蛋_AI示意.mp4"
+    },
+    {
+      "tag": "V1贵阳",
+      "source_name": "06_吃到饱_AI示意.mp4"
+    },
+    {
+      "tag": "V1贵阳",
+      "source_name": "07_地图推进到粉店_衔接版.mp4"
+    },
+    {
+      "tag": "V2白底",
+      "source_name": "01_官网20美元_截图推进.mp4"
+    },
+    {
+      "tag": "V2白底",
+      "source_name": "02_搜索汇率_真实截图.mp4"
+    },
+    {
+      "tag": "V2白底",
+      "source_name": "03_六个会员Logo依次出现.mp4"
+    },
+    {
+      "tag": "V2白底",
+      "source_name": "04_会员天秤与20元金币.mp4"
+    },
+    {
+      "tag": "V2白底",
+      "source_name": "05_金币居中_引向贵阳.mp4"
+    },
+    {
+      "tag": "V2白底",
+      "source_name": "06_双额度进度条_白底.mp4"
+    },
+    {
+      "tag": "V2白底",
+      "source_name": "071_兔子上班_单镜头.mp4"
+    },
+    {
+      "tag": "V2白底",
+      "source_name": "072_兔子吃饭_单镜头.mp4"
+    },
+    {
+      "tag": "V2白底",
+      "source_name": "073_兔子睡觉_单镜头.mp4"
+    },
+    {
+      "tag": "V2白底",
+      "source_name": "074_兔子娱乐_单镜头.mp4"
+    },
+    {
+      "tag": "V2白底",
+      "source_name": "07_兔子上班吃饭睡觉娱乐.mp4"
+    },
+    {
+      "tag": "V2白底",
+      "source_name": "08_晚上十点到凌晨三点.mp4"
+    },
+    {
+      "tag": "V2白底",
+      "source_name": "09_公司遥控家里电脑再设闹钟.mp4"
+    },
+    {
+      "tag": "V2白底",
+      "source_name": "10_我付钱AI敲键盘.mp4"
+    },
+    {
+      "tag": "V2白底",
+      "source_name": "11_AI等额度我等AI钱继续花.mp4"
+    },
+    {
+      "tag": "安装备选",
+      "source_name": "00_完整安装引导_24秒_无旁白.mp4"
+    },
+    {
+      "tag": "安装备选",
+      "source_name": "01_箭头指向视频简介.mp4"
+    },
+    {
+      "tag": "安装备选",
+      "source_name": "02_截图给Agent_静止指令卡.mp4"
+    },
+    {
+      "tag": "V3旧贵阳",
+      "source_name": "04_map_中国贵州贵阳_地图推进街头.mp4"
+    },
+    {
+      "tag": "V3旧食物",
+      "source_name": "05_noodles_贵阳牛肉粉_加粉加肉加煎蛋.mp4"
+    },
+    {
+      "tag": "V4完整贵阳",
+      "source_name": "00_complete_中国到贵阳面摊_牛肉面加料与20元.mp4"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "project_name": "TokenMax_竖屏整合_33镜头_20261030",
+  "main_timeline": "主剪辑｜33镜头｜5分31秒",
+  "main_media_count": 33,
+  "alternative_media_count": 37,
+  "total_imported_media_count": 70,
+  "main_duration_seconds": 331,
+  "resolution": [
+    1080,
+    1920
+  ],
+  "fps": 30,
+  "audio_tracks": 0,
+  "verification": [
+    "剪映素材库文件夹成员统计为33+37",
+    "剪映主时间线显示00:05:31:00",
+    "剪映草稿参数显示1080x1920与30.00帧/秒",
+    "Timelines/project.json包含命名后的主剪辑时间线"
+  ],
+  "notes": [
+    "时间线01为新建草稿时的空白时间线；请使用已选中的主剪辑时间线",
+    "原始素材未修改，剪映引用本整合目录下的独立副本",
+    "会员合计与汇率镜头仍沿用已有素材，后续可按已核实口径修改"
+  ]
+}
