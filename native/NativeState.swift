@@ -176,6 +176,28 @@ struct MissionReceipt: Decodable {
         ["pending":L("待发送"), "checking":L("正在检查"), "sending":L("正在确认发送"), "sent":L("已确认发送"), "failed":L("未发送"), "unknown":L("发送结果待核对")][state] ?? state
     }
 }
+// Older local services returned a structured connection failure. Normalize only
+// this field, preserving strict decoding for the rest of the public snapshot.
+@propertyWrapper struct MissionConnectionErrorText: Decodable {
+    var wrappedValue: String?
+    init(wrappedValue: String? = nil) { self.wrappedValue = wrappedValue }
+    init(from decoder: Decoder) throws {
+        let value = try decoder.singleValueContainer()
+        if value.decodeNil() { wrappedValue = nil; return }
+        if let text = try? value.decode(String.self) { wrappedValue = text; return }
+        let legacy = try value.decode(LegacyError.self)
+        let detail = legacy.detail?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let kind = legacy.type?.trimmingCharacters(in: .whitespacesAndNewlines)
+        wrappedValue = detail?.isEmpty == false ? detail : kind?.isEmpty == false ? kind : L("连接待恢复")
+    }
+    private struct LegacyError: Decodable { var type: String?; var detail: String? }
+}
+extension KeyedDecodingContainer {
+    func decode(_ type: MissionConnectionErrorText.Type, forKey key: Key) throws -> MissionConnectionErrorText {
+        try decodeIfPresent(type, forKey: key) ?? MissionConnectionErrorText()
+    }
+}
+
 struct MissionChat: Decodable, Identifiable {
     var id: String; var key: String; var name: String; var state: String
     var auto_resume: Bool; var manual_hold: Bool; var revision: Int
@@ -183,7 +205,8 @@ struct MissionChat: Decodable, Identifiable {
     var auto_pending: Bool?; var can_control: Bool?; var capability_note: String?
     var runtime: MissionRuntime?; var category: String?; var source_label: String?
     var execution_stage: MissionStage?; var plan: MissionPlan?; var immediate: MissionReceipt?
-    var reason: String?; var connection_error: String?; var recovery_first_seen: Double?
+    var reason: String?; var recovery_first_seen: Double?
+    @MissionConnectionErrorText var connection_error: String?
     var paused_at: Double?; var resumed_at: Double?; var goal: Bool?
     var host_id: String?
     var isLocal: Bool {

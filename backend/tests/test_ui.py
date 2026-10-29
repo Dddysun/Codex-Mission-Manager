@@ -74,6 +74,17 @@ class InterfaceTests(unittest.TestCase):
         self.assertEqual(data["usage"]["account"]["id"], "account-1")
         self.assertFalse(data["usage"]["stale"])
 
+    def test_connection_errors_have_native_compatible_text(self):
+        for error, expected in [
+            (None, None), ("connection timed out", "connection timed out"),
+            ({"type": "TimeoutError", "detail": "connection timed out"}, "connection timed out"),
+            ({"type": "TimeoutError"}, "TimeoutError"), ({}, "连接待恢复"),
+        ]:
+            self.store.put("task_errors", {"task-1": error})
+            data = json.loads(self.request()[2])
+            self.assertEqual(data["tasks"][0]["connection_error"], expected)
+            self.assertEqual(data["tasks"][0]["id"], "task-1")
+
     def test_control_enabled_uses_shared_compatibility_status(self):
         self.store.put('supervisor_paused',False)
         for supported in (False,True):

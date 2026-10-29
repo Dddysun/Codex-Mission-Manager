@@ -25,6 +25,18 @@ IS_WINDOWS = os.name == 'nt'
 
 
 
+def connection_error_message(value):
+    """Expose structured collector errors as native UI text; retain legacy text."""
+    if value is None or isinstance(value, str):
+        return value
+    if isinstance(value, dict):
+        for key in ('detail', 'type'):
+            text = value.get(key)
+            if isinstance(text, str) and text.strip():
+                return text
+    return "连接待恢复"
+
+
 class Application:
     def __init__(self, config_path):
         self.config_path = Path(config_path)
@@ -69,7 +81,7 @@ class Application:
                     "revision": task.get("control_revision", 0),
                     "runtime": current.get("status") if runtime_fresh else None,
                     "goal": bool(current.get("goal") or task.get("paused_for_goal")),
-                    "connection_error": task_errors.get(task["id"]),
+                    "connection_error": connection_error_message(task_errors.get(task["id"])),
                     "paused_at": task.get("paused_at"), "resumed_at": task.get("resumed_at"),
                     "recovery_first_seen": task.get("recovery_first_seen"),
                 })

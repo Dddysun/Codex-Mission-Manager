@@ -6,6 +6,32 @@ import Foundation
         let data = try Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1]))
         let state = try JSONDecoder().decode(MissionSnapshot.self, from: data)
         if CommandLine.arguments.contains("--decode-only") { print("Native decoder accepted live snapshot: \(state.tasks.count) chats, \(state.events.count) events"); return }
+        let taskObject = ((try JSONSerialization.jsonObject(with:data) as! [String:Any])["tasks"] as! [[String:Any]])[1]
+        func decodedConnectionTask(_ value: Any?, revision: Any? = nil) throws -> MissionChat {
+            var object=taskObject
+            object.removeValue(forKey:"connection_error")
+            if let value { object["connection_error"]=value }
+            if let revision { object["revision"]=revision }
+            return try JSONDecoder().decode(MissionChat.self,from:JSONSerialization.data(withJSONObject:object))
+        }
+        for value: Any? in [nil,NSNull()] {
+            let task=try decodedConnectionTask(value)
+            precondition(task.connection_error == nil && !task.attention && task.status == "等待指令")
+        }
+        let stringError=try decodedConnectionTask("Connection temporarily unavailable")
+        precondition(stringError.connection_error == "Connection temporarily unavailable" && stringError.attention && stringError.status == "连接待恢复")
+        let objectError=try decodedConnectionTask(["type":"ConnectionError","detail":"Connection temporarily unavailable"])
+        precondition(objectError.connection_error == stringError.connection_error && objectError.attention && objectError.status == "连接待恢复")
+        let typeOnlyError=try decodedConnectionTask(["type":"ConnectionError"])
+        precondition(typeOnlyError.connection_error == "ConnectionError" && typeOnlyError.attention)
+        let emptyError=try decodedConnectionTask([String:String]())
+        precondition(emptyError.connection_error == "连接待恢复" && emptyError.attention,"An empty legacy failure object must not clear its error state")
+        for invalid: Any in [42,["detail":42],["type":true]] {
+            do { _=try decodedConnectionTask(invalid);preconditionFailure("Invalid connection-error types must still fail decoding") }
+            catch is DecodingError {} // Only the known string/object compatibility is allowed.
+        }
+        do { _=try decodedConnectionTask(["type":"ConnectionError","detail":"offline"],revision:"invalid");preconditionFailure("Other fields must remain strict") }
+        catch is DecodingError {}
         var termination = MissionTerminationState()
         precondition(termination.phase == .running && !termination.complete())
         precondition(termination.request() && termination.phase == .waiting)
@@ -247,6 +273,7 @@ import Foundation
         precondition(MissionLogoControl.state(connected:true,paused:false,snapshot:logo) == .waiting,"Older snapshots derive the waiting visual from known quota")
         logo.running=false
         precondition(MissionLogoControl.state(connected:true,paused:false,snapshot:logo) == .idle)
+        print("Native connection-error missing / null / string / legacy-object compatibility checks passed")
         print("Native TokenMax copy / recovery summary / five-state logo checks passed")
         print("Native activity origin / three filters / immutable latest-200 cache checks passed")
         print("Native V0.3.0 rules / Codex filtering / theme / IME synchronization checks passed")
