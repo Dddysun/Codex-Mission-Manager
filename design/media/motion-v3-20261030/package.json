@@ -1,0 +1,8 @@
+{
+  "name": "tokenmax-motion-v3",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deterministic SVG motion graphics for TokenMax vertical video inserts",
+  "scripts": {"render": "node src/render.cjs", "stills": "node src/render.cjs --stills", "qa": "node src/qa.cjs"},
+  "dependencies": {"playwright": "1.62.1"}
+}

@@ -1,0 +1,86 @@
+[
+  {
+    "id": "01_price",
+    "name": "官网20美元_真实截图与数字",
+    "duration": 7,
+    "poster": 5
+  },
+  {
+    "id": "02_exchange",
+    "name": "实时查询截图_美元换人民币",
+    "duration": 6,
+    "poster": 4.8
+  },
+  {
+    "id": "02b_members",
+    "name": "六项会员_真实Logo逐个入场",
+    "duration": 6,
+    "poster": 4.8
+  },
+  {
+    "id": "03_balance",
+    "name": "六会员天秤_金币连续转场",
+    "duration": 12,
+    "poster": 7.8
+  },
+  {
+    "id": "04_map",
+    "name": "中国贵州贵阳_地图推进街头",
+    "duration": 10,
+    "poster": 4.5
+  },
+  {
+    "id": "05_noodles",
+    "name": "贵阳牛肉粉_加粉加肉加煎蛋",
+    "duration": 9,
+    "poster": 7.2
+  },
+  {
+    "id": "06_quota",
+    "name": "五小时与周额度_同时消耗",
+    "duration": 10,
+    "poster": 7.7
+  },
+  {
+    "id": "07_week",
+    "name": "十次机会_七天日历",
+    "duration": 6,
+    "poster": 4.5
+  },
+  {
+    "id": "08_life",
+    "name": "兔子上班吃饭睡觉娱乐",
+    "duration": 12,
+    "poster": 1.8
+  },
+  {
+    "id": "09_alarm",
+    "name": "晚上十点_凌晨三点惊醒",
+    "duration": 10,
+    "poster": 7.8
+  },
+  {
+    "id": "10_office",
+    "name": "人在公司_惦记家中额度",
+    "duration": 8,
+    "poster": 5.4
+  },
+  {
+    "id": "11_pay",
+    "name": "我花钱_AI敲键盘",
+    "duration": 8,
+    "poster": 4.5
+  },
+  {
+    "id": "12_wait",
+    "name": "AI等额度_人等AI_时间流失",
+    "duration": 8,
+    "poster": 4.5
+  },
+  {
+    "id": "13_install",
+    "name": "简介箭头_截图给Agent安装",
+    "duration": 22,
+    "poster": 11
+  }
+]

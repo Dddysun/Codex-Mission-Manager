@@ -1,0 +1,16 @@
+TOKENMAX／暂停这一屏即可
+截图，发给 Agent。
+让它查询并安装最新发布版本。
+给 Agent 指令
+请读取这个仓库的安装说明：
+https://github.com/Dddysun/TokenMax-Zhazhiji
+公开仓库/Windows 与 macos 原生应用
+查询执行时最新已发布的 Release
+（含预览版），按我系统和芯片
+架构下载匹配安装包，校验后安装。
+保留已有数据；需要授权或登录时，
+请提示我。
+Windows x64
+macos • Apple Silicon
+安装包按执行时的 Release 选择
+不写死版本号，当前发布包的原生平台如上

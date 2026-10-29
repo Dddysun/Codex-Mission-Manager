@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>TokenMax · Motion V3</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#e7ebe7;font-family:Arial,"PingFang SC","Hiragino Sans GB",sans-serif}#stage{width:1080px;height:1920px;background:white;transform-origin:top left}svg{display:block;font-family:Arial,"PingFang SC","Hiragino Sans GB",sans-serif}text{font-feature-settings:"tnum"}#ui{position:fixed;top:16px;right:16px;width:290px;padding:20px;border:1px solid #d7ded8;border-radius:18px;background:#fff;box-shadow:0 10px 50px #0001}select,button,input{width:100%;margin-top:12px;font:inherit}button{padding:12px;border:0;border-radius:10px;background:#172620;color:white;cursor:pointer}#readout{margin-top:10px;color:#728079}#ui h2{font-size:18px;margin:0 0 5px}#ui p{font-size:13px;line-height:1.6}body.render #ui{display:none}body.render{background:#fff;overflow:hidden}
+</style></head><body><div id="stage"><svg id="frame" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1080" height="1920" viewBox="0 0 1080 1920"></svg></div>
+<aside id="ui"><h2>TokenMax · 镜头预览 V3</h2><p>白底 / 9:16 / 逐帧代码动画<br>播放器支持暂停、选镜头和拖动时间。</p><select id="shot"></select><button id="play">播放 / 暂停</button><input id="seek" type="range" min="0" max="7" step="0.033333" value="0"><div id="readout"></div></aside>
+<script src="src/draw.js"></script><script src="src/map-data.js"></script><script src="src/scenes.js"></script>
+<script>
+const params=new URLSearchParams(location.search);let idx=Number(params.get('shot')||0),time=0,playing=false,last=0;
+if(params.has('render'))document.body.className='render';
+else{function fit(){document.getElementById('stage').style.transform=`scale(${Math.min((innerWidth-340)/1080,innerHeight/1920)})`}fit();addEventListener('resize',fit)}
+const pick=document.getElementById('shot'),seek=document.getElementById('seek');SHOTS.forEach((s,i)=>pick.add(new Option(`${i+1}. ${s.name}`,i)));pick.value=idx;
+pick.onchange=()=>{idx=Number(pick.value);time=0;seek.max=SHOTS[idx].duration;renderFrame(idx,time)};
+document.getElementById('play').onclick=()=>playing=!playing;
+seek.oninput=()=>{playing=false;time=Number(seek.value);renderFrame(idx,time)};
+function loop(now){if(playing){time+=(now-last)/1000;if(time>=SHOTS[idx].duration)time=0;renderFrame(idx,time);seek.value=time}last=now;document.getElementById('readout').textContent=`${time.toFixed(2)} / ${SHOTS[idx].duration} 秒`;requestAnimationFrame(loop)}
+renderFrame(idx,time);requestAnimationFrame(loop);
+window.assetsReady=Promise.all([...new Set(['openai_00_官方说明.png','openai_01_月费20美元.png','google_00_搜索前.png','google_01_输入查询.png','google_02_汇率结果.png',...APPS.map(logoFile),logoFile('chatgpt')])].map(n=>new Promise((r,j)=>{let im=new Image;im.onload=r;im.onerror=()=>j(new Error('Asset failed: '+n));im.src='assets/'+n}))).then(()=>document.fonts.ready);
+</script></body></html>

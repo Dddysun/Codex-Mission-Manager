@@ -1,0 +1,89 @@
+TokenMax · 代码逐帧动画 V3
+制作日期：2026-10-30
+
+这次交付
+14 个独立镜头，1080×1920，30 fps，H.264，无旁白、无音乐。
+02_预览/60秒_重点镜头预览.mp4：天秤、地图、加料、双额度、闹钟、付钱和等待。
+02_预览/134秒_全部镜头串片.mp4：全部镜头顺序预览，不代表完整视频最终时长。
+完整串片单独交付，ZIP 不重复打包这个由独立镜头拼接的文件；运行 package.py 可重建。
+index.html：可选择镜头、播放、暂停及拖动时间的本地浏览器预览。
+src/：可编辑的角色、道具、分镜、地图数据及渲染源码。
+03_制作资料/：安装指令、来源、镜头时长、验证结果和许可证索引。
+
+本轮改动
+放大角色与主要道具，统一白底、深色描边、红围巾和少量绿色/金币黄色。
+六项会员先用大 Logo 展示名称，再进入天秤镜头。
+天秤横梁受落物影响摆动、逐步回稳，20 元金币飞出并承接下一镜地图。
+地图从中国推进贵州、贵阳、街道，终点为示意粉店，不冒充实际商户。
+牛肉粉改为 SVG 食物插画，逐项加粉、加肉、加煎蛋；这是插画，并非实拍。
+两条剩余额度条同时下降：五小时从 100% 到 0%，周额度从 100% 到 90%。
+兔子增加眨眼、头部与耳朵的滞后摆动、打字、夹粉、睡觉、游戏、惊醒及困倦动作。
+花钱干活和等待额度两镜共享人物站位和金币，表现因果变化。
+安装引导前 6 秒指向视频简介，后 16 秒静止显示仓库和指令，方便截图。
+
+实际采用的技术
+参考图列的是七类技术路线，不必全部放进一个项目。
+本片使用 HTML/CSS 排版、SVG 原创角色与地图、JavaScript 确定性时间线。
+Playwright 复用官方 Chromium，逐帧执行 renderFrame(index, frame/30)，抓取浏览器渲染结果，再由 FFmpeg 编码。
+这是离线逐帧导出，不依赖实时录屏能否跑满帧率。
+本轮没有调用 Claude Opus，也没有使用 Remotion、HyperFrames、Three.js、p5.js 或 Manim。
+这些框架可以支持各类动画；画面改进主要来自重新设计构图、角色和动作，而不是单纯更换框架名。
+
+参考七种路线的选用判断
+Canvas：适合像素图、粒子和自定义绘制；本片主要为清晰矢量角色，未启用。
+HTML/CSS/SVG：适合文字、Logo、网页截图、扁平角色和界面动效；本片主路线。
+WebGL 着色器：适合大规模粒子与程序纹理；此片白底叙事没有必要。
+Three.js：适合立体空间与三维镜头；本片按用户要求维持平面简笔画。
+p5.js：适合生成艺术和交互草图；与本片 SVG 时间线需求重叠，未引入。
+Remotion / HyperFrames：适合组织代码视频；本次复用现有 Playwright 与 FFmpeg，降低迁移成本。
+Manim：适合数学演绎；这里的双进度条用 SVG 已足够直接。
+
+事实与素材边界
+1. 官网和汇率画面复用 2026-10-29 已采集的真实网页截图，不是本轮重新查询的实时汇率。
+2. 截图是 $20/月及 20 美元约 133.22 元。若口播仍说 150 元，需要交代粗略估算或改为一百三十多元。
+3. 六项会员总额没有按具体套餐核实，天秤上保留“会员套餐合计待核价 / 预算示意”。
+4. 剩余 20 元及全家福牛肉粉的价格，是用户提供的叙事情境，不是商户报价。
+5. 5 小时窗口消耗相当于周额度 10%、约十次机会均为口播假设；具体限制依任务和账户而异。
+6. 22:00→03:00 为情境演绎，不代表所有人的固定恢复时间。
+7. “钱继续花”用金币与订阅时间表现，不代表按秒扣费。
+8. 地图取自既有 China-GeoData MIT 数据与 OpenStreetMap 街道数据，保留来源与许可。
+9. 安装引导使用执行时查询最新已发布 Release（含预览版）的提示，不把 v0.4.2 写死。
+10. 平台标签沿用 2026-10-30 已核实的 Windows x64 / macOS Apple Silicon 发布包；并未声称支持所有架构。
+11. 软件实录仍由用户提供；本片没有把示意动画冒充软件功能运行结果。
+
+重新渲染
+需要 Node.js、FFmpeg 和系统中文字体。制作环境为 macOS；字体使用系统字体，不打包字体文件。
+在本目录安装 npm 依赖，然后运行：
+  npm install
+  npx playwright install chromium --only-shell
+  npm run render
+  npm run qa
+  python3 src/package.py
+package.py 需要 Pillow，可用 pip install Pillow 安装。
+只导出指定镜头：node src/render.cjs --shots=3,6,9
+只导出关键帧：npm run stills
+浏览器预览：在本目录 python3 -m http.server 8765，浏览器打开 http://localhost:8765。
+这些命令在用户自备环境下仍取决于依赖下载与系统字体。当前交付的 MP4 已经实际渲染并核验。
+
+剪辑建议
+独立镜头按口播插入。生活镜头可按每 3 秒切成上班、吃饭、睡觉和娱乐。
+安装卡最后 16 秒完全静止，可以适当加长；不要对仓库地址做滚动字幕或打字动画。
+镜头串片没有加入你的软件实录，也没有生成旁白。
+对外发布前请确认会员预算台词与实际套餐一致。
+
+仓库快捷索引
+实际复用：
+https://github.com/microsoft/playwright  Apache-2.0
+https://github.com/simple-icons/simple-icons  CC0（Bilibili 标识路径；商标权另计）
+https://github.com/Supeset/China-GeoData  MIT
+https://www.openstreetmap.org/copyright  ODbL
+https://ffmpeg.org/legal.html  FFmpeg 及本地编码器依各自构建许可；没有打包二进制。
+评估参考、未引入：
+https://github.com/remotion-dev/remotion
+https://github.com/heygen-com/hyperframes
+
+采集来源
+https://help.openai.com/en/articles/6950777-what-is-chatgpt-plus
+https://www.google.com/search?q=20美元等于多少人民币
+品牌来源见 03_制作资料/logo-sources.json，原始图标来自官方应用商店/品牌网页，Bilibili 使用 Simple Icons。
+项目仓库：https://github.com/Dddysun/TokenMax-Zhazhiji

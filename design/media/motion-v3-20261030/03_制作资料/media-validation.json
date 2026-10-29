@@ -1,0 +1,142 @@
+[
+  {
+    "file": "01_独立镜头/01_price_官网20美元_真实截图与数字.mp4",
+    "seconds": 7,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "full_decode": "pass",
+    "sha256": "a31720915201534d4583ed539299b1dbfb83745c669242f017b512b4bd3f8a4b"
+  },
+  {
+    "file": "01_独立镜头/02_exchange_实时查询截图_美元换人民币.mp4",
+    "seconds": 6,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "full_decode": "pass",
+    "sha256": "07ea053399da4b15d1550fabd2db1a4d871eee788e84961580da22378ab99b19"
+  },
+  {
+    "file": "01_独立镜头/02b_members_六项会员_真实Logo逐个入场.mp4",
+    "seconds": 6,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "full_decode": "pass",
+    "sha256": "80146fc6129e4d0a93e4de0f2926dc97ab61cf5e67131bd66b7fb728d085b45d"
+  },
+  {
+    "file": "01_独立镜头/03_balance_六会员天秤_金币连续转场.mp4",
+    "seconds": 12,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "full_decode": "pass",
+    "sha256": "cca2367d97a6850f8fb3842cf5257c9af7d2feab522e43b72ba26c47261eb13c"
+  },
+  {
+    "file": "01_独立镜头/04_map_中国贵州贵阳_地图推进街头.mp4",
+    "seconds": 10,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "full_decode": "pass",
+    "sha256": "c46591917fa9a31dccc3076a93c30125c319db2367c6545866e5c9a536398272"
+  },
+  {
+    "file": "01_独立镜头/05_noodles_贵阳牛肉粉_加粉加肉加煎蛋.mp4",
+    "seconds": 9,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "full_decode": "pass",
+    "sha256": "a69b4346a067d4fe092ec7edd4d2bd7345086b423b5e74952c85e7703b9bd3fb"
+  },
+  {
+    "file": "01_独立镜头/06_quota_五小时与周额度_同时消耗.mp4",
+    "seconds": 10,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "full_decode": "pass",
+    "sha256": "2f54aea8d251248c045deb7153410295ccc64e7c6b2d754a3bc38933f62bff3f"
+  },
+  {
+    "file": "01_独立镜头/07_week_十次机会_七天日历.mp4",
+    "seconds": 6,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "full_decode": "pass",
+    "sha256": "3e14d8e480f899d732bf30e4e00aa37fa853d326cafb83246e13a524794b8800"
+  },
+  {
+    "file": "01_独立镜头/08_life_兔子上班吃饭睡觉娱乐.mp4",
+    "seconds": 12,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "full_decode": "pass",
+    "sha256": "3a7e7c9350255cedf8226a7dc63543f66548acba431e6388ab5a9eac87ce5c64"
+  },
+  {
+    "file": "01_独立镜头/09_alarm_晚上十点_凌晨三点惊醒.mp4",
+    "seconds": 10,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "full_decode": "pass",
+    "sha256": "a48a243ffe96f452574eee663c2e55051905031b88cd70d0feb80f3d26e6bd89"
+  },
+  {
+    "file": "01_独立镜头/10_office_人在公司_惦记家中额度.mp4",
+    "seconds": 8,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "full_decode": "pass",
+    "sha256": "30f2006d08e61e3eee7c351324bf080f8f8d743ded82158a177c835576d656f7"
+  },
+  {
+    "file": "01_独立镜头/11_pay_我花钱_AI敲键盘.mp4",
+    "seconds": 8,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "full_decode": "pass",
+    "sha256": "16ee2e4c4063926aa40206ae1966ffa2c4365c3f1953f80799a6c394bb64079a"
+  },
+  {
+    "file": "01_独立镜头/12_wait_AI等额度_人等AI_时间流失.mp4",
+    "seconds": 8,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "full_decode": "pass",
+    "sha256": "fb41aecb2ef3fa4580ec359f976a43079162b5a5d42c88d1412e072201866fb7"
+  },
+  {
+    "file": "01_独立镜头/13_install_简介箭头_截图给Agent安装.mp4",
+    "seconds": 22,
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "audio": false,
+    "full_decode": "pass",
+    "sha256": "30950666ca36866f2edc7c1e816e52feeb162fbb5ae944852dbf3ad76051300c"
+  }
+]
