@@ -1,0 +1,17 @@
+{
+  "accent": "green",
+  "fixtureChats": 3,
+  "hostStarted": false,
+  "language": "zh",
+  "messagesSent": 0,
+  "nativeHosting": true,
+  "privatePreferencesLoaded": false,
+  "renderedViews": 127,
+  "rulesEditable": true,
+  "sourceChats": 3,
+  "theme": "light",
+  "view": "home",
+  "webViewCount": 0,
+  "version": "0.4.2",
+  "data": "synthetic current-schema fixture; timestamps rebased"
+}
